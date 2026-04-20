@@ -3,6 +3,7 @@ import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import type { Map } from "leaflet";
 import { atom, computed, onSet } from "nanostores";
 
+import { buildReachabilityPayload } from "@/lib/share/reachability-payload";
 import type { ReachabilityResult } from "@/lib/transit/types";
 import type { ReachabilityStatus } from "@/maps/geo-utils/zonePipeline";
 import type {
@@ -389,6 +390,14 @@ export const hidingZone = computed(
         includeDefaultStations,
         customPresets,
         permanentOverlay,
+        startingLocation,
+        reachabilityBudgetMinutes,
+        reachabilityWalkSpeedMph,
+        reachabilityMaxWalkLegMinutes,
+        reachabilityDeparturePreset,
+        reachabilityDepartureCustomISO,
+        reachabilitySelectedSystemIds,
+        reachabilityOverrides,
     ],
     (
         q,
@@ -404,7 +413,29 @@ export const hidingZone = computed(
         includeDefault,
         presets,
         $permanentOverlay,
+        $startingLocation,
+        $budget,
+        $walkSpeed,
+        $maxWalkLeg,
+        $departurePreset,
+        $departureCustomISO,
+        $selectedSystemIds,
+        $overrides,
     ) => {
+        // Build the (optional) reachability share block. Omitted entirely
+        // when every field is still at its default — a sharer who has
+        // never touched Phase 4 ships the exact same payload they would
+        // have pre-Phase-4.
+        const reachability = buildReachabilityPayload({
+            budgetMinutes: $budget,
+            walkSpeedMph: $walkSpeed,
+            maxWalkLegMinutes: $maxWalkLeg,
+            departurePreset: $departurePreset,
+            departureCustomISO: $departureCustomISO,
+            selectedSystemIds: $selectedSystemIds,
+            overrides: $overrides,
+        });
+
         if (geo !== null) {
             return {
                 ...geo,
@@ -418,6 +449,8 @@ export const hidingZone = computed(
                 includeDefaultStations: includeDefault,
                 presets: structuredClone(presets),
                 permanentOverlay: $permanentOverlay,
+                startingLocation: $startingLocation,
+                ...(reachability ? { reachability } : {}),
             };
         } else {
             const $loc = structuredClone(loc);
@@ -435,6 +468,8 @@ export const hidingZone = computed(
                 includeDefaultStations: includeDefault,
                 presets: structuredClone(presets),
                 permanentOverlay: $permanentOverlay,
+                startingLocation: $startingLocation,
+                ...(reachability ? { reachability } : {}),
             };
         }
     },

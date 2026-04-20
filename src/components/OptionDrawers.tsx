@@ -38,6 +38,13 @@ import {
     planningModeEnabled,
     polyGeoJSON,
     questions,
+    reachabilityBudgetMinutes,
+    reachabilityDepartureCustomISO,
+    reachabilityDeparturePreset,
+    reachabilityMaxWalkLegMinutes,
+    reachabilityOverrides,
+    reachabilitySelectedSystemIds,
+    reachabilityWalkSpeedMph,
     save,
     showTutorial,
     startingLocation,
@@ -45,6 +52,7 @@ import {
     triggerLocalRefresh,
     useCustomStations,
 } from "@/lib/context";
+import { parseReachabilityPayload } from "@/lib/share/reachability-payload";
 import {
     cn,
     compress,
@@ -268,6 +276,57 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                 permanentOverlay.set(geojson.permanentOverlay);
             } else {
                 permanentOverlay.set(null);
+            }
+
+            // Starting location (also used as the reachability origin).
+            // Older share payloads predate this field; leave the atom
+            // alone in that case so the guest keeps whatever they had.
+            if (
+                geojson.startingLocation === false ||
+                (geojson.startingLocation &&
+                    typeof geojson.startingLocation === "object" &&
+                    typeof geojson.startingLocation.latitude === "number" &&
+                    typeof geojson.startingLocation.longitude === "number")
+            ) {
+                startingLocation.set(geojson.startingLocation);
+            }
+
+            // Reachability query + per-station overrides. The parser
+            // validates version + field types, so anything it returns
+            // is safe to write straight to the persistent atoms.
+            const reachability = parseReachabilityPayload(
+                geojson.reachability,
+            );
+            if (reachability) {
+                if (reachability.budgetMinutes !== undefined) {
+                    reachabilityBudgetMinutes.set(reachability.budgetMinutes);
+                }
+                if (reachability.walkSpeedMph !== undefined) {
+                    reachabilityWalkSpeedMph.set(reachability.walkSpeedMph);
+                }
+                if (reachability.maxWalkLegMinutes !== undefined) {
+                    reachabilityMaxWalkLegMinutes.set(
+                        reachability.maxWalkLegMinutes,
+                    );
+                }
+                if (reachability.departurePreset !== undefined) {
+                    reachabilityDeparturePreset.set(
+                        reachability.departurePreset,
+                    );
+                }
+                if (reachability.departureCustomISO !== undefined) {
+                    reachabilityDepartureCustomISO.set(
+                        reachability.departureCustomISO,
+                    );
+                }
+                if (reachability.selectedSystemIds !== undefined) {
+                    reachabilitySelectedSystemIds.set(
+                        reachability.selectedSystemIds,
+                    );
+                }
+                if (reachability.overrides !== undefined) {
+                    reachabilityOverrides.set(reachability.overrides);
+                }
             }
 
             toast.success("Hiding zone loaded successfully", {
