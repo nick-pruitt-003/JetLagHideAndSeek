@@ -1,6 +1,14 @@
 import { useStore } from "@nanostores/react";
 import { SidebarCloseIcon } from "lucide-react";
 
+import { AddQuestionDialog } from "@/components/AddQuestionDialog";
+import {
+    MatchingQuestionComponent,
+    MeasuringQuestionComponent,
+    RadiusQuestionComponent,
+    TentacleQuestionComponent,
+    ThermometerQuestionComponent,
+} from "@/components/QuestionCards";
 import {
     Sidebar,
     SidebarContent,
@@ -18,15 +26,6 @@ import {
     save,
     triggerLocalRefresh,
 } from "@/lib/context";
-
-import { AddQuestionDialog } from "./AddQuestionDialog";
-import {
-    MatchingQuestionComponent,
-    MeasuringQuestionComponent,
-    RadiusQuestionComponent,
-    TentacleQuestionComponent,
-    ThermometerQuestionComponent,
-} from "./QuestionCards";
 
 export const QuestionSidebar = () => {
     useStore(triggerLocalRefresh);

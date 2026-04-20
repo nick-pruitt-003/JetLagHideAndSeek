@@ -2,6 +2,7 @@ import { useStore } from "@nanostores/react";
 import { Label } from "@radix-ui/react-label";
 import * as React from "react";
 
+import { QuestionCard } from "@/components/cards/base";
 import CustomInitDialog from "@/components/CustomInitDialog";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import PresetsDialog from "@/components/PresetsDialog";
@@ -30,8 +31,6 @@ import {
     measuringQuestionSchema,
     NO_GROUP,
 } from "@/maps/schema";
-
-import { QuestionCard } from "./base";
 
 export const MeasuringQuestionComponent = ({
     data,
@@ -176,7 +175,7 @@ export const MeasuringQuestionComponent = ({
                             .flatMap((x) =>
                                 determineUnionizedStrings(x.shape.type),
                             )
-                            .map((x) => [(x._def as any).value, x.description]),
+                            .map((x) => [x.value, x.description]),
                     )}
                     groups={measuringQuestionSchema.options
                         .filter((x) => x.description !== NO_GROUP)
@@ -184,10 +183,7 @@ export const MeasuringQuestionComponent = ({
                             x.description,
                             Object.fromEntries(
                                 determineUnionizedStrings(x.shape.type).map(
-                                    (x) => [
-                                        (x._def as any).value,
-                                        x.description,
-                                    ],
+                                    (x) => [x.value, x.description],
                                 ),
                             ),
                         ])

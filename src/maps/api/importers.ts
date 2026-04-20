@@ -5,7 +5,7 @@ import type {
     CustomStation,
     StationPlace,
     StationPlaceProperties,
-} from "./types";
+} from "@/maps/api/types";
 
 function parseCSV(text: string): CustomStation[] {
     const { data, errors } = Papa.parse<Record<string, string>>(text, {

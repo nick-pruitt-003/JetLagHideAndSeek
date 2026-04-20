@@ -1,8 +1,7 @@
 import { z } from "zod";
 
 import { defaultUnit } from "@/lib/context";
-
-import { ICON_COLORS } from "./api/constants";
+import { ICON_COLORS } from "@/maps/api/constants";
 
 export const NO_GROUP = "NO_GROUP";
 
@@ -16,7 +15,7 @@ export const determineUnionizedStrings = (
     } else if (obj instanceof z.ZodLiteral) {
         return [obj];
     } else if (obj instanceof z.ZodDefault) {
-        return determineUnionizedStrings(obj.removeDefault());
+        return determineUnionizedStrings(obj.unwrap());
     }
     return [];
 };

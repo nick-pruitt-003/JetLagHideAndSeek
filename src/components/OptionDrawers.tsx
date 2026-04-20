@@ -2,6 +2,9 @@ import { useStore } from "@nanostores/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 
+import { LatitudeLongitude } from "@/components/LatLngPicker";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Drawer,
     DrawerContent,
@@ -9,6 +12,16 @@ import {
     DrawerTitle,
     DrawerTrigger,
 } from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import {
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+} from "@/components/ui/sidebar-l";
+import { UnitSelect } from "@/components/UnitSelect";
 import {
     additionalMapGeoLocations,
     allowGooglePlusCodes,
@@ -63,20 +76,6 @@ import {
 } from "@/lib/utils";
 import { questionsSchema } from "@/maps/schema";
 
-import { LatitudeLongitude } from "./LatLngPicker";
-import { Button } from "./ui/button";
-import { Checkbox } from "./ui/checkbox";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Select } from "./ui/select";
-import { Separator } from "./ui/separator";
-import {
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-} from "./ui/sidebar-l";
-import { UnitSelect } from "./UnitSelect";
-
 const HIDING_ZONE_URL_PARAM = "hz";
 const HIDING_ZONE_COMPRESSED_URL_PARAM = "hzc";
 const PASTEBIN_URL_PARAM = "pb";
@@ -99,23 +98,23 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
     const $alwaysUsePastebin = useStore(alwaysUsePastebin);
     const $followMe = useStore(followMe);
     const $customInitPref = useStore(customInitPreference);
-    const lastDefaultUnit = useRef($defaultUnit);
-    const hasSyncedInitialUnit = useRef(false);
-    const [isOptionsOpen, setOptionsOpen] = useState(false);
+    const lastDefaultUnitRef = useRef($defaultUnit);
+    const hasSyncedInitialUnitRef = useRef(false);
+    const [isOptionsOpen, setIsOptionsOpen] = useState(false);
 
     useEffect(() => {
         const currentDefault = $defaultUnit;
 
-        if (!hasSyncedInitialUnit.current) {
-            hasSyncedInitialUnit.current = true;
+        if (!hasSyncedInitialUnitRef.current) {
+            hasSyncedInitialUnitRef.current = true;
             if (hidingRadiusUnits.get() !== currentDefault) {
                 hidingRadiusUnits.set(currentDefault);
             }
-        } else if (lastDefaultUnit.current !== currentDefault) {
+        } else if (lastDefaultUnitRef.current !== currentDefault) {
             hidingRadiusUnits.set(currentDefault);
         }
 
-        lastDefaultUnit.current = currentDefault;
+        lastDefaultUnitRef.current = currentDefault;
     }, [$defaultUnit]);
 
     useEffect(() => {
@@ -239,6 +238,16 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                     }
                 } catch (err) {
                     console.warn("Failed to import presets", err);
+                    // Share loaded, but the user's custom presets didn't
+                    // round-trip — warn them explicitly so they don't
+                    // assume everything came through cleanly.
+                    toast.warning(
+                        "Couldn't import shared presets; the rest of the share loaded successfully.",
+                        {
+                            toastId: "preset-import-failed",
+                            autoClose: 6000,
+                        },
+                    );
                 }
             }
 
@@ -294,9 +303,7 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
             // Reachability query + per-station overrides. The parser
             // validates version + field types, so anything it returns
             // is safe to write straight to the persistent atoms.
-            const reachability = parseReachabilityPayload(
-                geojson.reachability,
-            );
+            const reachability = parseReachabilityPayload(geojson.reachability);
             if (reachability) {
                 if (reachability.budgetMinutes !== undefined) {
                     reachabilityBudgetMinutes.set(reachability.budgetMinutes);
@@ -421,7 +428,7 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
             >
                 Tutorial
             </Button>
-            <Drawer open={isOptionsOpen} onOpenChange={setOptionsOpen}>
+            <Drawer open={isOptionsOpen} onOpenChange={setIsOptionsOpen}>
                 <DrawerTrigger className="w-24" asChild>
                     <Button
                         className="w-24 shadow-md"

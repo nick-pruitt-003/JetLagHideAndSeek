@@ -1,21 +1,73 @@
+import importAlias from "@dword-design/eslint-plugin-import-alias";
 import pluginJs from "@eslint/js";
+import eslintReact from "@eslint-react/eslint-plugin";
 import pluginAstro from "eslint-plugin-astro";
-import pluginImportAlias from "eslint-plugin-import-alias";
 import pluginReact from "eslint-plugin-react";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-import tsconfig from "./tsconfig.json" with { type: "json" };
-
 /** @type {import('eslint').Linter.Config[]} */
 export default [
+    // Agent sandboxes checked out as locked git worktrees under
+    // `.claude/worktrees/**` carry their own tsconfig.json and would
+    // otherwise confuse typescript-eslint's tsconfigRootDir detection
+    // (multiple candidate roots → parsing error on every file).
+    // They're gitignored and untracked — no reason to lint them.
+    { ignores: [".claude/**", "dist/**", ".astro/**"] },
     { files: ["**/*.{js,mjs,cjs,ts,jsx,tsx}"] },
     { languageOptions: { globals: globals.browser } },
     pluginJs.configs.recommended,
     ...tseslint.configs.recommended,
+    // Legacy React plugin stays on during the gradual migration so nothing
+    // silently regresses. All rules that overlap with @eslint-react are
+    // switched off below by the `disable-conflict-eslint-plugin-react`
+    // preset — @eslint-react's own rule is the source of truth.
     pluginReact.configs.flat.recommended,
     ...pluginAstro.configs["flat/recommended"],
+    // @eslint-react runs on TS/TSX only. Astro files have an Astro-specific
+    // JSX-like syntax that would false-positive on many React rules, and
+    // plain .js/.mjs/.cjs aren't React components in this codebase.
+    {
+        files: ["**/*.{ts,tsx}"],
+        ...eslintReact.configs["recommended-typescript"],
+    },
+    // Turn off legacy eslint-plugin-react rules that overlap with the new
+    // @eslint-react versions so we don't get duplicate reports. Remove
+    // once eslint-plugin-react is fully retired.
+    eslintReact.configs["disable-conflict-eslint-plugin-react"],
+    {
+        files: ["**/*.{ts,tsx}"],
+        rules: {
+            // Flags `(() => { ... })()` in JSX because React Compiler
+            // can't optimize IIFEs. We don't run React Compiler, and the
+            // pattern is actually useful for locally-scoped bindings in
+            // JSX without hoisting a helper. Re-enable if we ever adopt
+            // React Compiler.
+            "@eslint-react/unsupported-syntax": "off",
+        },
+    },
+    // Shadcn/ui templates ship with React-19-incompatible-by-default
+    // patterns (`forwardRef`, `<Context.Provider>`, `useContext`) on
+    // purpose to stay portable across React versions. Don't diverge from
+    // upstream here — the entire `src/components/ui/**` tree is vendored
+    // and re-synced occasionally. Also covers common shadcn idioms like
+    // controlled-input effects and `children` passed as a prop inside
+    // primitive wrappers.
+    {
+        files: ["src/components/ui/**/*.{ts,tsx}"],
+        rules: {
+            "@eslint-react/no-forward-ref": "off",
+            "@eslint-react/no-context-provider": "off",
+            "@eslint-react/no-use-context": "off",
+            "@eslint-react/use-state": "off",
+            "@eslint-react/naming-convention-ref-name": "off",
+            "@eslint-react/set-state-in-effect": "off",
+            "@eslint-react/exhaustive-deps": "off",
+            "@eslint-react/jsx-no-children-prop": "off",
+            "@eslint-react/purity": "off",
+        },
+    },
     // In Astro templates: `class` is correct HTML (not a React prop), and
     // `Fragment` / `Slot` are Astro built-ins that don't need React imports.
     {
@@ -25,9 +77,14 @@ export default [
             "react/jsx-no-undef": "off",
         },
     },
+    // Node config files — `process`, `require`, etc. (the default
+    // browser globals block above wrongly marks `process` as undefined).
+    {
+        files: ["astro.config.mjs", "tailwind.config.mjs", "eslint.config.js"],
+        languageOptions: { globals: globals.node },
+    },
     {
         plugins: {
-            "import-alias": pluginImportAlias,
             "simple-import-sort": simpleImportSort,
         },
         settings: {
@@ -36,22 +93,37 @@ export default [
             },
         },
         rules: {
-            "import-alias/import-alias": [
-                "error",
-                {
-                    relativeDepth: 0,
-                    aliases: Object.entries(tsconfig.compilerOptions.paths).map(
-                        ([to, [from]]) => ({
-                            alias: to.replace(/\*$/, ""),
-                            matcher: from.replace(/^\.\//, "^"),
-                        }),
-                    ),
-                },
-            ],
             "react/react-in-jsx-scope": "off",
             "@typescript-eslint/no-explicit-any": "off", // Would be great to remove all `any` types...
+            // Treat `_`-prefixed names as intentionally unused. Matches
+            // the TypeScript compiler's own ts(6133) convention so the
+            // two tools agree on what counts as "unused".
+            "@typescript-eslint/no-unused-vars": [
+                "error",
+                {
+                    argsIgnorePattern: "^_",
+                    varsIgnorePattern: "^_",
+                    caughtErrorsIgnorePattern: "^_",
+                    destructuredArrayIgnorePattern: "^_",
+                },
+            ],
             "simple-import-sort/imports": "error",
             "simple-import-sort/exports": "error",
+        },
+    },
+    // Prefer `@/` (and other `tsconfig` paths) over long `../` chains.
+    // `aliasForSubpaths: true` keeps sibling/child imports on `@/…` too
+    // (the plugin default only rewrites parent `../` paths).
+    // Scoped to real TS/TSX; virtual `*.astro.ts` chunks are ignored.
+    {
+        files: ["**/*.{ts,tsx}"],
+        ignores: ["**/*.astro.ts", "**/*.astro.js"],
+        plugins: importAlias.configs.recommended.plugins,
+        rules: {
+            "@dword-design/import-alias/prefer-alias": [
+                "error",
+                { aliasForSubpaths: true },
+            ],
         },
     },
 ];

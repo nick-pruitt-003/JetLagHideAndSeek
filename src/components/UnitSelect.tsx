@@ -1,6 +1,5 @@
+import { Select } from "@/components/ui/select";
 import type { Units } from "@/maps/schema";
-
-import { Select } from "./ui/select";
 
 export const UnitSelect = ({
     unit,

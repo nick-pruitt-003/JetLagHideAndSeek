@@ -5,11 +5,21 @@
  * feeds can coexist without collision. Deleting a system is a single bulk-
  * delete pass keyed by the systemId index on every store.
  *
- * Schema version bumps must be handled in `upgrade` below — users will have
- * real imported data we don't want to silently drop.
+ * Schema evolution lives in the {@link MIGRATIONS} table below — each bump
+ * is a `{ version, run(db, tx) }` entry and `upgrade(...)` just replays the
+ * applicable steps between `oldVersion` and the current `DB_VERSION`. Add
+ * new steps to the end of the array; never edit a released step (users'
+ * databases already ran it).
  */
 
-import { type DBSchema, type IDBPDatabase, openDB } from "idb";
+import {
+    type DBSchema,
+    type IDBPDatabase,
+    type IDBPTransaction,
+    openDB,
+    type StoreNames,
+} from "idb";
+import { toast } from "react-toastify";
 
 import type {
     Footpath,
@@ -19,10 +29,9 @@ import type {
     TransitSystem,
     TransitTrip,
     TransitTripStopTimes,
-} from "./types";
+} from "@/lib/transit/types";
 
 const DB_NAME = "jetlag-transit";
-const DB_VERSION = 1;
 
 interface TransitDBSchema extends DBSchema {
     systems: {
@@ -70,53 +79,172 @@ interface TransitDBSchema extends DBSchema {
 
 export type TransitDB = IDBPDatabase<TransitDBSchema>;
 
+/**
+ * One schema migration step. `run` executes inside the `versionchange`
+ * transaction — callers can use either `db` (store creation / deletion) or
+ * `tx` (data rewrites on existing stores).
+ *
+ * Steps must be idempotent across repeated failed upgrades: IDB aborts the
+ * whole `versionchange` transaction on throw, so a retry will re-enter at
+ * the same `oldVersion`. Guard with `db.objectStoreNames.contains(...)`
+ * when adding stores/indexes that another path might also create.
+ */
+interface MigrationStep {
+    version: number;
+    name: string;
+    run(
+        db: IDBPDatabase<TransitDBSchema>,
+        tx: IDBPTransaction<
+            TransitDBSchema,
+            StoreNames<TransitDBSchema>[],
+            "versionchange"
+        >,
+    ): void | Promise<void>;
+}
+
+const MIGRATIONS: MigrationStep[] = [
+    {
+        version: 1,
+        name: "initial schema",
+        run(db) {
+            db.createObjectStore("systems", { keyPath: "id" });
+
+            const stops = db.createObjectStore("stops", { keyPath: "id" });
+            stops.createIndex("by-system", "systemId");
+
+            const routes = db.createObjectStore("routes", {
+                keyPath: "id",
+            });
+            routes.createIndex("by-system", "systemId");
+
+            const trips = db.createObjectStore("trips", { keyPath: "id" });
+            trips.createIndex("by-system", "systemId");
+            trips.createIndex("by-route", "routeId");
+
+            const stopTimes = db.createObjectStore("stopTimes", {
+                keyPath: "tripId",
+            });
+            stopTimes.createIndex("by-system", "systemId");
+
+            const services = db.createObjectStore("services", {
+                keyPath: "id",
+            });
+            services.createIndex("by-system", "systemId");
+
+            const transfersGtfs = db.createObjectStore("transfersGtfs", {
+                keyPath: ["fromStopId", "toStopId"],
+            });
+            transfersGtfs.createIndex("by-from", "fromStopId");
+            // For bulk-delete we need to know which system a transfer
+            // belongs to — derived from the fromStopId prefix, but an
+            // explicit index is faster than string parsing.
+            transfersGtfs.createIndex("by-system", "fromStopId");
+
+            const transfersAuto = db.createObjectStore("transfersAuto", {
+                keyPath: ["fromStopId", "toStopId"],
+            });
+            transfersAuto.createIndex("by-from", "fromStopId");
+        },
+    },
+    // Future migration steps go here:
+    // {
+    //     version: 2,
+    //     name: "add parent_station index on stops",
+    //     run(db, tx) {
+    //         tx.objectStore("stops").createIndex(
+    //             "by-parent", "parentStationId", { unique: false },
+    //         );
+    //     },
+    // },
+];
+
+/**
+ * Current DB version = highest version in {@link MIGRATIONS}. Keeping this
+ * derived means you can't forget to bump it when adding a step.
+ */
+const DB_VERSION = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0);
+
 let dbPromise: Promise<TransitDB> | null = null;
 
 export function openTransitDB(): Promise<TransitDB> {
     if (dbPromise) return dbPromise;
     dbPromise = openDB<TransitDBSchema>(DB_NAME, DB_VERSION, {
-        upgrade(db, oldVersion) {
-            // Fresh install.
-            if (oldVersion < 1) {
-                db.createObjectStore("systems", { keyPath: "id" });
-
-                const stops = db.createObjectStore("stops", { keyPath: "id" });
-                stops.createIndex("by-system", "systemId");
-
-                const routes = db.createObjectStore("routes", {
-                    keyPath: "id",
-                });
-                routes.createIndex("by-system", "systemId");
-
-                const trips = db.createObjectStore("trips", { keyPath: "id" });
-                trips.createIndex("by-system", "systemId");
-                trips.createIndex("by-route", "routeId");
-
-                const stopTimes = db.createObjectStore("stopTimes", {
-                    keyPath: "tripId",
-                });
-                stopTimes.createIndex("by-system", "systemId");
-
-                const services = db.createObjectStore("services", {
-                    keyPath: "id",
-                });
-                services.createIndex("by-system", "systemId");
-
-                const transfersGtfs = db.createObjectStore("transfersGtfs", {
-                    keyPath: ["fromStopId", "toStopId"],
-                });
-                transfersGtfs.createIndex("by-from", "fromStopId");
-                // For bulk-delete we need to know which system a transfer
-                // belongs to — derived from the fromStopId prefix, but an
-                // explicit index is faster than string parsing.
-                transfersGtfs.createIndex("by-system", "fromStopId");
-
-                const transfersAuto = db.createObjectStore("transfersAuto", {
-                    keyPath: ["fromStopId", "toStopId"],
-                });
-                transfersAuto.createIndex("by-from", "fromStopId");
+        upgrade(db, oldVersion, _newVersion, tx) {
+            // Replay every migration step strictly newer than what the
+            // user's DB already has. Steps run in ascending version order.
+            const sorted = [...MIGRATIONS].sort(
+                (a, b) => a.version - b.version,
+            );
+            for (const step of sorted) {
+                if (step.version <= oldVersion) continue;
+                try {
+                    step.run(db, tx);
+                } catch (err) {
+                    console.error(
+                        `IDB migration failed at v${step.version} (${step.name}):`,
+                        err,
+                    );
+                    // Rethrow so IDB aborts the versionchange transaction
+                    // and the user's data stays on the previous version
+                    // instead of ending up half-migrated.
+                    throw err;
+                }
             }
         },
+        blocked(currentVersion, blockedVersion) {
+            // Another tab of the app still has an older connection open,
+            // preventing our version bump. Ask the user to close it.
+            console.log(
+                `IDB upgrade blocked: v${currentVersion} → v${blockedVersion}`,
+            );
+            toast.warning(
+                "A newer version of the app is ready — close other tabs of this site to apply it.",
+                {
+                    toastId: "idb-upgrade-blocked",
+                    autoClose: false,
+                },
+            );
+        },
+        blocking(currentVersion, blockedVersion) {
+            // This tab holds the old connection; another tab wants to
+            // upgrade. Close our connection so they can proceed; the
+            // next openTransitDB() call from this tab will re-open at
+            // the new version.
+            console.log(
+                `Closing old IDB connection to unblock upgrade: v${currentVersion} → v${blockedVersion}`,
+            );
+            // The `db` param isn't handed to us here; rely on idb's
+            // default close-on-blocking via resetting the cached promise.
+            dbPromise = null;
+        },
+        terminated() {
+            // Browser forcibly closed the DB (quota eviction, etc.).
+            // Reset the cache so the next call retries.
+            console.log("IDB connection terminated unexpectedly");
+            dbPromise = null;
+            toast.error(
+                "Local transit storage was closed unexpectedly. Reload to retry.",
+                {
+                    toastId: "idb-terminated",
+                    autoClose: 8000,
+                },
+            );
+        },
+    }).catch((err: unknown) => {
+        // openDB failed outright — usually SecurityError (private mode /
+        // blocked storage), QuotaExceededError (low disk), or corruption.
+        console.error("Failed to open transit DB:", err);
+        toast.error(
+            "Couldn't open local transit storage. Private mode, low disk, or a corrupted database may be the cause.",
+            {
+                toastId: "idb-open-failed",
+                autoClose: 8000,
+            },
+        );
+        // Null out so a future call can retry (e.g. after the user
+        // exits private mode or frees disk space).
+        dbPromise = null;
+        throw err;
     });
     return dbPromise;
 }
@@ -130,7 +258,9 @@ export async function listSystems(): Promise<TransitSystem[]> {
     return db.getAll("systems");
 }
 
-export async function getSystem(id: string): Promise<TransitSystem | undefined> {
+export async function getSystem(
+    id: string,
+): Promise<TransitSystem | undefined> {
     const db = await openTransitDB();
     return db.get("systems", id);
 }
@@ -190,11 +320,7 @@ export async function deleteSystem(systemId: string): Promise<void> {
     await tx.done;
 }
 
-async function deleteByIndex(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    index: any,
-    systemId: string,
-): Promise<void> {
+async function deleteByIndex(index: any, systemId: string): Promise<void> {
     let cursor = await index.openCursor(IDBKeyRange.only(systemId));
     while (cursor) {
         await cursor.delete();
@@ -234,7 +360,6 @@ export async function writeSystemBulk(opts: {
     );
 
     const put = <T>(store: string, items: T[]) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const os = (tx as any).objectStore(store);
         return Promise.all(items.map((item) => os.put(item)));
     };
@@ -254,7 +379,9 @@ export async function writeSystemBulk(opts: {
 // Reads used by routing
 // ---------------------------------------------------------------------------
 
-export async function getAllStops(systemIds?: string[]): Promise<TransitStop[]> {
+export async function getAllStops(
+    systemIds?: string[],
+): Promise<TransitStop[]> {
     const db = await openTransitDB();
     if (!systemIds || systemIds.length === 0) {
         return db.getAll("stops");
@@ -280,7 +407,9 @@ export async function getAllStopTimes(
     return out;
 }
 
-export async function getAllTrips(systemIds?: string[]): Promise<TransitTrip[]> {
+export async function getAllTrips(
+    systemIds?: string[],
+): Promise<TransitTrip[]> {
     const db = await openTransitDB();
     if (!systemIds || systemIds.length === 0) {
         return db.getAll("trips");
@@ -339,10 +468,7 @@ export async function estimateUsage(): Promise<{
     usage?: number;
     quota?: number;
 }> {
-    if (
-        typeof navigator === "undefined" ||
-        !navigator.storage?.estimate
-    ) {
+    if (typeof navigator === "undefined" || !navigator.storage?.estimate) {
         return {};
     }
     const { usage, quota } = await navigator.storage.estimate();

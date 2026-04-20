@@ -2,6 +2,7 @@ import { useStore } from "@nanostores/react";
 import * as turf from "@turf/turf";
 import { Suspense, use } from "react";
 
+import { QuestionCard } from "@/components/cards/base";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import PresetsDialog from "@/components/PresetsDialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,8 +30,6 @@ import {
     tentacleQuestionSchema,
     type TraditionalTentacleQuestion,
 } from "@/maps/schema";
-
-import { QuestionCard } from "./base";
 
 export const TentacleQuestionComponent = ({
     data,
@@ -98,7 +97,7 @@ export const TentacleQuestionComponent = ({
                             .flatMap((x) =>
                                 determineUnionizedStrings(x.shape.locationType),
                             )
-                            .map((x) => [(x._def as any).value, x.description]),
+                            .map((x) => [x.value, x.description]),
                     )}
                     groups={Object.fromEntries(
                         tentacleQuestionSchema.options
@@ -108,10 +107,7 @@ export const TentacleQuestionComponent = ({
                                 Object.fromEntries(
                                     determineUnionizedStrings(
                                         x.shape.locationType,
-                                    ).map((x) => [
-                                        (x._def as any).value,
-                                        x.description,
-                                    ]),
+                                    ).map((x) => [x.value, x.description]),
                                 ),
                             ]),
                     )}

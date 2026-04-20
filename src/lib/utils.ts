@@ -119,8 +119,16 @@ export async function shareOrFallback(
             return false;
         }
 
-        navigator.clipboard.writeText(url);
-        return "clipboard";
+        // Previously this fire-and-forgot writeText and returned "clipboard"
+        // unconditionally — meaning a denied permission or insecure context
+        // would report success. Await and return `false` on failure so the
+        // caller can surface a real error instead of a false-positive.
+        try {
+            await navigator.clipboard.writeText(url);
+            return "clipboard";
+        } catch {
+            return false;
+        }
     }
 
     if (!navigator.share) return shareOrFallback(url, true); // Fallback to clipboard

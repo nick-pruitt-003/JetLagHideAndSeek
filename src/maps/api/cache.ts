@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { toast } from "react-toastify";
 
-import { CacheType } from "./types";
+import { CacheType } from "@/maps/api/types";
 
 const determineQuestionCache = _.memoize(() => caches.open(CacheType.CACHE));
 const determineZoneCache = _.memoize(() => caches.open(CacheType.ZONE_CACHE));

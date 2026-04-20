@@ -5,7 +5,7 @@ import {
     parseReachabilityPayload,
     REACHABILITY_DEFAULTS,
     type ReachabilityShareState,
-} from "../src/lib/share/reachability-payload";
+} from "@/lib/share/reachability-payload";
 
 const DEFAULT_STATE: ReachabilityShareState = {
     budgetMinutes: REACHABILITY_DEFAULTS.budgetMinutes,

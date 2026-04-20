@@ -16,6 +16,7 @@ import {
     findPlacesSpecificInZone,
     LOCATION_FIRST_TAG,
     nearestToQuestion,
+    overpassAirportIataFilter,
     prettifyLocation,
     QuestionSpecificLocation,
 } from "@/maps/api";
@@ -145,7 +146,7 @@ export const determineMeasuringBoundary = async (
                         _.uniqBy(
                             (
                                 await findPlacesInZone(
-                                    '["aeroway"="aerodrome"]["iata"]', // Only commercial airports have IATA codes,
+                                    overpassAirportIataFilter(),
                                     "Finding airports...",
                                 )
                             ).elements,

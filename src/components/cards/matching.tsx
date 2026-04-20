@@ -2,6 +2,7 @@ import { useStore } from "@nanostores/react";
 import * as React from "react";
 import { toast } from "react-toastify";
 
+import { QuestionCard } from "@/components/cards/base";
 import CustomInitDialog from "@/components/CustomInitDialog";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import PresetsDialog from "@/components/PresetsDialog";
@@ -34,8 +35,6 @@ import {
     matchingQuestionSchema,
     NO_GROUP,
 } from "@/maps/schema";
-
-import { QuestionCard } from "./base";
 
 export const MatchingQuestionComponent = ({
     data,
@@ -268,7 +267,7 @@ export const MatchingQuestionComponent = ({
                             .flatMap((x) =>
                                 determineUnionizedStrings(x.shape.type),
                             )
-                            .map((x) => [(x._def as any).value, x.description]),
+                            .map((x) => [x.value, x.description]),
                     )}
                     groups={matchingQuestionSchema.options
                         .filter((x) => x.description !== NO_GROUP)
@@ -276,10 +275,7 @@ export const MatchingQuestionComponent = ({
                             x.description,
                             Object.fromEntries(
                                 determineUnionizedStrings(x.shape.type).map(
-                                    (x) => [
-                                        (x._def as any).value,
-                                        x.description,
-                                    ],
+                                    (x) => [x.value, x.description],
                                 ),
                             ),
                         ])

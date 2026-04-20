@@ -4,30 +4,30 @@ import {
     adjustPerMatching,
     hiderifyMatching,
     matchingPlanningPolygon,
-} from "./questions/matching";
+} from "@/maps/questions/matching";
 import {
     adjustPerMeasuring,
     hiderifyMeasuring,
     measuringPlanningPolygon,
-} from "./questions/measuring";
+} from "@/maps/questions/measuring";
 import {
     adjustPerRadius,
     hiderifyRadius,
     radiusPlanningPolygon,
-} from "./questions/radius";
+} from "@/maps/questions/radius";
 import {
     adjustPerTentacle,
     hiderifyTentacles,
     tentaclesPlanningPolygon,
-} from "./questions/tentacles";
+} from "@/maps/questions/tentacles";
 import {
     adjustPerThermometer,
     hiderifyThermometer,
     thermometerPlanningPolygon,
-} from "./questions/thermometer";
-import type { Question, Questions } from "./schema";
+} from "@/maps/questions/thermometer";
+import type { Question, Questions } from "@/maps/schema";
 
-export * from "./geo-utils";
+export * from "@/maps/geo-utils";
 
 export const hiderifyQuestion = async (question: Question) => {
     if (question.data.drag) {
@@ -36,7 +36,7 @@ export const hiderifyQuestion = async (question: Question) => {
                 question.data = hiderifyRadius(question.data);
                 break;
             case "thermometer":
-                question.data = await hiderifyThermometer(question.data);
+                question.data = hiderifyThermometer(question.data);
                 break;
             case "tentacles":
                 question.data = await hiderifyTentacles(question.data);
@@ -79,7 +79,7 @@ async function adjustMapGeoDataForQuestion(question: any, mapGeoData: any) {
             case "radius":
                 return await adjustPerRadius(question.data, mapGeoData);
             case "thermometer":
-                return await adjustPerThermometer(question.data, mapGeoData);
+                return adjustPerThermometer(question.data, mapGeoData);
             case "tentacles":
                 if (question.data.location === false) {
                     return adjustPerRadius(

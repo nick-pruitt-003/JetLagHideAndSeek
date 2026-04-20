@@ -49,6 +49,55 @@ export const LOCATION_FIRST_TAG: {
     park: "leisure",
 };
 
+/**
+ * Overpass tag chain for Jet Lag "airport" questions: scheduled-airport-style
+ * facilities with an IATA code.
+ *
+ * - `aeroway=aerodrome` + `iata`: OSM helipads use `aeroway=helipad`, so they
+ *   never match this query.
+ * - `heliport!=yes` / `aerodrome:type`≠heliport: some downtown heliports are
+ *   tagged as aerodromes with IATA; drop those.
+ * - `aerodrome:type`≠balloonport: balloon bases are not airline airports.
+ *
+ * Grass / private strips are rarely IATA-tagged; if one slips through, it is
+ * usually mapper error — we intentionally do not exclude `aerodrome:type=private`
+ * because many public-use fields use that value.
+ */
+export function overpassAirportIataFilter(options?: {
+    /** When true, drop `disused` / `closed` facilities (matches "Active airports only"). */
+    activeOnly?: boolean;
+}): string {
+    const activeOnly = options?.activeOnly === true;
+    const active = activeOnly
+        ? '["disused"!="yes"]["closed"!="yes"]'
+        : "";
+    return (
+        '["aeroway"="aerodrome"]["iata"]' +
+        '["heliport"!="yes"]' +
+        '["aerodrome:type"!="heliport"]' +
+        '["aerodrome:type"!="balloonport"]' +
+        active
+    );
+}
+
+/**
+ * Appended to each hiding-zone place selector (`[railway=station]`, …) when
+ * "Active stations only" is on. Excludes out-of-service / non-passenger
+ * facilities using common OSM lifecycle and status tags — including
+ * `disused:railway=*` and `operational_status=suspended`, which plain
+ * `disused!=yes` misses.
+ */
+export const OVERPASS_ACTIVE_RAIL_STATION_EXCLUSIONS =
+    '["disused"!="yes"]["abandoned"!="yes"]' +
+    '["railway:status"!="abandoned"]["railway:status"!="disused"]["railway:status"!="closed"]' +
+    '["operational_status"!="closed"]["operational_status"!="suspended"]' +
+    '["operational_status"!="disused"]["operational_status"!="abandoned"]' +
+    '["passenger"!="no"]' +
+    '["station"!="freight"]["railway:traffic_mode"!="freight"]' +
+    '["historic"!="station"]' +
+    '["disused:railway"!="station"]["disused:railway"!="halt"]["disused:railway"!="stop"]' +
+    '["abandoned:railway"!="station"]["abandoned:railway"!="halt"]["abandoned:railway"!="stop"]';
+
 export const BLANK_GEOJSON = {
     type: "FeatureCollection",
     features: [

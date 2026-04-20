@@ -17,6 +17,9 @@ export const MapPrint = (props) => {
         return () => {
             map.removeControl(control);
         };
+        // Props are captured once at mount by design — the print
+        // control is re-created on `map` changes only.
+        // eslint-disable-next-line @eslint-react/exhaustive-deps
     }, [map]);
 
     return null;

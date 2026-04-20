@@ -1,5 +1,6 @@
 import { useStore } from "@nanostores/react";
 
+import { QuestionCard } from "@/components/cards/base";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,8 +19,6 @@ import {
 } from "@/lib/context";
 import { cn } from "@/lib/utils";
 import type { RadiusQuestion } from "@/maps/schema";
-
-import { QuestionCard } from "./base";
 
 export const RadiusQuestionComponent = ({
     data,

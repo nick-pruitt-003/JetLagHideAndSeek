@@ -65,7 +65,7 @@ describe("parseCustomStationsFromText", () => {
 
     it("throws error when name column is missing", () => {
         const csv = "lat,lng\n-122.4194,-122.4194";
-        expect(() => parseCustomStationsFromText(csv, "text/csv")).toThrowError(
+        expect(() => parseCustomStationsFromText(csv, "text/csv")).toThrow(
             /missing required 'name'/i,
         );
     });

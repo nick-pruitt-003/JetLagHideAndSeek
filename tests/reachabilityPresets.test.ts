@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveDeparturePreset } from "../src/components/ReachabilitySection";
+import { resolveDeparturePreset } from "@/components/ReachabilitySection";
 
 describe("resolveDeparturePreset", () => {
     it("returns 'now' verbatim", () => {

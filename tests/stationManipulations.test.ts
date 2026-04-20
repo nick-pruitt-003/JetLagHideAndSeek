@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect,it } from "vitest";
 
-import { mergeDuplicateStation } from "../src/maps/geo-utils/stationManipulations";
+import { mergeDuplicateStation } from "@/maps/geo-utils/stationManipulations";
 
 describe("mergeDuplicateStation", () => {
     it("merges duplicates in the eastern hemisphere", () => {
@@ -208,10 +208,11 @@ describe("mergeDuplicateStation", () => {
     });
 });
 
-import { checkIfStationsShareZones } from "../src/maps/geo-utils/stationManipulations";
-import type { Location } from "../src/maps/geo-utils/stationManipulations";
 import * as turf from "@turf/turf";
+
 import type { StationPlace } from "@/maps/api";
+import type { Location } from "@/maps/geo-utils/stationManipulations";
+import { checkIfStationsShareZones } from "@/maps/geo-utils/stationManipulations";
 
 describe("checkIfStationsShareZones", () => {
     it("returns true that Jan van Galenstraat subway station and nearby tram station share zones with km as unit", () => {
@@ -231,7 +232,7 @@ describe("checkIfStationsShareZones", () => {
             radius,
             units,
         );
-        expect(result).true;
+        expect(result).toBe(true);
     });
 
     it("returns false that Jan van Galenstraat subway station and far away tram station share zones with km as unit", () => {
@@ -251,7 +252,7 @@ describe("checkIfStationsShareZones", () => {
             radius,
             units,
         );
-        expect(result).false;
+        expect(result).toBe(false);
     });
 
     it("returns false that Jan van Galenstraat subway station and far away tram station share zones with miles as unit", () => {
@@ -271,6 +272,6 @@ describe("checkIfStationsShareZones", () => {
             radius,
             units,
         );
-        expect(result).false;
+        expect(result).toBe(false);
     });
 });

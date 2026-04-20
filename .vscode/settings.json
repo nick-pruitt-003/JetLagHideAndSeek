@@ -1,3 +1,13 @@
 {
-    "cSpell.words": ["hiderify", "latlng", "osmtogeojson", "voronoi"]
+    "cSpell.words": ["hiderify", "latlng", "osmtogeojson", "voronoi"],
+    "css.lint.unknownAtRules": "ignore",
+    "scss.lint.unknownAtRules": "ignore",
+    "less.lint.unknownAtRules": "ignore",
+    "files.associations": {
+        "*.css": "tailwindcss"
+    },
+    "tailwindCSS.experimental.configFile": "src/styles/globals.css",
+    "tailwindCSS.includeLanguages": {
+        "astro": "html"
+    }
 }

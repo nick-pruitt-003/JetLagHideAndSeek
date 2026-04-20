@@ -11,10 +11,11 @@
  * Curated presets (NYCT, LIRR, MNR, NJT, SLE) slot into the empty
  * presets section and come in the follow-up p4-presets task.
  */
+import { Globe, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
-import { Loader2, Trash2, Upload, Globe, Plus } from "lucide-react";
 import { toast } from "react-toastify";
 
+import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
@@ -23,26 +24,25 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
-
+import { errorTask, finishTask, startTask, updateTask } from "@/lib/progress";
+import { rebuildAutoTransfers } from "@/lib/transit/auto-transfers";
+import { fetchGtfsZip, looksLikeZip } from "@/lib/transit/cors-proxy";
+import { parseGtfs } from "@/lib/transit/gtfs-parser";
 import {
     deleteSystem,
     listSystems,
     writeSystemBulk,
 } from "@/lib/transit/gtfs-store";
-import { parseGtfs } from "@/lib/transit/gtfs-parser";
-import { fetchGtfsZip, looksLikeZip } from "@/lib/transit/cors-proxy";
-import { rebuildAutoTransfers } from "@/lib/transit/auto-transfers";
-import { reachabilityClient } from "@/lib/transit/reachability-client";
 import {
-    GTFS_PRESETS,
     type ByoUrlPreset,
+    GTFS_PRESETS,
     type GtfsPreset,
 } from "@/lib/transit/presets";
+import { reachabilityClient } from "@/lib/transit/reachability-client";
 import type { ImportProgress, TransitSystem } from "@/lib/transit/types";
+import { cn } from "@/lib/utils";
 
 interface TransitSystemsDialogProps {
     open: boolean;
@@ -122,6 +122,8 @@ export default function TransitSystemsDialog({
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
+        // Reset to loading state before the IDB read resolves.
+        // eslint-disable-next-line @eslint-react/set-state-in-effect -- loading-state reset before async load
         setSystems(null);
         listSystems()
             .then((s) => {
@@ -175,15 +177,16 @@ export default function TransitSystemsDialog({
     ) => {
         if (loading) return;
 
-        const overrideName =
-            source.kind === "url" ? source.name : undefined;
+        const overrideName = source.kind === "url" ? source.name : undefined;
         const rawName =
             overrideName ||
             nameInput.trim() ||
             (source.kind === "file"
                 ? source.file.name.replace(/\.zip$/i, "")
-                : source.url.split("/").pop()?.replace(/\.zip.*$/i, "") ||
-                  "Imported system");
+                : source.url
+                      .split("/")
+                      .pop()
+                      ?.replace(/\.zip.*$/i, "") || "Imported system");
 
         const systemId =
             source.kind === "url" && source.systemId
@@ -193,7 +196,22 @@ export default function TransitSystemsDialog({
         setLoading(true);
         setProgress({ phase: "fetching", fraction: 0, message: "" });
 
-        const onProgress = (p: ImportProgress) => setProgress(p);
+        // Mirror import progress into the global top-of-viewport bar so the
+        // flow is visible even if the user closes the dialog mid-import.
+        const taskId = startTask({
+            label: `Importing ${rawName}…`,
+            progress: 0,
+        });
+        const onProgress = (p: ImportProgress) => {
+            setProgress(p);
+            const label = p.message
+                ? `${phaseLabel(p.phase)} — ${p.message}`
+                : phaseLabel(p.phase);
+            updateTask(taskId, {
+                label: `${rawName}: ${label}`,
+                progress: p.fraction,
+            });
+        };
 
         try {
             let bytes: ArrayBuffer;
@@ -261,6 +279,7 @@ export default function TransitSystemsDialog({
             // next reachability query sees the new feed.
             reachabilityClient.invalidate();
 
+            finishTask(taskId);
             toast.success(
                 `Imported ${parsed.system.name} (${parsed.stops.length.toLocaleString()} stops)`,
             );
@@ -271,6 +290,7 @@ export default function TransitSystemsDialog({
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.log("GTFS import failed:", err);
+            errorTask(taskId);
             toast.error(`Import failed: ${msg}`, {
                 toastId: "gtfs-import-error",
                 autoClose: 8000,

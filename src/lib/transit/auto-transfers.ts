@@ -24,8 +24,8 @@
 
 import KDBush from "kdbush";
 
-import { openTransitDB, replaceAutoTransfers } from "./gtfs-store";
-import type { Footpath, TransitStop } from "./types";
+import { openTransitDB, replaceAutoTransfers } from "@/lib/transit/gtfs-store";
+import type { Footpath, TransitStop } from "@/lib/transit/types";
 
 export interface AutoTransferOptions {
     /** Max straight-line distance to consider for a transfer edge. */
@@ -61,9 +61,7 @@ export async function rebuildAutoTransfers(
     //   2 = entrance                 <- skip
     //   3 = generic node             <- skip
     //   4 = boarding area            <- skip
-    const platforms = allStops.filter(
-        (s) => (s.locationType ?? 0) === 0,
-    );
+    const platforms = allStops.filter((s) => (s.locationType ?? 0) === 0);
 
     if (platforms.length === 0) {
         await replaceAutoTransfers([]);
@@ -110,10 +108,7 @@ export async function rebuildAutoTransfers(
             // Skip same-parent_station transfers — GTFS transfers.txt already
             // covers these with authoritative times, and if it doesn't, RAPTOR
             // treats same-parent stops as zero-cost via the parentStopId.
-            if (
-                from.parentStopId &&
-                from.parentStopId === to.parentStopId
-            ) {
+            if (from.parentStopId && from.parentStopId === to.parentStopId) {
                 continue;
             }
 

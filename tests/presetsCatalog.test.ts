@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { GTFS_PRESETS } from "../src/lib/transit/presets";
+import { GTFS_PRESETS } from "@/lib/transit/presets";
 
 describe("GTFS_PRESETS catalog", () => {
     it("has unique system ids", () => {

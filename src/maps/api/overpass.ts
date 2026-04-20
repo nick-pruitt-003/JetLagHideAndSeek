@@ -1,5 +1,14 @@
 import * as turf from "@turf/turf";
 import type { FeatureCollection, MultiPolygon } from "geojson";
+
+/** GET URLs longer than this often fail (browser/proxy limits); use POST instead. */
+const MAX_OVERPASS_GET_URL_LENGTH = 7500;
+/** One Overpass query with many `map_to_area` blocks is slow and RAM-heavy; split beyond this. */
+const MULTI_AREA_SPLIT_THRESHOLD = 4;
+/** Avoid too many concurrent Overpass requests per batch. */
+const MULTI_AREA_PARALLEL_CHUNK = 4;
+/** Keep `poly:"…"` clauses small enough for GET and faster server-side evaluation. */
+const MAX_POLY_INLINE_LENGTH = 5200;
 import _ from "lodash";
 import { toast } from "react-toastify";
 
@@ -8,23 +17,67 @@ import {
     mapGeoLocation,
     polyGeoJSON,
 } from "@/lib/context";
-import osmtogeojson from "@/maps/api/osm-to-geojson";
-import { safeUnion } from "@/maps/geo-utils";
-
-import { cacheFetch, determineCache } from "./cache";
+import { cacheFetch, determineCache } from "@/maps/api/cache";
 import {
     LOCATION_FIRST_TAG,
     NOMINATIM_API,
     OVERPASS_API,
     OVERPASS_API_FALLBACK,
-} from "./constants";
+} from "@/maps/api/constants";
+import osmtogeojson from "@/maps/api/osm-to-geojson";
 import type {
     EncompassingTentacleQuestionSchema,
     HomeGameMatchingQuestions,
     HomeGameMeasuringQuestions,
     QuestionSpecificLocation,
-} from "./types";
-import { CacheType } from "./types";
+} from "@/maps/api/types";
+import { CacheType } from "@/maps/api/types";
+import { safeUnion } from "@/maps/geo-utils";
+
+function dedupeOsmElements(elements: any[]): any[] {
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const el of elements) {
+        if (!el || typeof el.type !== "string" || typeof el.id !== "number")
+            continue;
+        const k = `${el.type}\0${el.id}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(el);
+    }
+    return out;
+}
+
+/**
+ * Build the lat/lon space-separated string for Overpass `poly:"…"` from a
+ * feature collection, simplifying until the clause fits GET limits and
+ * evaluates in reasonable time on the server.
+ */
+export function polyClauseStringForOverpass(
+    fc: FeatureCollection,
+): string {
+    const build = (c: FeatureCollection) =>
+        turf
+            .getCoords(c.features as any)
+            .flatMap((polygon: any) => polygon.geometry.coordinates)
+            .flat()
+            .map((coord: number[]) => `${coord[1]} ${coord[0]}`)
+            .join(" ");
+
+    let tolerance = 0.00006;
+    let current = fc;
+    let str = build(current);
+    let guard = 0;
+    while (str.length > MAX_POLY_INLINE_LENGTH && guard++ < 28) {
+        tolerance *= 1.35;
+        current = turf.simplify(fc, {
+            tolerance,
+            highQuality: true,
+        }) as FeatureCollection;
+        str = build(current);
+    }
+    return str;
+}
 
 const getOverpassData = async (
     query: string,
@@ -33,9 +86,50 @@ const getOverpassData = async (
 ) => {
     const encodedQuery = encodeURIComponent(query);
     const primaryUrl = `${OVERPASS_API}?data=${encodedQuery}`;
-    let response = await cacheFetch(primaryUrl, loadingText, cacheType);
+    const usePost = primaryUrl.length > MAX_OVERPASS_GET_URL_LENGTH;
 
-    if (!response.ok) {
+    const fetchOverpassPost = async (): Promise<Response> => {
+        let response = await fetch(OVERPASS_API, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: `data=${encodedQuery}`,
+        });
+        if (!response.ok) {
+            response = await fetch(OVERPASS_API_FALLBACK, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: `data=${encodedQuery}`,
+            });
+        }
+        if (response.ok) {
+            const cache = await determineCache(cacheType);
+            await cache.put(primaryUrl, response.clone());
+        }
+        return response;
+    };
+
+    let response: Response;
+
+    if (usePost) {
+        const cache = await determineCache(cacheType);
+        const cachedResponse = await cache.match(primaryUrl);
+        if (cachedResponse?.ok) {
+            response = cachedResponse.clone();
+        } else {
+            const pending = fetchOverpassPost();
+            response = loadingText
+                ? await toast.promise(pending, { pending: loadingText })
+                : await pending;
+        }
+    } else {
+        response = await cacheFetch(primaryUrl, loadingText, cacheType);
+    }
+
+    if (!response.ok && !usePost) {
         // Try the fallback, but store the result under the primary URL key so future requests are served from cache without needing to fail-over again.
         try {
             const fallbackResponse = await cacheFetch(
@@ -348,29 +442,26 @@ export const findPlacesInZone = async (
     alternatives: string[] = [],
     timeoutDuration: number = 0,
 ) => {
-    let query: string;
     const $polyGeoJSON = polyGeoJSON.get();
+    const jsonHeader =
+        timeoutDuration !== 0
+            ? `[out:json][timeout:${timeoutDuration}][maxsize:536870912]`
+            : `[out:json]`;
+
+    let data: { elements?: any[] };
+
     if ($polyGeoJSON) {
-        query = `
-[out:json]${timeoutDuration != 0 ? `[timeout:${timeoutDuration}]` : ""};
+        const polyStr = polyClauseStringForOverpass($polyGeoJSON);
+        const query = `
+${jsonHeader};
 (
-${searchType}${filter}(poly:"${turf
-            .getCoords($polyGeoJSON.features)
-            .flatMap((polygon) => polygon.geometry.coordinates)
-            .flat()
-            .map((coord) => [coord[1], coord[0]].join(" "))
-            .join(" ")}");
+${searchType}${filter}(poly:"${polyStr}");
 ${
     alternatives.length > 0
         ? alternatives
               .map(
                   (alternative) =>
-                      `${searchType}${alternative}(poly:"${turf
-                          .getCoords($polyGeoJSON.features)
-                          .flatMap((polygon) => polygon.geometry.coordinates)
-                          .flat()
-                          .map((coord) => [coord[1], coord[0]].join(" "))
-                          .join(" ")}");`,
+                      `${searchType}${alternative}(poly:"${polyStr}");`,
               )
               .join("\n")
         : ""
@@ -378,6 +469,11 @@ ${
 );
 out ${outType};
 `;
+        data = await getOverpassData(
+            query,
+            loadingText,
+            CacheType.ZONE_CACHE,
+        );
     } else {
         const primaryLocation = mapGeoLocation.get();
         const additionalLocations = additionalMapGeoLocations
@@ -385,48 +481,108 @@ out ${outType};
             .filter((entry) => entry.added)
             .map((entry) => entry.location);
         const allLocations = [primaryLocation, ...additionalLocations];
-        const relationToAreaBlocks = allLocations
-            .map((loc, idx) => {
-                const regionVar = `.region${idx}`;
-                return `relation(${loc.properties.osm_id});map_to_area->${regionVar};`;
-            })
-            .join("\n");
-        const searchBlocks = allLocations
-            .map((_, idx) => {
-                const regionVar = `area.region${idx}`;
-                const altQueries =
-                    alternatives.length > 0
-                        ? alternatives
-                              .map(
-                                  (alt) => `${searchType}${alt}(${regionVar});`,
-                              )
-                              .join("\n")
-                        : "";
-                return `
+
+        if (allLocations.length >= MULTI_AREA_SPLIT_THRESHOLD) {
+            const header =
+                timeoutDuration !== 0
+                    ? `[out:json][timeout:${timeoutDuration}][maxsize:536870912];`
+                    : `[out:json][maxsize:536870912];`;
+
+            const runSplit = async () => {
+                const queries = allLocations.map((loc) => {
+                    const relationToAreaBlocks = `relation(${loc.properties.osm_id});map_to_area->.region0;`;
+                    const regionVar = `area.region0`;
+                    const altQueries =
+                        alternatives.length > 0
+                            ? alternatives
+                                  .map(
+                                      (alt) =>
+                                          `${searchType}${alt}(${regionVar});`,
+                                  )
+                                  .join("\n")
+                            : "";
+                    return `
+${header}
+${relationToAreaBlocks}
+(
+            ${searchType}${filter}(${regionVar});
+            ${altQueries}
+);
+out ${outType};
+`;
+                });
+
+                const merged: any[] = [];
+                for (
+                    let i = 0;
+                    i < queries.length;
+                    i += MULTI_AREA_PARALLEL_CHUNK
+                ) {
+                    const chunk = queries.slice(i, i + MULTI_AREA_PARALLEL_CHUNK);
+                    const parts = await Promise.all(
+                        chunk.map((q) =>
+                            getOverpassData(q, undefined, CacheType.ZONE_CACHE),
+                        ),
+                    );
+                    for (const p of parts) {
+                        merged.push(...(p.elements ?? []));
+                    }
+                }
+                return { elements: dedupeOsmElements(merged) };
+            };
+
+            data = loadingText
+                ? await toast.promise(runSplit(), { pending: loadingText })
+                : await runSplit();
+        } else {
+            const relationToAreaBlocks = allLocations
+                .map((loc, idx) => {
+                    const regionVar = `.region${idx}`;
+                    return `relation(${loc.properties.osm_id});map_to_area->${regionVar};`;
+                })
+                .join("\n");
+            const searchBlocks = allLocations
+                .map((_, idx) => {
+                    const regionVar = `area.region${idx}`;
+                    const altQueries =
+                        alternatives.length > 0
+                            ? alternatives
+                                  .map(
+                                      (alt) =>
+                                          `${searchType}${alt}(${regionVar});`,
+                                  )
+                                  .join("\n")
+                            : "";
+                    return `
             ${searchType}${filter}(${regionVar});
             ${altQueries}
           `;
-            })
-            .join("\n");
-        query = `
-        [out:json]${timeoutDuration !== 0 ? `[timeout:${timeoutDuration}]` : ""};
+                })
+                .join("\n");
+            const query = `
+        ${jsonHeader};
         ${relationToAreaBlocks}
         (
         ${searchBlocks}
         );
         out ${outType};
         `;
+            data = await getOverpassData(
+                query,
+                loadingText,
+                CacheType.ZONE_CACHE,
+            );
+        }
     }
-    const data = await getOverpassData(
-        query,
-        loadingText,
-        CacheType.ZONE_CACHE,
-    );
+    if (!data.elements) {
+        data.elements = [];
+    }
+
     const subtractedEntries = additionalMapGeoLocations
         .get()
         .filter((e) => !e.added);
     const subtractedPolygons = subtractedEntries.map((entry) => entry.location);
-    if (subtractedPolygons.length > 0 && data && data.elements) {
+    if (subtractedPolygons.length > 0 && data.elements.length > 0) {
         const turfPolys = await Promise.all(
             subtractedPolygons.map(
                 async (location) =>
@@ -449,7 +605,7 @@ out ${outType};
             );
         });
     }
-    return data;
+    return data as { elements: any[]; remark?: string };
 };
 
 /**
@@ -466,6 +622,16 @@ out ${outType};
  * Cached under ZONE_CACHE so toggling the option (or editing questions)
  * doesn't re-hit the network.
  */
+function heritageNodeIdsFromElements(elements: any[] | undefined): Set<number> {
+    const ids = new Set<number>();
+    for (const el of elements ?? []) {
+        if (el.type === "node" && typeof el.id === "number") {
+            ids.add(el.id);
+        }
+    }
+    return ids;
+}
+
 export const findHeritageRailwayMemberNodeIds = async (): Promise<
     Set<number>
 > => {
@@ -482,40 +648,8 @@ export const findHeritageRailwayMemberNodeIds = async (): Promise<
         '["railway"="heritage"]',
     ];
 
-    let scopeBlock: string;
-    if ($polyGeoJSON) {
-        const poly = turf
-            .getCoords($polyGeoJSON.features)
-            .flatMap((polygon) => polygon.geometry.coordinates)
-            .flat()
-            .map((coord) => [coord[1], coord[0]].join(" "))
-            .join(" ");
-        scopeBlock = wayFilters
-            .map((f) => `way${f}(poly:"${poly}");`)
-            .join("\n");
-    } else {
-        const primaryLocation = mapGeoLocation.get();
-        const additionalLocations = additionalMapGeoLocations
-            .get()
-            .filter((entry) => entry.added)
-            .map((entry) => entry.location);
-        const allLocations = [primaryLocation, ...additionalLocations];
-        const areaBlocks = allLocations
-            .map(
-                (loc, idx) =>
-                    `relation(${loc.properties.osm_id});map_to_area->.region${idx};`,
-            )
-            .join("\n");
-        const searchBlocks = allLocations
-            .flatMap((_loc, idx) =>
-                wayFilters.map((f) => `way${f}(area.region${idx});`),
-            )
-            .join("\n");
-        scopeBlock = `${areaBlocks}\n${searchBlocks}`;
-    }
-
-    const query = `
-[out:json][timeout:60];
+    const heritageQuery = (scopeBlock: string) => `
+[out:json][timeout:120][maxsize:536870912];
 (
 ${scopeBlock}
 )->.heritage_ways;
@@ -523,19 +657,85 @@ node(w.heritage_ways);
 out ids;
 `;
 
+    if ($polyGeoJSON) {
+        const poly = polyClauseStringForOverpass($polyGeoJSON);
+        const scopeBlock = wayFilters
+            .map((f) => `way${f}(poly:"${poly}");`)
+            .join("\n");
+        const data = await getOverpassData(
+            heritageQuery(scopeBlock),
+            "Finding heritage railway lines...",
+            CacheType.ZONE_CACHE,
+        );
+        return heritageNodeIdsFromElements(data.elements);
+    }
+
+    const primaryLocation = mapGeoLocation.get();
+    const additionalLocations = additionalMapGeoLocations
+        .get()
+        .filter((entry) => entry.added)
+        .map((entry) => entry.location);
+    const allLocations = [primaryLocation, ...additionalLocations];
+
+    if (allLocations.length >= MULTI_AREA_SPLIT_THRESHOLD) {
+        const runSplit = async () => {
+            const ids = new Set<number>();
+            const queries = allLocations.map((loc) => {
+                const scope = wayFilters
+                    .map((f) => `way${f}(area.r0);`)
+                    .join("\n");
+                return `
+[out:json][timeout:120][maxsize:536870912];
+relation(${loc.properties.osm_id});map_to_area->.r0;
+(
+${scope}
+)->.heritage_ways;
+node(w.heritage_ways);
+out ids;
+`;
+            });
+
+            for (let i = 0; i < queries.length; i += MULTI_AREA_PARALLEL_CHUNK) {
+                const chunk = queries.slice(i, i + MULTI_AREA_PARALLEL_CHUNK);
+                const parts = await Promise.all(
+                    chunk.map((q) =>
+                        getOverpassData(q, undefined, CacheType.ZONE_CACHE),
+                    ),
+                );
+                for (const p of parts) {
+                    for (const id of heritageNodeIdsFromElements(p.elements)) {
+                        ids.add(id);
+                    }
+                }
+            }
+            return ids;
+        };
+
+        return toast.promise(runSplit(), {
+            pending: "Finding heritage railway lines...",
+        });
+    }
+
+    const areaBlocks = allLocations
+        .map(
+            (loc, idx) =>
+                `relation(${loc.properties.osm_id});map_to_area->.region${idx};`,
+        )
+        .join("\n");
+    const searchBlocks = allLocations
+        .flatMap((_loc, idx) =>
+            wayFilters.map((f) => `way${f}(area.region${idx});`),
+        )
+        .join("\n");
+    const scopeBlock = `${areaBlocks}\n${searchBlocks}`;
+
     const data = await getOverpassData(
-        query,
+        heritageQuery(scopeBlock),
         "Finding heritage railway lines...",
         CacheType.ZONE_CACHE,
     );
 
-    const ids = new Set<number>();
-    for (const el of data.elements ?? []) {
-        if (el.type === "node" && typeof el.id === "number") {
-            ids.add(el.id);
-        }
-    }
-    return ids;
+    return heritageNodeIdsFromElements(data.elements);
 };
 
 export const findPlacesSpecificInZone = async (

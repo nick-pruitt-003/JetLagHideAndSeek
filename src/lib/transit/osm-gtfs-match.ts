@@ -20,8 +20,8 @@
 
 import KDBush from "kdbush";
 
-import { haversineMeters } from "./auto-transfers";
-import type { TransitStop } from "./types";
+import { haversineMeters } from "@/lib/transit/auto-transfers";
+import type { TransitStop } from "@/lib/transit/types";
 
 /** OSM tags we'll look at for an explicit GTFS crosswalk. Order matters. */
 const GTFS_REF_TAGS = [
@@ -87,16 +87,18 @@ const NOISE_TOKENS = new Set([
  * Ordinal suffixes on numbers are stripped so "42nd St" matches "42 St".
  */
 export function normalizeStationName(raw: string): string[] {
-    return raw
-        .toLowerCase()
-        .normalize("NFKD")
-        // collapse punctuation (but keep hyphen as a token separator)
-        .replace(/[^\p{Letter}\p{Number}\s-]/gu, " ")
-        // strip ordinal suffixes: "42nd" -> "42"
-        .replace(/(\d+)(?:st|nd|rd|th)\b/g, "$1")
-        .split(/[\s-]+/)
-        .map((t) => t.trim())
-        .filter((t) => t.length > 0 && !NOISE_TOKENS.has(t));
+    return (
+        raw
+            .toLowerCase()
+            .normalize("NFKD")
+            // collapse punctuation (but keep hyphen as a token separator)
+            .replace(/[^\p{Letter}\p{Number}\s-]/gu, " ")
+            // strip ordinal suffixes: "42nd" -> "42"
+            .replace(/(\d+)(?:st|nd|rd|th)\b/g, "$1")
+            .split(/[\s-]+/)
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0 && !NOISE_TOKENS.has(t))
+    );
 }
 
 /** Jaccard similarity of two station names after normalization. 0..1. */
@@ -290,7 +292,8 @@ function resolveExplicitCrosswalk(
         if (!candidates?.length) continue;
         // Prefer a parent station (location_type=1) if one exists among
         // the matches, otherwise take the first.
-        const chosen = candidates.find((c) => c.locationType === 1) ?? candidates[0];
+        const chosen =
+            candidates.find((c) => c.locationType === 1) ?? candidates[0];
         return {
             stopId: chosen.id,
             systemId: chosen.systemId,
@@ -390,7 +393,10 @@ function dedupePreferringParents(
  * and the parent — use {@link lookupArrivalWithParentFallback} for
  * convenience.
  */
-export function rollUpToParent(stopId: string, byId: Map<string, TransitStop>): string {
+export function rollUpToParent(
+    stopId: string,
+    byId: Map<string, TransitStop>,
+): string {
     const s = byId.get(stopId);
     if (!s) return stopId;
     const lt = s.locationType ?? 0;

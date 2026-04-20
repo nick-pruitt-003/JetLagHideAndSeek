@@ -1,8 +1,8 @@
 import _ from "lodash";
 
-import { GEOCODER_API } from "./constants";
-import { convertToLatLong } from "./geo";
-import type { OpenStreetMap } from "./types";
+import { GEOCODER_API } from "@/maps/api/constants";
+import { convertToLatLong } from "@/maps/api/geo";
+import type { OpenStreetMap } from "@/maps/api/types";
 
 export const geocode = async (
     address: string,

@@ -9,14 +9,7 @@ import { OpenLocationCode } from "open-location-code";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useDebounce } from "@/hooks/useDebounce";
-import { allowGooglePlusCodes, isLoading } from "@/lib/context";
-import { cn } from "@/lib/utils";
-import { determineName, geocode, ICON_COLORS } from "@/maps/api";
-
-import { Button } from "./ui/button";
+import { Button } from "@/components/ui/button";
 import {
     Command,
     CommandEmpty,
@@ -24,7 +17,7 @@ import {
     CommandInput,
     CommandItem,
     CommandList,
-} from "./ui/command";
+} from "@/components/ui/command";
 import {
     Dialog,
     DialogClose,
@@ -33,9 +26,15 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
-} from "./ui/dialog";
-import { Separator } from "./ui/separator";
-import { SidebarMenuItem } from "./ui/sidebar-l";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { SidebarMenuItem } from "@/components/ui/sidebar-l";
+import { useDebounce } from "@/hooks/useDebounce";
+import { allowGooglePlusCodes, isLoading } from "@/lib/context";
+import { cn } from "@/lib/utils";
+import { determineName, geocode, ICON_COLORS } from "@/maps/api";
 
 const parseCoordinatesFromText = (
     text: string,
@@ -110,6 +109,9 @@ const LatLngEditForm = ({
     const googlePlusCodesRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
+        // Debounced query effect: resetting/loading-flag bookkeeping is
+        // the whole point, so `set-state-in-effect` warnings are expected.
+        /* eslint-disable @eslint-react/set-state-in-effect */
         if (debouncedValue === "") {
             setResults([]);
             return;
@@ -126,6 +128,7 @@ const LatLngEditForm = ({
                     setLoading(false);
                 });
         }
+        /* eslint-enable @eslint-react/set-state-in-effect */
     }, [debouncedValue]);
 
     const _latlngLabels = results.map((r) => determineName(r));

@@ -10,6 +10,7 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
+import { Button } from "@/components/ui/button";
 import {
     Command,
     CommandEmpty,
@@ -23,6 +24,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { useTutorialStep } from "@/hooks/use-tutorial-step";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
@@ -36,6 +38,7 @@ import {
     polyGeoJSON,
     questions,
 } from "@/lib/context";
+import { withTask } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 import {
     CacheType,
@@ -45,9 +48,6 @@ import {
     geocode,
     type OpenStreetMap,
 } from "@/maps/api";
-
-import { Button } from "./ui/button";
-import { Separator } from "./ui/separator";
 
 export const PlacePicker = ({
     className = "",
@@ -81,11 +81,7 @@ export const PlacePicker = ({
             mapGeoLocation.get()?.properties?.osm_id,
             additionalMapGeoLocations
                 .get()
-                .map((l) => [
-                    l.location.properties.osm_id,
-                    l.added,
-                    l.base,
-                ]),
+                .map((l) => [l.location.properties.osm_id, l.added, l.base]),
         ]);
 
     const handleUpgradeBoundary = async () => {
@@ -93,14 +89,12 @@ export const PlacePicker = ({
         setUpgradingBoundary(true);
         const signatureBefore = captureRegionSignature();
         try {
-            const detailed = await toast.promise(
-                determineMapBoundaries({ forceDetailed: true }),
-                {
-                    pending: "Loading detailed boundary from Overpass...",
-                    error: "Couldn't load detailed boundary (Overpass may be rate-limited). Falling back to simplified polygon.",
-                    success: "Detailed boundary loaded.",
-                },
-                { toastId: "boundary-upgrade" },
+            // Show in-flight status in the global progress bar (indeterminate
+            // — Overpass doesn't report progress). We still fire a toast on
+            // success/error so slow-to-notice users get a second channel.
+            const detailed = await withTask(
+                "Loading detailed boundary from Overpass…",
+                () => determineMapBoundaries({ forceDetailed: true }),
             );
             if (captureRegionSignature() !== signatureBefore) {
                 // User picked a different region while we were fetching.
@@ -112,8 +106,15 @@ export const PlacePicker = ({
             // Tell Map.tsx to re-render - its refresh effect keys off
             // this nonce in addition to the normal region atoms.
             mapRefreshNonce.set(mapRefreshNonce.get() + 1);
+            toast.success("Detailed boundary loaded.", {
+                toastId: "boundary-upgrade",
+            });
         } catch (err) {
             console.error("Detailed boundary upgrade failed:", err);
+            toast.error(
+                "Couldn't load detailed boundary (Overpass may be rate-limited). Falling back to simplified polygon.",
+                { toastId: "boundary-upgrade" },
+            );
         } finally {
             setUpgradingBoundary(false);
         }
@@ -123,6 +124,9 @@ export const PlacePicker = ({
         !$polyGeoJSON && $boundaryDetailLevel === "simple";
 
     useEffect(() => {
+        // Debounced query effect: resetting/loading-flag bookkeeping is
+        // the whole point, so `set-state-in-effect` warnings are expected.
+        /* eslint-disable @eslint-react/set-state-in-effect */
         if (debouncedValue === "") {
             setResults([]);
             return;
@@ -140,6 +144,7 @@ export const PlacePicker = ({
                     setLoading(false);
                 });
         }
+        /* eslint-enable @eslint-react/set-state-in-effect */
     }, [debouncedValue]);
 
     const _placeLabels = results.map((r) => determineName(r));
@@ -336,8 +341,8 @@ export const PlacePicker = ({
                                         : "Load detailed boundary"}
                                 </span>
                                 <span className="text-xs text-slate-500">
-                                    Coastline-precision geometry from
-                                    Overpass. Slower, sometimes times out.
+                                    Coastline-precision geometry from Overpass.
+                                    Slower, sometimes times out.
                                 </span>
                             </span>
                         </button>

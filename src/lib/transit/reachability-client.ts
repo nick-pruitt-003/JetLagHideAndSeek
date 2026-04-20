@@ -11,13 +11,13 @@
  * so its in-memory graph is reused across queries.
  */
 
-import type { ReachabilityQuery, ReachabilityResult } from "./types";
 import type {
     SerializedQuery,
     SerializedResult,
     WorkerRequest,
     WorkerResponse,
-} from "./reachability-worker";
+} from "@/lib/transit/reachability-worker";
+import type { ReachabilityQuery, ReachabilityResult } from "@/lib/transit/types";
 
 export interface QueryOptions {
     maxRounds?: number;
@@ -48,9 +48,12 @@ class ReachabilityClient {
             new URL("./reachability-worker.ts", import.meta.url),
             { type: "module" },
         );
-        this.worker.addEventListener("message", (ev: MessageEvent<WorkerResponse>) => {
-            this.handleMessage(ev.data);
-        });
+        this.worker.addEventListener(
+            "message",
+            (ev: MessageEvent<WorkerResponse>) => {
+                this.handleMessage(ev.data);
+            },
+        );
         this.worker.addEventListener("error", (ev) => {
             // Surface worker-script-level errors by rejecting all pending.
             for (const p of this.pending.values()) {
@@ -86,7 +89,7 @@ class ReachabilityClient {
                 // Cleaner would be a separate pending map, but cacheStats
                 // is diagnostic only.
                 this.pending.delete(msg.id);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
                 (handler as any).resolve(msg.stats);
                 return;
         }
@@ -140,7 +143,6 @@ class ReachabilityClient {
         const worker = this.ensureWorker();
         const id = this.nextId++;
         return new Promise((resolve, reject) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             this.pending.set(id, { resolve: resolve as any, reject });
             worker.postMessage({
                 id,

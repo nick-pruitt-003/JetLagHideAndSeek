@@ -7,6 +7,23 @@ import { Loader2, SidebarCloseIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 
+import ReachabilitySection from "@/components/ReachabilitySection";
+import { TransitSystemsButton } from "@/components/TransitSystemsDialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { ScrollToTop } from "@/components/ui/scroll-to-top";
+import { MENU_ITEM_CLASSNAME } from "@/components/ui/sidebar-l";
 import {
     Sidebar,
     SidebarContent,
@@ -16,6 +33,7 @@ import {
     SidebarMenu,
     SidebarMenuItem,
 } from "@/components/ui/sidebar-r";
+import { UnitSelect } from "@/components/UnitSelect";
 import {
     activeStationsOnly as activeStationsOnlyAtom,
     additionalMapGeoLocations,
@@ -47,8 +65,8 @@ import {
 import { getAllStops } from "@/lib/transit/gtfs-store";
 import {
     buildStopIndex,
-    matchOsmToGtfs,
     type MatchedStation,
+    matchOsmToGtfs,
     type OsmStationInput,
 } from "@/lib/transit/osm-gtfs-match";
 import type { TransitStop } from "@/lib/transit/types";
@@ -61,12 +79,12 @@ import {
     findTentacleLocations,
     nearestToQuestion,
     normalizeToStationFeatures,
+    OVERPASS_ACTIVE_RAIL_STATION_EXCLUSIONS,
     parseCustomStationsFromText,
     QuestionSpecificLocation,
     type StationCircle,
     type StationPlace,
 } from "@/maps/api";
-import { filterCirclesByReachability } from "@/maps/geo-utils/zonePipeline";
 import osmtogeojson from "@/maps/api/osm-to-geojson";
 import {
     applyQuestionFilters,
@@ -83,25 +101,7 @@ import {
     safeUnion,
     stationsSignature,
 } from "@/maps/geo-utils";
-
-import { Button } from "./ui/button";
-import { TransitSystemsButton } from "./TransitSystemsDialog";
-import ReachabilitySection from "./ReachabilitySection";
-import { Checkbox } from "./ui/checkbox";
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from "./ui/command";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { MultiSelect } from "./ui/multi-select";
-import { ScrollToTop } from "./ui/scroll-to-top";
-import { MENU_ITEM_CLASSNAME } from "./ui/sidebar-l";
-import { UnitSelect } from "./UnitSelect";
+import { filterCirclesByReachability } from "@/maps/geo-utils/zonePipeline";
 
 function _previewText(count: number) {
     return `${count} custom station${count === 1 ? "" : "s"} imported`;
@@ -191,7 +191,9 @@ export const ZoneSidebar = () => {
 
         removeHidingZones();
 
-        const stationColor = (feature: any): {
+        const stationColor = (
+            feature: any,
+        ): {
             color: string;
             fillColor: string;
             fillOpacity: number;
@@ -268,8 +270,8 @@ export const ZoneSidebar = () => {
                 // icon so unknown stations pop visually. Falls back
                 // to the original black-on-transparent icon when
                 // reachability isn't active.
-                const osmId: string | undefined =
-                    (geoJsonPoint as any)?.properties?.properties?.id;
+                const osmId: string | undefined = (geoJsonPoint as any)
+                    ?.properties?.properties?.id;
                 const info = statusLookup?.(osmId);
                 const tint = !info
                     ? "text-black"
@@ -387,7 +389,7 @@ export const ZoneSidebar = () => {
                     }));
                 } else {
                     const activeFilter = activeStationsOnly
-                        ? '["disused"!="yes"]["abandoned"!="yes"]["railway:status"!="abandoned"]["railway:status"!="disused"]["railway:status"!="closed"]["operational_status"!="closed"]["passenger"!="no"]["station"!="freight"]["railway:traffic_mode"!="freight"]["historic"!="station"]'
+                        ? OVERPASS_ACTIVE_RAIL_STATION_EXCLUSIONS
                         : "";
                     const stationOptions = $displayHidingZonesOptions.map(
                         (opt) => `${opt}${activeFilter}`,
@@ -400,7 +402,7 @@ export const ZoneSidebar = () => {
                             "nwr",
                             "center",
                             stationOptions.slice(1),
-                            90,
+                            240,
                         ),
                     ).features;
 
@@ -474,6 +476,17 @@ export const ZoneSidebar = () => {
                             "Heritage railway filter failed; keeping all stations:",
                             err,
                         );
+                        // User asked to exclude heritage/tourist lines but
+                        // the Overpass call died — tell them the filter
+                        // didn't run instead of silently including heritage
+                        // stations and looking like the toggle is broken.
+                        toast.warning(
+                            "Couldn't load heritage-railway data (Overpass may be rate-limited); heritage stations were NOT filtered out.",
+                            {
+                                toastId: "heritage-filter-failed",
+                                autoClose: 8000,
+                            },
+                        );
                     }
                 }
 
@@ -515,10 +528,9 @@ export const ZoneSidebar = () => {
 
         fetchRawCircles().catch((error) => {
             console.log("Error in hiding zone initialization:", error);
-            toast.error(
-                "An error occurred during hiding zone initialization",
-                { toastId: "hiding-zone-initialization-error" },
-            );
+            toast.error("An error occurred during hiding zone initialization", {
+                toastId: "hiding-zone-initialization-error",
+            });
         });
     }, [
         map,
@@ -548,11 +560,13 @@ export const ZoneSidebar = () => {
     // ------------------------------------------------------------------
     useEffect(() => {
         if (!rawCircles || rawCircles.length === 0) {
+            // eslint-disable-next-line @eslint-react/set-state-in-effect -- reset stale bundle when upstream clears
             setReachabilityBundle(null);
             return;
         }
         if (!$reachabilityResult) {
             // Reachability hasn't been queried yet; don't load GTFS.
+            // eslint-disable-next-line @eslint-react/set-state-in-effect -- reset stale bundle when query cleared
             setReachabilityBundle(null);
             return;
         }
@@ -605,6 +619,17 @@ export const ZoneSidebar = () => {
             } catch (err) {
                 if (!cancelled) {
                     console.log("Reachability bundle build failed:", err);
+                    // Silent degradation here would leave the station filter
+                    // silently stale vs. GTFS — surface it so the user knows
+                    // classifications may be wrong. Dedup by toastId so a
+                    // flapping effect can't spam the UI.
+                    toast.error(
+                        "Couldn't match stations to GTFS stops; reachability results may be stale.",
+                        {
+                            toastId: "reachability-bundle-failed",
+                            autoClose: 6000,
+                        },
+                    );
                 }
             } finally {
                 if (import.meta.env.DEV) console.timeEnd(markLabel);
@@ -650,9 +675,8 @@ export const ZoneSidebar = () => {
             });
 
             const currentQuestions = questions.get();
-            const measuringPoiCache = await prefetchMeasuringPoiPoints(
-                currentQuestions,
-            );
+            const measuringPoiCache =
+                await prefetchMeasuringPoiPoints(currentQuestions);
             if (gen !== filterGenRef.current) {
                 if (import.meta.env.DEV) console.timeEnd(markLabel);
                 return;
@@ -690,8 +714,7 @@ export const ZoneSidebar = () => {
                         matches: reachabilityBundle.matches,
                         arrivalsByStopId: $reachabilityResult.arrivalSeconds,
                         stopById: reachabilityBundle.stopById,
-                        budgetMinutes:
-                            $reachabilityResult.query.budgetMinutes,
+                        budgetMinutes: $reachabilityResult.query.budgetMinutes,
                         overrides: overridesMap,
                         unknownDefault: "include",
                     });
@@ -709,10 +732,9 @@ export const ZoneSidebar = () => {
 
         run().catch((error) => {
             console.log("Error in hiding zone filter pass:", error);
-            toast.error(
-                "An error occurred during hiding zone filtering",
-                { toastId: "hiding-zone-filter-error" },
-            );
+            toast.error("An error occurred during hiding zone filtering", {
+                toastId: "hiding-zone-filter-error",
+            });
         });
     }, [
         map,
@@ -744,7 +766,13 @@ export const ZoneSidebar = () => {
     // is O(N log N) at best and noticeable at a few hundred circles.
     // Key on a stable signature so unrelated store changes
     // (hidingZoneModeStationID, planning-mode flags) don't redo the
-    // union.
+    // union. We intentionally exclude `activeStations` identity so a
+    // re-filter that produces the same set doesn't re-run union.
+    const activeStationsSignature = stationsSignature(
+        activeStations,
+        $hidingRadius,
+        $hidingRadiusUnits,
+    );
     const styledGeoJSON = useMemo(
         () =>
             styleStations(
@@ -753,18 +781,8 @@ export const ZoneSidebar = () => {
                 $hidingRadius,
                 $hidingRadiusUnits,
             ),
-        // Signature string captures the set of station ids + radius +
-        // units. We intentionally exclude `activeStations` identity so
-        // a re-filter that produces the same set doesn't re-run union.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [
-            stationsSignature(
-                activeStations,
-                $hidingRadius,
-                $hidingRadiusUnits,
-            ),
-            $displayHidingZonesStyle,
-        ],
+        // eslint-disable-next-line @eslint-react/exhaustive-deps
+        [activeStationsSignature, $displayHidingZonesStyle],
     );
 
     useEffect(() => {
@@ -803,8 +821,7 @@ export const ZoneSidebar = () => {
             const statusLookup = $reachabilityResult
                 ? (osmId: string | undefined) => {
                       if (!osmId) return undefined;
-                      const status =
-                          $reachabilityClassifications.get(osmId);
+                      const status = $reachabilityClassifications.get(osmId);
                       if (!status) return undefined;
                       return {
                           status,
@@ -821,6 +838,11 @@ export const ZoneSidebar = () => {
         } else {
             removeHidingZones();
         }
+        // `map`, `showGeoJSON`, `removeHidingZones` are stable per mount
+        // (map is a Leaflet instance captured once; the two functions
+        // are component-module scoped). Re-running on their identity
+        // would needlessly redraw the GeoJSON layer.
+        // eslint-disable-next-line @eslint-react/exhaustive-deps
     }, [
         $displayHidingZones,
         $displayHidingZonesStyle,
@@ -924,6 +946,21 @@ export const ZoneSidebar = () => {
                                     />
                                 </div>
                             </SidebarMenuItem>
+                            <SidebarMenuItem
+                                className={cn(
+                                    MENU_ITEM_CLASSNAME,
+                                    "text-xs text-muted-foreground leading-4 -mt-1",
+                                )}
+                            >
+                                Filters out disused / suspended stops and
+                                lifecycle-tagged stations (
+                                <span className="font-mono text-[0.85em]">
+                                    disused:railway
+                                </span>
+                                , etc.). Turn off to match raw OSM (e.g. if a
+                                closed stop is still tagged like an active
+                                station).
+                            </SidebarMenuItem>
                             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                                 <div className="flex flex-row items-center justify-between w-full">
                                     <Label className="font-semibold font-poppins flex items-center gap-1.5">
@@ -947,11 +984,11 @@ export const ZoneSidebar = () => {
                                     "text-xs text-muted-foreground leading-4 -mt-1",
                                 )}
                             >
-                                Drops stops on preserved / tourism /
-                                abandoned railway lines. Leave off for
-                                one-way scenic routes like Durango–Silverton
-                                or Cuyahoga Valley Scenic, where stations
-                                are still meaningful hiding spots.
+                                Drops stops on preserved / tourism / abandoned
+                                railway lines. Leave off for one-way scenic
+                                routes like Durango–Silverton or Cuyahoga Valley
+                                Scenic, where stations are still meaningful
+                                hiding spots.
                             </SidebarMenuItem>
                             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                                 <TransitSystemsButton
@@ -1493,7 +1530,9 @@ export const ZoneSidebar = () => {
                                                                         .id
                                                                 ]
                                                             }
-                                                            disabled={$isLoading}
+                                                            disabled={
+                                                                $isLoading
+                                                            }
                                                         />
                                                     )}
                                                     <button
@@ -1589,11 +1628,13 @@ function StationReachabilityControl({
     } else if (status === "unreachable") {
         glyph = "✗";
         color = "bg-red-600/80 text-white";
-        title = "Unreachable — shown because it was included manually (click to force include)";
+        title =
+            "Unreachable — shown because it was included manually (click to force include)";
     } else {
         glyph = "?";
         color = "bg-amber-500 text-white";
-        title = "Unknown — no GTFS match. Click to force include; click again to exclude.";
+        title =
+            "Unknown — no GTFS match. Click to force include; click again to exclude.";
     }
 
     return (
@@ -1616,9 +1657,9 @@ function StationReachabilityControl({
 function styleStations(
     circles: StationCircle[],
     style: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _radius: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _units: turf.Units,
 ): FeatureCollection | Feature {
     switch (style) {

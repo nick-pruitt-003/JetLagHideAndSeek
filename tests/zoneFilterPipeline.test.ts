@@ -2,6 +2,8 @@ import * as turf from "@turf/turf";
 import type { Feature, FeatureCollection, Polygon } from "geojson";
 import { describe, expect, it } from "vitest";
 
+import type { MatchedStation } from "@/lib/transit/osm-gtfs-match";
+import type { TransitStop } from "@/lib/transit/types";
 import type { StationCircle, StationPlace } from "@/maps/api";
 import {
     applyQuestionFilters,
@@ -11,8 +13,6 @@ import {
     playableBboxFromHoledMask,
     stationsSignature,
 } from "@/maps/geo-utils/zonePipeline";
-import type { MatchedStation } from "@/lib/transit/osm-gtfs-match";
-import type { TransitStop } from "@/lib/transit/types";
 import type { Question } from "@/maps/schema";
 
 // ---------------------------------------------------------------------------
@@ -158,10 +158,11 @@ describe("buildCirclesFromPlaces", () => {
     });
 
     it("honors the steps option for polygon resolution", () => {
-        const circles = buildCirclesFromPlaces(
-            [mkPlace("node/1", 0, 0)],
-            { radius: 1, units: "kilometers", steps: 8 },
-        );
+        const circles = buildCirclesFromPlaces([mkPlace("node/1", 0, 0)], {
+            radius: 1,
+            units: "kilometers",
+            steps: 8,
+        });
         // turf.circle produces `steps + 1` coordinates (closed ring).
         expect(circles[0].geometry.coordinates[0].length).toBe(9);
     });
@@ -223,10 +224,10 @@ describe("cullCirclesAgainstZone", () => {
     });
 
     it("returns empty when no playable region is provided", () => {
-        const circles = buildCirclesFromPlaces(
-            [mkPlace("anywhere", 0, 0)],
-            { radius: 1, units: "miles" },
-        );
+        const circles = buildCirclesFromPlaces([mkPlace("anywhere", 0, 0)], {
+            radius: 1,
+            units: "miles",
+        });
         const kept = cullCirclesAgainstZone(circles, {
             playableBbox: null,
             unionizedMask: unionized,
@@ -410,9 +411,7 @@ describe("applyQuestionFilters", () => {
             turf.point([-73.983, 40.75]), // ~0.15 mi from "near"
             turf.point([-73.0, 40.5]),
         ]);
-        const cache = new Map([
-            ['["brand:wikidata"="Q38076"]', poiFC],
-        ]);
+        const cache = new Map([['["brand:wikidata"="Q38076"]', poiFC]]);
         const question = {
             id: "measuring",
             key: 1,
@@ -475,9 +474,7 @@ describe("applyQuestionFilters", () => {
                 warned += 1;
             },
             error: () => {},
-        } as unknown as Parameters<
-            typeof applyQuestionFilters
-        >[0]["toast"];
+        } as unknown as Parameters<typeof applyQuestionFilters>[0]["toast"];
 
         const circles = build([
             { id: "custom/a", lng: -73.98, lat: 40.75, name: "Alpha" },

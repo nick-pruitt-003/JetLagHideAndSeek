@@ -13,6 +13,14 @@ import { useEffect, useRef, useState } from "react";
 import { FeatureGroup, Marker, Polygon, Polyline } from "react-leaflet";
 import { EditControl } from "react-leaflet-draw";
 
+import { LatitudeLongitude } from "@/components/LatLngPicker";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+} from "@/components/ui/sidebar-l";
 import {
     autoSave,
     drawingQuestionKey,
@@ -31,17 +39,8 @@ import type {
     Question,
 } from "@/maps/schema";
 
-import { LatitudeLongitude } from "./LatLngPicker";
-import { Dialog, DialogContent } from "./ui/dialog";
-import { Input } from "./ui/input";
-import {
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-} from "./ui/sidebar-l";
-
 const swapCoordinates = (geojson: any) => {
-    return JSON.parse(JSON.stringify(geojson), (key, value) => {
+    return JSON.parse(JSON.stringify(geojson), (_key, value) => {
         if (
             Array.isArray(value) &&
             value.length >= 2 &&

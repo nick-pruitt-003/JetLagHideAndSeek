@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect,it } from "vitest";
 
 import {
     buildStopIndex,
@@ -6,10 +6,10 @@ import {
     matchOsmToGtfs,
     nameSimilarity,
     normalizeStationName,
-    rollUpToParent,
     type OsmStationInput,
-} from "../src/lib/transit/osm-gtfs-match";
-import type { TransitStop } from "../src/lib/transit/types";
+    rollUpToParent,
+} from "@/lib/transit/osm-gtfs-match";
+import type { TransitStop } from "@/lib/transit/types";
 
 // ---------------------------------------------------------------------------
 // Fixtures — synthesized NYC-flavored data. Coordinates are close to real
@@ -326,11 +326,7 @@ describe("lookupArrivalWithParentFallback", () => {
         const { byId } = buildStopIndex(allStops);
         const arrivals = new Map([[timesSqPlatform.id, 600]]);
         expect(
-            lookupArrivalWithParentFallback(
-                timesSqPlatform.id,
-                arrivals,
-                byId,
-            ),
+            lookupArrivalWithParentFallback(timesSqPlatform.id, arrivals, byId),
         ).toBe(600);
     });
 
@@ -338,11 +334,7 @@ describe("lookupArrivalWithParentFallback", () => {
         const { byId } = buildStopIndex(allStops);
         const arrivals = new Map([[timesSqParent.id, 420]]);
         expect(
-            lookupArrivalWithParentFallback(
-                timesSqPlatform.id,
-                arrivals,
-                byId,
-            ),
+            lookupArrivalWithParentFallback(timesSqPlatform.id, arrivals, byId),
         ).toBe(420);
     });
 
@@ -372,11 +364,7 @@ describe("lookupArrivalWithParentFallback", () => {
     it("returns undefined when the stop and its relatives all have no arrival", () => {
         const { byId } = buildStopIndex(allStops);
         expect(
-            lookupArrivalWithParentFallback(
-                jfkAirtrain.id,
-                new Map(),
-                byId,
-            ),
+            lookupArrivalWithParentFallback(jfkAirtrain.id, new Map(), byId),
         ).toBeUndefined();
     });
 });

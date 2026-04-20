@@ -4,7 +4,17 @@ import { useState } from "react";
 import { Fragment } from "react/jsx-runtime";
 import { Marker } from "react-leaflet";
 
+import { LatitudeLongitude } from "@/components/LatLngPicker";
+import {
+    MatchingQuestionComponent,
+    MeasuringQuestionComponent,
+    RadiusQuestionComponent,
+    TentacleQuestionComponent,
+    ThermometerQuestionComponent,
+} from "@/components/QuestionCards";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { SidebarMenu } from "@/components/ui/sidebar-l";
 import {
     autoSave,
     hiderMode,
@@ -15,17 +25,6 @@ import {
     triggerLocalRefresh,
 } from "@/lib/context";
 import type { ICON_COLORS } from "@/maps/api";
-
-import { LatitudeLongitude } from "./LatLngPicker";
-import {
-    MatchingQuestionComponent,
-    MeasuringQuestionComponent,
-    RadiusQuestionComponent,
-    TentacleQuestionComponent,
-    ThermometerQuestionComponent,
-} from "./QuestionCards";
-import { Button } from "./ui/button";
-import { SidebarMenu } from "./ui/sidebar-l";
 
 let isDragging = false;
 

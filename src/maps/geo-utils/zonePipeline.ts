@@ -20,20 +20,19 @@ import type { BBox, Feature, FeatureCollection } from "geojson";
 import type { toast as toastFn } from "react-toastify";
 
 import {
+    lookupArrivalWithParentFallback,
+    type MatchedStation,
+} from "@/lib/transit/osm-gtfs-match";
+import type { TransitStop } from "@/lib/transit/types";
+import {
     findPlacesSpecificInZone,
     QuestionSpecificLocation,
     type StationCircle,
     type StationPlace,
     trainLineNodeFinder,
 } from "@/maps/api";
-import {
-    lookupArrivalWithParentFallback,
-    type MatchedStation,
-} from "@/lib/transit/osm-gtfs-match";
-import type { TransitStop } from "@/lib/transit/types";
+import { extractStationName } from "@/maps/geo-utils/special";
 import type { Question } from "@/maps/schema";
-
-import { extractStationName } from "./special";
 
 // ---------------------------------------------------------------------------
 // Phase A: build the raw circle set (no question filtering)
@@ -139,11 +138,7 @@ export function playableBboxFromHoledMask(
  * enough for a bbox-disjoint prefilter; the real `turf.booleanWithin`
  * handles the exact containment check afterwards.
  */
-function cheapCircleBbox(
-    lng: number,
-    lat: number,
-    radiusKm: number,
-): BBox {
+function cheapCircleBbox(lng: number, lat: number, radiusKm: number): BBox {
     const dLat = radiusKm / 111.32;
     const cosLat = Math.cos((lat * Math.PI) / 180);
     const dLng = radiusKm / (111.32 * Math.max(cosLat, 1e-6));
@@ -260,16 +255,11 @@ export async function applyQuestionFilters({
         ) {
             if (current.length === 0) break;
 
-            const location = turf.point([
-                question.data.lng,
-                question.data.lat,
-            ]);
+            const location = turf.point([question.data.lng, question.data.lat]);
 
             const nearestTrainStation = turf.nearestPoint(
                 location,
-                turf.featureCollection(
-                    current.map((x) => x.properties),
-                ) as any,
+                turf.featureCollection(current.map((x) => x.properties)) as any,
             );
 
             if (question.data.type === "same-train-line") {
@@ -329,9 +319,12 @@ export async function applyQuestionFilters({
                 current = current.filter((circle) => {
                     const name = extractStationName(circle.properties);
                     if (!name) return false;
-                    if (comparison === "same") return name.length === seekerLength;
-                    if (comparison === "shorter") return name.length < seekerLength;
-                    if (comparison === "longer") return name.length > seekerLength;
+                    if (comparison === "same")
+                        return name.length === seekerLength;
+                    if (comparison === "shorter")
+                        return name.length < seekerLength;
+                    if (comparison === "longer")
+                        return name.length > seekerLength;
                     return false;
                 });
             }
@@ -355,10 +348,7 @@ export async function applyQuestionFilters({
                 question.data.lng,
                 question.data.lat,
             ]);
-            const seekerNearest = turf.nearestPoint(
-                seekerPoint,
-                points as any,
-            );
+            const seekerNearest = turf.nearestPoint(seekerPoint, points as any);
             const seekerDistance = turf.distance(
                 seekerPoint,
                 seekerNearest as any,
@@ -546,4 +536,3 @@ export function stationsSignature(
         .join(",");
     return `${circles.length}|${radius}|${units}|${ids}`;
 }
-

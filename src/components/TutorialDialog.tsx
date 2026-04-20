@@ -4,6 +4,13 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import {
+    MatchingQuestionComponent,
+    MeasuringQuestionComponent,
+    RadiusQuestionComponent,
+    TentacleQuestionComponent,
+    ThermometerQuestionComponent,
+} from "@/components/QuestionCards";
+import {
     AlertDialog,
     AlertDialogDescription,
     AlertDialogHeader,
@@ -13,14 +20,6 @@ import { Button } from "@/components/ui/button";
 import { SidebarGroup, SidebarMenu } from "@/components/ui/sidebar-l";
 import { showTutorial, tutorialStep } from "@/lib/context";
 import { cn } from "@/lib/utils";
-
-import {
-    MatchingQuestionComponent,
-    MeasuringQuestionComponent,
-    RadiusQuestionComponent,
-    TentacleQuestionComponent,
-    ThermometerQuestionComponent,
-} from "./QuestionCards";
 
 interface TutorialStep {
     title: string;
@@ -434,6 +433,9 @@ const tutorialSteps: TutorialStep[] = [
                 <strong>Airport Matching:</strong>
                 <br />• Compares nearest commercial airports (those with IATA
                 codes)
+                <br />• Excludes helipads (different OSM tag), tagged heliports,
+                and balloonports; optional “Active airports only” drops
+                disused/closed aerodromes
                 <br />• Uses Voronoi diagrams to determine airport catchment
                 areas
                 <br />
@@ -508,7 +510,8 @@ const tutorialSteps: TutorialStep[] = [
                 <br />• <strong>Coastline:</strong> Distance to nearest coast
                 using detailed coastline data
                 <br />• <strong>Commercial Airports:</strong> Distance to
-                nearest airport with IATA code
+                nearest IATA aerodrome (helipads / heliport-tagged /
+                balloonport facilities excluded, same as matching)
                 <br />• <strong>Major Cities:</strong> Distance to cities with
                 1M+ population
                 <br />• <strong>High-Speed Rail:</strong> Distance to high-speed
@@ -707,7 +710,8 @@ const tutorialSteps: TutorialStep[] = [
                 <br />
                 <strong>Transportation Data:</strong>
                 <br />• Train stations: Good coverage in developed regions
-                <br />• Commercial airports: Limited to those with IATA codes
+                <br />• Commercial airports: IATA aerodromes; helipads,
+                heliport-tagged, and balloonport sites excluded
                 <br />• High-speed rail: Covers major systems (Shinkansen, TGV,
                 etc.)
                 <br />• Business data (McDonald&apos;s, 7-Eleven) depends on
@@ -913,7 +917,7 @@ export const TutorialDialog = () => {
             // its 680px cap.
             const maxWidth = isMobile
                 ? Math.max(280, window.innerWidth - 32)
-                : 680;
+                : 760;
 
             dialogElement.style.maxWidth = `${maxWidth}px`;
             // Use an explicit width rather than `auto`. On iOS Safari
@@ -956,9 +960,9 @@ export const TutorialDialog = () => {
 
             const dialogRect = dialogElement.getBoundingClientRect();
             const dialogWidth = Math.min(
-                dialogRect.width || 680,
+                dialogRect.width || 760,
                 // Match the inline width cap above; on mobile this is
-                // innerWidth - 32, on desktop 680.
+                // innerWidth - 32, on desktop 760.
                 maxWidth,
             );
             const dialogHeight = dialogRect.height || 400;
@@ -1081,6 +1085,10 @@ export const TutorialDialog = () => {
         }, 300);
 
         return () => clearTimeout(timeoutId);
+        // `currentTutorialStep` is derived from `$tutorialStep` and
+        // read inside the timeout callback, so keying the effect on the
+        // step index + visibility is sufficient.
+        // eslint-disable-next-line @eslint-react/exhaustive-deps
     }, [$tutorialStep, $showTutorial]);
 
     useEffect(() => {
@@ -1116,6 +1124,11 @@ export const TutorialDialog = () => {
 
         document.addEventListener("keydown", handleKeyDown);
         return () => document.removeEventListener("keydown", handleKeyDown);
+        // `handleNext`, `handlePrevious`, `handleClose` close over live
+        // nanostore reads, so keying the effect on the visible tutorial
+        // state is enough. Including the callbacks would reattach the
+        // keydown listener on every render.
+        // eslint-disable-next-line @eslint-react/exhaustive-deps
     }, [$showTutorial, $tutorialStep]);
 
     return (
@@ -1128,10 +1141,10 @@ export const TutorialDialog = () => {
                 <AlertDialogPrimitive.AlertDialogContent
                     ref={dialogRef}
                     className={cn(
-                        "fixed z-10000 flex flex-col border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
-                        // Cap height; inner body scrolls, header/footer stay pinned.
-                        // Targeted steps (pointing at a UI element) stay compact so
-                        // the highlighted element remains visible alongside.
+                        "fixed z-10000 flex flex-col overflow-hidden border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+                        // Cap height. Body uses max-h + scroll (not flex-1) so short
+                        // steps don’t leave a huge empty band above the footer.
+                        // Targeted steps stay shorter so the map highlight stays visible.
                         "tutorial-dialog",
                         currentTutorialStep.targetSelector
                             ? "max-h-[70vh]"
@@ -1143,9 +1156,12 @@ export const TutorialDialog = () => {
                         // container to min-content, which collapses the
                         // dialog to the width of its widest word and
                         // clips prose off the right edge. Match width
-                        // and maxWidth so desktop still caps at 680px.
-                        width: "min(680px, calc(100vw - 2rem))",
-                        maxWidth: "min(680px, calc(100vw - 2rem))",
+                        // and maxWidth so desktop still caps at 760px
+                        // (bumped from 680 — the workflow / question
+                        // overview steps wrap awkwardly at 680 on a
+                        // normal laptop).
+                        width: "min(760px, calc(100vw - 2rem))",
+                        maxWidth: "min(760px, calc(100vw - 2rem))",
                         transition:
                             "left 0.3s ease-out, top 0.3s ease-out, transform 0.3s ease-out",
                     }}
@@ -1161,6 +1177,7 @@ export const TutorialDialog = () => {
                         <div className="flex space-x-1.5">
                             {tutorialSteps.map((_, index) => (
                                 <div
+                                    // eslint-disable-next-line @eslint-react/no-array-index-key -- progress dots have no stable id
                                     key={index}
                                     className={`h-2 rounded-full flex-1 ${
                                         index <= $tutorialStep
@@ -1172,7 +1189,14 @@ export const TutorialDialog = () => {
                         </div>
                     </AlertDialogHeader>
 
-                    <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
+                    <div
+                        className={cn(
+                            "w-full overflow-y-auto overscroll-contain px-4 py-4 md:px-6 md:py-5",
+                            currentTutorialStep.targetSelector
+                                ? "max-h-[min(52vh,calc(70vh-12rem))]"
+                                : "max-h-[min(68vh,calc(85vh-12rem))]",
+                        )}
+                    >
                         {(currentTutorialStep.isDescription ?? true) ? (
                             <AlertDialogDescription className="text-base leading-relaxed whitespace-pre-line">
                                 {currentTutorialStep.content}
@@ -1184,29 +1208,29 @@ export const TutorialDialog = () => {
                         )}
                     </div>
 
-                    <div className="shrink-0 flex flex-col gap-y-2 justify-between items-center p-4 md:p-6 pt-4 border-t border-border/60">
-                        <div className="flex items-center space-x-2">
+                    <div className="shrink-0 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border/60 p-4 md:p-6 pt-4">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:gap-x-3">
                             <Button
                                 variant="outline"
                                 onClick={handleClose}
-                                className="text-sm"
+                                className="text-sm shrink-0"
                             >
                                 Skip Tutorial
                             </Button>
-                            <div className="hidden md:block text-xs text-muted-foreground">
+                            <span className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap">
                                 Use arrow keys to navigate
-                            </div>
-                            <div className="text-sm text-muted-foreground">
+                            </span>
+                            <span className="text-sm text-muted-foreground tabular-nums shrink-0">
                                 {$tutorialStep + 1} of {tutorialSteps.length}
-                            </div>
+                            </span>
                         </div>
 
-                        <div className="flex items-center space-x-2">
+                        <div className="flex shrink-0 items-center gap-2">
                             <Button
                                 variant="outline"
                                 onClick={handlePrevious}
                                 disabled={$tutorialStep === 0}
-                                className="flex items-center space-x-1"
+                                className="flex items-center gap-1"
                             >
                                 <ChevronLeft className="h-4 w-4" />
                                 <span>Previous</span>
@@ -1221,7 +1245,7 @@ export const TutorialDialog = () => {
                             ) : (
                                 <Button
                                     onClick={handleNext}
-                                    className="flex items-center space-x-1"
+                                    className="flex items-center gap-1"
                                 >
                                     <span>Next</span>
                                     <ChevronRight className="h-4 w-4" />

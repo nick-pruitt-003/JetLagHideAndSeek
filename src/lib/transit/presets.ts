@@ -107,8 +107,7 @@ export const GTFS_PRESETS: GtfsPreset[] = [
         name: "Shore Line East",
         agency: "Connecticut DOT / CTtransit",
         region: "Connecticut",
-        description:
-            "Shore Line East commuter rail (New Haven ↔ New London).",
+        description: "Shore Line East commuter rail (New Haven ↔ New London).",
         url: "https://www.cttransit.com/sites/default/files/gtfs/slegtfs_1.zip",
         licenseUrl: "https://www.cttransit.com/about/developers/terms-of-use",
     },

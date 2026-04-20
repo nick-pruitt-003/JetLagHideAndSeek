@@ -101,7 +101,10 @@ export const GET: APIRoute = async ({ url }) => {
 
     // Stream through, counting bytes and aborting if we exceed the cap mid-
     // stream. This protects against servers that lie about Content-Length.
-    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+    const { readable, writable } = new TransformStream<
+        Uint8Array,
+        Uint8Array
+    >();
     const writer = writable.getWriter();
 
     (async () => {

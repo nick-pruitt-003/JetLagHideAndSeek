@@ -9,6 +9,10 @@ import { useEffect, useMemo, useRef } from "react";
 import { MapContainer, ScaleControl, TileLayer } from "react-leaflet";
 import { toast } from "react-toastify";
 
+import { DraggableMarkers } from "@/components/DraggableMarkers";
+import { LeafletFullScreenButton } from "@/components/LeafletFullScreenButton";
+import { MapPrint } from "@/components/MapPrint";
+import { PolygonDraw } from "@/components/PolygonDraw";
 import {
     additionalMapGeoLocations,
     addQuestion,
@@ -34,11 +38,6 @@ import { cn } from "@/lib/utils";
 import { applyQuestionsToMapGeoData, holedMask } from "@/maps";
 import { hiderifyQuestion } from "@/maps";
 import { clearCache, determineMapBoundaries } from "@/maps/api";
-
-import { DraggableMarkers } from "./DraggableMarkers";
-import { LeafletFullScreenButton } from "./LeafletFullScreenButton";
-import { MapPrint } from "./MapPrint";
-import { PolygonDraw } from "./PolygonDraw";
 
 const getTileLayer = (tileLayer: string, thunderforestApiKey: string) => {
     switch (tileLayer) {
@@ -257,9 +256,19 @@ export const Map = ({ className }: { className?: string }) => {
             console.log(error);
 
             isLoading.set(false);
-            if (document.querySelectorAll(".Toastify__toast").length === 0) {
-                return toast.error("No solutions found / error occurred");
-            }
+            // Previously this only fired if no other toast was visible —
+            // fragile (could silently swallow the error while an unrelated
+            // toast was on-screen) and opaque (users never saw what broke).
+            // Use toastId so Toastify itself dedupes repeated re-renders,
+            // and always surface something.
+            const msg =
+                error instanceof Error && error.message
+                    ? error.message
+                    : "No solutions found / error occurred";
+            toast.error(msg, {
+                toastId: "map-apply-questions-failed",
+                autoClose: 6000,
+            });
         } finally {
             isLoading.set(false);
         }
@@ -425,6 +434,12 @@ export const Map = ({ className }: { className?: string }) => {
                 />
             </MapContainer>
         ),
+        // `$mapGeoLocation.geometry.coordinates` is the *initial* map
+        // center — Leaflet ignores subsequent changes to the `center`
+        // prop so there's no benefit to reactively re-creating the
+        // container. Same story for `className`, which is passed from
+        // Astro as a static string.
+        // eslint-disable-next-line @eslint-react/exhaustive-deps
         [map, $baseTileLayer, $thunderforestApiKey],
     );
 
@@ -443,6 +458,12 @@ export const Map = ({ className }: { className?: string }) => {
                 refreshTimerRef.current = null;
             }
         };
+        // `refreshQuestions` is defined in the component body and
+        // closes over live store reads (`questions.get()` etc.), so its
+        // identity changes on every render. Putting it in deps would
+        // kick the debounce on every state change. We want the debounce
+        // to fire only on the real inputs listed below.
+        // eslint-disable-next-line @eslint-react/exhaustive-deps
     }, [
         $questions,
         map,
@@ -527,6 +548,9 @@ export const Map = ({ className }: { className?: string }) => {
                 geoWatchIdRef.current = null;
             }
         };
+        // `followMeMarkerRef` and `geoWatchIdRef` are refs, not values;
+        // including them in deps would be a hook-rules false positive.
+        // eslint-disable-next-line @eslint-react/exhaustive-deps
     }, [$followMe, map]);
 
     useEffect(() => {
@@ -543,8 +567,7 @@ export const Map = ({ className }: { className?: string }) => {
                 interactive: false,
 
                 // @ts-expect-error Type hints force a Layer to be returned, but Leaflet accepts null as well
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                pointToLayer(geoJsonPoint, latlng) {
+                pointToLayer(_geoJsonPoint, _latlng) {
                     return null;
                 },
 

@@ -150,5 +150,15 @@ const manifestHref = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/manifest.we
     <body class:list={[className, "dark", "flex", "flex-col", "min-h-svh"]} style="touch-action: manipulation;">
         <slot />
         <ToastContainer client:only="react" />
+        {/*
+          SW registration. Ships as its own client-only script so it
+          runs once per page load (the import side effect), cannot
+          block rendering, and lives outside the React tree — it only
+          ever interacts with the DOM via the toast container above.
+        */}
+        <script>
+            import { registerServiceWorker } from "@/lib/sw-register";
+            registerServiceWorker();
+        </script>
     </body>
 </html>

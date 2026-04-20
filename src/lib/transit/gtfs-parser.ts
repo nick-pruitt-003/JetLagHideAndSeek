@@ -23,7 +23,7 @@
  *     multiple feeds without collisions.
  */
 
-import { unzipSync, strFromU8 } from "fflate";
+import { strFromU8, unzipSync } from "fflate";
 import Papa from "papaparse";
 
 import type {
@@ -35,7 +35,7 @@ import type {
     TransitSystem,
     TransitTrip,
     TransitTripStopTimes,
-} from "./types";
+} from "@/lib/transit/types";
 
 /**
  * Route types we keep. GTFS reference:
@@ -181,7 +181,9 @@ export async function parseGtfs(
             routeId: prefix(row.route_id),
             serviceId: prefix(row.service_id),
             headsign: row.trip_headsign,
-            directionId: row.direction_id ? parseInt(row.direction_id, 10) : undefined,
+            directionId: row.direction_id
+                ? parseInt(row.direction_id, 10)
+                : undefined,
         });
     }
 
@@ -203,7 +205,12 @@ export async function parseGtfs(
     // still need to sort per trip at the end.
     const tripStopsRaw = new Map<
         string,
-        { seqs: number[]; stopIds: string[]; arrivals: number[]; departures: number[] }
+        {
+            seqs: number[];
+            stopIds: string[];
+            arrivals: number[];
+            departures: number[];
+        }
     >();
     const keptStopIds = new Set<string>(); // unprefixed — stops to include
 
@@ -285,7 +292,10 @@ export async function parseGtfs(
 
     const stops: TransitStop[] = [];
     for (const row of stopRows) {
-        if (!keptStopIds.has(row.stop_id) && !parentIdsToAlsoKeep.has(row.stop_id)) {
+        if (
+            !keptStopIds.has(row.stop_id) &&
+            !parentIdsToAlsoKeep.has(row.stop_id)
+        ) {
             continue;
         }
         const lat = parseFloat(row.stop_lat);
@@ -298,8 +308,12 @@ export async function parseGtfs(
             name: row.stop_name,
             lat,
             lng,
-            locationType: row.location_type ? parseInt(row.location_type, 10) : 0,
-            parentStopId: row.parent_station ? prefix(row.parent_station) : undefined,
+            locationType: row.location_type
+                ? parseInt(row.location_type, 10)
+                : 0,
+            parentStopId: row.parent_station
+                ? prefix(row.parent_station)
+                : undefined,
         });
     }
 
@@ -450,7 +464,15 @@ export async function parseGtfs(
         calendarEnd,
     };
 
-    return { system, stops, routes, trips, tripStopTimes, services, gtfsTransfers };
+    return {
+        system,
+        stops,
+        routes,
+        trips,
+        tripStopTimes,
+        services,
+        gtfsTransfers,
+    };
 }
 
 // ---------------------------------------------------------------------------

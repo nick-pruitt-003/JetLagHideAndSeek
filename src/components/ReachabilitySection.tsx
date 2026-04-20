@@ -10,11 +10,17 @@
  * Origin is reused from `startingLocation` (the existing game-center
  * marker) — this component never asks the user to re-pick an origin.
  */
-import React, { useEffect, useMemo, useState } from "react";
 import { useStore } from "@nanostores/react";
 import { Loader2, Navigation, Play, RotateCcw, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { SidebarMenuItem } from "@/components/ui/sidebar-r";
+import type { ReachabilityDeparturePreset } from "@/lib/context";
 import {
     reachabilityBudgetMinutes as reachabilityBudgetMinutesAtom,
     reachabilityClassifications as reachabilityClassificationsAtom,
@@ -27,16 +33,10 @@ import {
     reachabilityWalkSpeedMph as reachabilityWalkSpeedMphAtom,
     startingLocation as startingLocationAtom,
 } from "@/lib/context";
-import type { ReachabilityDeparturePreset } from "@/lib/context";
+import { errorTask, finishTask, startTask, updateTask } from "@/lib/progress";
 import { listSystems } from "@/lib/transit/gtfs-store";
 import { reachabilityClient } from "@/lib/transit/reachability-client";
 import type { TransitSystem } from "@/lib/transit/types";
-
-import { Button } from "./ui/button";
-import { Checkbox } from "./ui/checkbox";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { SidebarMenuItem } from "./ui/sidebar-r";
 import { cn } from "@/lib/utils";
 
 const MENU_ITEM_CLASSNAME =
@@ -115,11 +115,11 @@ function nextAt(
 // ---------------------------------------------------------------------------
 
 const PRESET_LABELS: Record<ReachabilityDeparturePreset, string> = {
-    "now": "Now",
+    now: "Now",
     "weekday-9am": "Next weekday, 9am",
     "saturday-noon": "Next Saturday, noon",
     "tonight-6pm": "Tonight, 6pm",
-    "custom": "Custom…",
+    custom: "Custom…",
 };
 
 const PRESET_ORDER: ReachabilityDeparturePreset[] = [
@@ -208,6 +208,17 @@ export default function ReachabilitySection() {
                 if (!cancelled) {
                     console.log("Failed to list systems:", err);
                     setSystems([]);
+                    // Empty list could mean "no feeds imported" OR "IDB is
+                    // broken"; users deserve to know the difference so
+                    // they don't re-import and hit the same wall. Dedup
+                    // so repeated effect re-runs don't stack toasts.
+                    toast.error(
+                        "Couldn't read transit systems from device storage. Your browser may be blocking IndexedDB (private mode / quota).",
+                        {
+                            toastId: "list-systems-failed",
+                            autoClose: 8000,
+                        },
+                    );
                 }
             });
         return () => {
@@ -285,6 +296,10 @@ export default function ReachabilitySection() {
         if (!canRun || !origin || !departureTime) return;
         setRunning(true);
         setProgressMsg("");
+        // Reachability is indeterminate (the worker reports phase strings,
+        // not fractions), so the global bar shimmers and its caption tracks
+        // the most recent phase message from the worker.
+        const taskId = startTask({ label: "Computing reachability…" });
         try {
             const result = await reachabilityClient.query(
                 {
@@ -296,16 +311,25 @@ export default function ReachabilitySection() {
                     systemIds: effectiveSystemIds,
                 },
                 {
-                    onProgress: (msg) => setProgressMsg(msg),
+                    onProgress: (msg) => {
+                        setProgressMsg(msg);
+                        updateTask(taskId, {
+                            label: msg
+                                ? `Reachability: ${msg}`
+                                : "Computing reachability…",
+                        });
+                    },
                 },
             );
             reachabilityResultAtom.set(result);
+            finishTask(taskId);
             toast.success(
                 `Reachability: ${result.arrivalSeconds.size} stops within ${$budget} min`,
             );
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.log("Reachability query failed:", err);
+            errorTask(taskId);
             toast.error(`Reachability query failed: ${msg}`, {
                 toastId: "reachability-query-error",
                 autoClose: 6000,
@@ -366,9 +390,9 @@ export default function ReachabilitySection() {
                     </Label>
                 </div>
                 <p className="text-xs text-muted-foreground leading-4">
-                    Only keep stations you could reach from the starting
-                    point by transit within a time budget. Needs at least
-                    one imported GTFS feed.
+                    Only keep stations you could reach from the starting point
+                    by transit within a time budget. Needs at least one imported
+                    GTFS feed.
                 </p>
             </SidebarMenuItem>
 
@@ -381,9 +405,7 @@ export default function ReachabilitySection() {
                     {origin ? (
                         <span className="text-muted-foreground">
                             {origin.lat.toFixed(4)}, {origin.lng.toFixed(4)}{" "}
-                            <span className="opacity-70">
-                                (starting point)
-                            </span>
+                            <span className="opacity-70">(starting point)</span>
                         </span>
                     ) : (
                         <span className="text-amber-500">
@@ -612,8 +634,7 @@ export default function ReachabilitySection() {
                                                         systems.length &&
                                                     [...next].every((id) =>
                                                         systems.some(
-                                                            (r) =>
-                                                                r.id === id,
+                                                            (r) => r.id === id,
                                                         ),
                                                     )
                                                 ) {
@@ -737,8 +758,7 @@ export default function ReachabilitySection() {
                         </span>
                         {counts.overridesUsed > 0 && (
                             <span>
-                                ·{" "}
-                                {counts.overridesUsed.toLocaleString()}{" "}
+                                · {counts.overridesUsed.toLocaleString()}{" "}
                                 overridden
                             </span>
                         )}
@@ -749,9 +769,7 @@ export default function ReachabilitySection() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 text-xs"
-                                onClick={() =>
-                                    bulkOverrideUnknowns("include")
-                                }
+                                onClick={() => bulkOverrideUnknowns("include")}
                                 disabled={running}
                             >
                                 Include all unknown
@@ -760,9 +778,7 @@ export default function ReachabilitySection() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 text-xs"
-                                onClick={() =>
-                                    bulkOverrideUnknowns("exclude")
-                                }
+                                onClick={() => bulkOverrideUnknowns("exclude")}
                                 disabled={running}
                             >
                                 Exclude all unknown

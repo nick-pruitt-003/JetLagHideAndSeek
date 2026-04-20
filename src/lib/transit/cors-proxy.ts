@@ -22,9 +22,7 @@
  */
 const PUBLIC_PROXY = "https://corsproxy.io/?url=";
 
-const SELF_HOSTED_PROXY =
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (import.meta as any).env?.PUBLIC_GTFS_PROXY_URL || "";
+const SELF_HOSTED_PROXY = (import.meta as any).env?.PUBLIC_GTFS_PROXY_URL || "";
 
 export type FetchMethod = "direct" | "self-hosted" | "public-proxy";
 
@@ -37,7 +35,10 @@ export interface FetchResult {
 export class GtfsFetchError extends Error {
     constructor(
         message: string,
-        public readonly attempts: Array<{ method: FetchMethod; reason: string }>,
+        public readonly attempts: Array<{
+            method: FetchMethod;
+            reason: string;
+        }>,
     ) {
         super(message);
         this.name = "GtfsFetchError";
@@ -59,7 +60,11 @@ export async function fetchGtfsZip(
     // Tier 1: direct
     try {
         const bytes = await downloadWithProgress(url, onProgress, signal);
-        return { bytes: bytes.buffer, method: "direct", contentType: bytes.contentType };
+        return {
+            bytes: bytes.buffer,
+            method: "direct",
+            contentType: bytes.contentType,
+        };
     } catch (err) {
         attempts.push({
             method: "direct",
@@ -73,7 +78,11 @@ export async function fetchGtfsZip(
     if (SELF_HOSTED_PROXY) {
         try {
             const proxyUrl = `${SELF_HOSTED_PROXY}?url=${encodeURIComponent(url)}`;
-            const bytes = await downloadWithProgress(proxyUrl, onProgress, signal);
+            const bytes = await downloadWithProgress(
+                proxyUrl,
+                onProgress,
+                signal,
+            );
             return {
                 bytes: bytes.buffer,
                 method: "self-hosted",

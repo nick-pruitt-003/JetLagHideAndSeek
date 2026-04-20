@@ -20,6 +20,7 @@ import {
     findPlacesInZone,
     LOCATION_FIRST_TAG,
     nearestToQuestion,
+    overpassAirportIataFilter,
     prettifyLocation,
     trainLineNodeFinder,
 } from "@/maps/api";
@@ -35,14 +36,12 @@ import type {
 export const findMatchingPlaces = async (question: MatchingQuestion) => {
     switch (question.type) {
         case "airport": {
-            const activeFilter =
-                (question as any).activeOnly === true
-                    ? '["disused"!="yes"]["closed"!="yes"]'
-                    : "";
             return _.uniqBy(
                 (
                     await findPlacesInZone(
-                        `["aeroway"="aerodrome"]["iata"]${activeFilter}`, // Only commercial airports have IATA codes
+                        overpassAirportIataFilter({
+                            activeOnly: (question as any).activeOnly === true,
+                        }),
                         "Finding airports...",
                     )
                 ).elements,

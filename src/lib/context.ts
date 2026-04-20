@@ -5,7 +5,6 @@ import { atom, computed, onSet } from "nanostores";
 
 import { buildReachabilityPayload } from "@/lib/share/reachability-payload";
 import type { ReachabilityResult } from "@/lib/transit/types";
-import type { ReachabilityStatus } from "@/maps/geo-utils/zonePipeline";
 import type {
     AdditionalMapGeoLocations,
     CustomStation,
@@ -13,6 +12,7 @@ import type {
     StationCircle,
 } from "@/maps/api";
 import { extractStationLabel } from "@/maps/geo-utils";
+import type { ReachabilityStatus } from "@/maps/geo-utils/zonePipeline";
 import {
     type DeepPartial,
     type Question,
@@ -108,10 +108,7 @@ onSet(mapGeoLocation, ({ newValue }) => {
     // detailed polygon.
     const prevId = mapGeoLocation.get()?.properties?.osm_id;
     const nextId = newValue?.properties?.osm_id;
-    if (
-        prevId !== nextId &&
-        boundaryDetailLevel.get() !== "simple"
-    ) {
+    if (prevId !== nextId && boundaryDetailLevel.get() !== "simple") {
         boundaryDetailLevel.set("simple");
     }
 });
@@ -136,7 +133,7 @@ export const questions = persistentAtom<Questions>("questions", [], {
 });
 export const addQuestion = (question: DeepPartial<Question>) =>
     questionModified(questions.get().push(questionSchema.parse(question)));
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 export const questionModified = (..._: any[]) => {
     if (autoSave.get()) {
         questions.set([...questions.get()]);
@@ -233,7 +230,7 @@ export const includeDefaultStations = persistentAtom<boolean>(
 );
 export const activeStationsOnly = persistentAtom<boolean>(
     "activeStationsOnly",
-    false,
+    true,
     {
         encode: JSON.stringify,
         decode: JSON.parse,

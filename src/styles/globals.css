@@ -255,3 +255,17 @@
 [data-tutorial-active="true"] [role="dialog"] {
     position: fixed !important;
 }
+
+/* Global progress bar — indeterminate sweep for tasks with unknown total */
+@keyframes progressIndeterminate {
+    0% {
+        margin-left: -40%;
+    }
+    100% {
+        margin-left: 100%;
+    }
+}
+
+.animate-progress-indeterminate {
+    animation: progressIndeterminate 1.2s infinite ease-in-out;
+}

@@ -45,7 +45,7 @@
  * next day. This works naturally because we only compare/add seconds.
  */
 
-import { haversineMeters } from "./auto-transfers";
+import { haversineMeters } from "@/lib/transit/auto-transfers";
 import {
     getAllServices,
     getAllStops,
@@ -53,7 +53,7 @@ import {
     getAllTransfers,
     getAllTrips,
     listSystems,
-} from "./gtfs-store";
+} from "@/lib/transit/gtfs-store";
 import type {
     ReachabilityQuery,
     ReachabilityResult,
@@ -61,7 +61,7 @@ import type {
     TransitStop,
     TransitTrip,
     TransitTripStopTimes,
-} from "./types";
+} from "@/lib/transit/types";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -93,7 +93,10 @@ export interface RaptorData {
     stops: Map<string, TransitStop>;
     patterns: Map<string, Pattern>;
     /** stopId -> list of {patternId, stopIdxInPattern} where the stop appears. */
-    stopPatterns: Map<string, Array<{ patternId: string; idxInPattern: number }>>;
+    stopPatterns: Map<
+        string,
+        Array<{ patternId: string; idxInPattern: number }>
+    >;
     transfers: Map<string, Array<{ toStopId: string; seconds: number }>>;
     services: Map<string, TransitService>;
 }
@@ -157,7 +160,9 @@ export async function loadRaptorData(): Promise<RaptorData> {
     for (const p of patternBySig.values()) {
         const order = p.trips
             .map((_, i) => i)
-            .sort((a, b) => p.trips[a].departures[0] - p.trips[b].departures[0]);
+            .sort(
+                (a, b) => p.trips[a].departures[0] - p.trips[b].departures[0],
+            );
         const sortedTrips: PatternTrip[] = order.map((i) => p.trips[i]);
         p.trips = sortedTrips;
         p.tripIdxByDeparture = sortedTrips.map((t) => t.departures[0]);
@@ -273,7 +278,11 @@ export function activeServiceIds(
         // Explicit exception removes service for this date.
         if (svc.exceptions.includes(key)) continue;
         // Otherwise in-window + day-of-week bit.
-        if (key >= svc.startDate && key <= svc.endDate && (svc.daysOfWeek & bit)) {
+        if (
+            key >= svc.startDate &&
+            key <= svc.endDate &&
+            svc.daysOfWeek & bit
+        ) {
             out.add(svc.id);
         }
     }
@@ -392,7 +401,10 @@ export function runRaptor(
                 // at this stop is earlier than the trip we're on (or we're
                 // not on a trip yet).
                 const labelHere = labels.get(stopId);
-                if (labelHere !== undefined && labelHere < currentTripBoardArrival) {
+                if (
+                    labelHere !== undefined &&
+                    labelHere < currentTripBoardArrival
+                ) {
                     const tripIdx = earliestBoardableTrip(
                         pattern,
                         i,
@@ -401,7 +413,8 @@ export function runRaptor(
                     );
                     if (tripIdx !== -1) {
                         currentTripIdx = tripIdx;
-                        currentTripBoardArrival = pattern.trips[tripIdx].departures[i];
+                        currentTripBoardArrival =
+                            pattern.trips[tripIdx].departures[i];
                     }
                 }
             }

@@ -87,9 +87,7 @@ export function buildReachabilityPayload(
         payload.departurePreset = state.departurePreset;
         hasField = true;
     }
-    if (
-        state.departureCustomISO !== REACHABILITY_DEFAULTS.departureCustomISO
-    ) {
+    if (state.departureCustomISO !== REACHABILITY_DEFAULTS.departureCustomISO) {
         payload.departureCustomISO = state.departureCustomISO;
         hasField = true;
     }
