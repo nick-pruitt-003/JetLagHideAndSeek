@@ -51,12 +51,27 @@ const manifestHref = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/manifest.we
             href="https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap"
             rel="stylesheet"
         />
+        {/*
+          These three <script> tags are deliberately inline-verbatim.
+          Astro's default is to run <script> through Vite (TS support,
+          module bundling, hashed filenames) — but:
+            - Partytown requires the literal `type="text/partytown"`
+              MIME type so its patcher can hoist the script into a
+              web worker. Bundling strips the type.
+            - The Clarity loader is an IIFE that references `window`
+              directly and injects its own <script> tag; Astro's
+              module processing breaks the `(c, l, a, r, i, t, y)`
+              pattern.
+          `is:inline` tells Astro "yes, skip processing, on purpose"
+          and silences the ts hint about implicit inlining.
+        */}
         <script
+            is:inline
             type="text/partytown"
             async
             src="https://www.googletagmanager.com/gtag/js?id=G-RKJ9G6CNC2"
         ></script>
-        <script type="text/partytown">
+        <script is:inline type="text/partytown">
             window.dataLayer = window.dataLayer || [];
             function gtag() {
                 // eslint-disable-next-line prefer-rest-params
@@ -66,7 +81,7 @@ const manifestHref = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/manifest.we
 
             gtag("config", "G-RKJ9G6CNC2");
         </script>
-        <script type="text/javascript">
+        <script is:inline>
             if (!window.location.host.includes("localhost")) {
                 (function (c, l, a, r, i, t, y) {
                     c[a] =
