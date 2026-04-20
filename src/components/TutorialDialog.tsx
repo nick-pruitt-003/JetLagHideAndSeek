@@ -908,10 +908,18 @@ export const TutorialDialog = () => {
 
             const dialogElement = dialogRef.current;
             const isMobile = window.innerWidth < 768; // Tailwind md breakpoint
-            const maxWidth = isMobile ? window.innerWidth - 40 : 680;
+            // Reserve 2rem (32px) total horizontal margin on mobile so
+            // the dialog never touches the viewport edges. Desktop keeps
+            // its 680px cap.
+            const maxWidth = isMobile
+                ? Math.max(280, window.innerWidth - 32)
+                : 680;
 
             dialogElement.style.maxWidth = `${maxWidth}px`;
-            dialogElement.style.width = "auto";
+            // Use an explicit width rather than `auto`. On iOS Safari
+            // `width: auto` on a fixed flex container collapses to
+            // min-content (widest word), clipping prose off the right.
+            dialogElement.style.width = `${maxWidth}px`;
             dialogElement.style.height = "auto";
 
             if (!currentTutorialStep.targetSelector) {
@@ -949,7 +957,9 @@ export const TutorialDialog = () => {
             const dialogRect = dialogElement.getBoundingClientRect();
             const dialogWidth = Math.min(
                 dialogRect.width || 680,
-                isMobile ? window.innerWidth - padding * 2 : 680,
+                // Match the inline width cap above; on mobile this is
+                // innerWidth - 32, on desktop 680.
+                maxWidth,
             );
             const dialogHeight = dialogRect.height || 400;
 
@@ -1118,7 +1128,7 @@ export const TutorialDialog = () => {
                 <AlertDialogPrimitive.AlertDialogContent
                     ref={dialogRef}
                     className={cn(
-                        "fixed z-10000 flex flex-col w-full border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+                        "fixed z-10000 flex flex-col border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
                         // Cap height; inner body scrolls, header/footer stay pinned.
                         // Targeted steps (pointing at a UI element) stay compact so
                         // the highlighted element remains visible alongside.
@@ -1128,8 +1138,14 @@ export const TutorialDialog = () => {
                             : "max-h-[85vh] left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%]",
                     )}
                     style={{
-                        maxWidth: "min(680px, calc(100vw - 40px))",
-                        width: "auto",
+                        // Explicit width (not `auto`) — iOS Safari
+                        // resolves `width: auto` on a fixed flex
+                        // container to min-content, which collapses the
+                        // dialog to the width of its widest word and
+                        // clips prose off the right edge. Match width
+                        // and maxWidth so desktop still caps at 680px.
+                        width: "min(680px, calc(100vw - 2rem))",
+                        maxWidth: "min(680px, calc(100vw - 2rem))",
                         transition:
                             "left 0.3s ease-out, top 0.3s ease-out, transform 0.3s ease-out",
                     }}
