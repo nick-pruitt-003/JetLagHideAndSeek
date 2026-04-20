@@ -1,0 +1,6 @@
+# Pin Node for Railway/Nixpacks. `.nvmrc` is the primary source, this is a
+# fallback in case Nixpacks' default detection picks an older minor.
+# `22` resolves to the latest Node 22.x available in nixpkgs, which is
+# guaranteed to satisfy engines (>=22.22.2) and Astro (>=22.12.0).
+[variables]
+NIXPACKS_NODE_VERSION = "22"
