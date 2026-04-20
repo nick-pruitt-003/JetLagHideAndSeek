@@ -17,9 +17,11 @@ import { toast } from "react-toastify";
 
 import {
     reachabilityBudgetMinutes as reachabilityBudgetMinutesAtom,
+    reachabilityClassifications as reachabilityClassificationsAtom,
     reachabilityDepartureCustomISO as reachabilityDepartureCustomISOAtom,
     reachabilityDeparturePreset as reachabilityDeparturePresetAtom,
     reachabilityMaxWalkLegMinutes as reachabilityMaxWalkLegMinutesAtom,
+    reachabilityOverrides as reachabilityOverridesAtom,
     reachabilityResult as reachabilityResultAtom,
     reachabilitySelectedSystemIds as reachabilitySelectedSystemIdsAtom,
     reachabilityWalkSpeedMph as reachabilityWalkSpeedMphAtom,
@@ -183,6 +185,8 @@ export default function ReachabilitySection() {
     const $customISO = useStore(reachabilityDepartureCustomISOAtom);
     const $selectedSystems = useStore(reachabilitySelectedSystemIdsAtom);
     const $result = useStore(reachabilityResultAtom);
+    const $classifications = useStore(reachabilityClassificationsAtom);
+    const $overrides = useStore(reachabilityOverridesAtom);
 
     const [systems, setSystems] = useState<TransitSystem[] | null>(null);
     const [running, setRunning] = useState(false);
@@ -317,6 +321,35 @@ export default function ReachabilitySection() {
     };
 
     const hasSystems = systems !== null && systems.length > 0;
+
+    // Breakdown of the last filter pass. `$classifications` is keyed by
+    // OSM id and covers every circle we had at Phase B time; override
+    // counts are derived against the current overrides atom.
+    const counts = useMemo(() => {
+        let reachable = 0;
+        let unreachable = 0;
+        let unknown = 0;
+        let overridesUsed = 0;
+        for (const [osmId, status] of $classifications.entries()) {
+            if (status === "reachable") reachable++;
+            else if (status === "unreachable") unreachable++;
+            else unknown++;
+            if ($overrides[osmId]) overridesUsed++;
+        }
+        return { reachable, unreachable, unknown, overridesUsed };
+    }, [$classifications, $overrides]);
+
+    const bulkOverrideUnknowns = (decision: "include" | "exclude") => {
+        const next = { ...$overrides };
+        for (const [osmId, status] of $classifications.entries()) {
+            if (status === "unknown") next[osmId] = decision;
+        }
+        reachabilityOverridesAtom.set(next);
+    };
+
+    const clearAllOverrides = () => {
+        reachabilityOverridesAtom.set({});
+    };
 
     return (
         <>
@@ -667,6 +700,88 @@ export default function ReachabilitySection() {
                     )}
                 </div>
             </SidebarMenuItem>
+
+            {/*
+              Classification breakdown + bulk override actions. Only shown
+              when we actually have classifications — i.e. reachability
+              has been queried AND Phase B has run at least once.
+            */}
+            {$result && $classifications.size > 0 && (
+                <SidebarMenuItem
+                    className={cn(
+                        MENU_ITEM_CLASSNAME,
+                        "flex flex-col items-start gap-2",
+                    )}
+                >
+                    <Label className="font-semibold font-poppins text-sm">
+                        Station breakdown
+                    </Label>
+                    <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>
+                            <span className="text-green-500">
+                                ✓ {counts.reachable.toLocaleString()}
+                            </span>{" "}
+                            reachable
+                        </span>
+                        <span>
+                            <span className="text-amber-500">
+                                ? {counts.unknown.toLocaleString()}
+                            </span>{" "}
+                            unknown
+                        </span>
+                        <span>
+                            <span className="text-red-500">
+                                ✗ {counts.unreachable.toLocaleString()}
+                            </span>{" "}
+                            unreachable
+                        </span>
+                        {counts.overridesUsed > 0 && (
+                            <span>
+                                ·{" "}
+                                {counts.overridesUsed.toLocaleString()}{" "}
+                                overridden
+                            </span>
+                        )}
+                    </div>
+                    {counts.unknown > 0 && (
+                        <div className="flex gap-1.5 flex-wrap">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() =>
+                                    bulkOverrideUnknowns("include")
+                                }
+                                disabled={running}
+                            >
+                                Include all unknown
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() =>
+                                    bulkOverrideUnknowns("exclude")
+                                }
+                                disabled={running}
+                            >
+                                Exclude all unknown
+                            </Button>
+                        </div>
+                    )}
+                    {counts.overridesUsed > 0 && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-muted-foreground"
+                            onClick={clearAllOverrides}
+                            disabled={running}
+                        >
+                            Clear all overrides
+                        </Button>
+                    )}
+                </SidebarMenuItem>
+            )}
         </>
     );
 }

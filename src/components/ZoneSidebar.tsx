@@ -38,6 +38,7 @@ import {
     polyGeoJSON,
     questionFinishedMapData,
     questions,
+    reachabilityClassifications,
     reachabilityOverrides as reachabilityOverridesAtom,
     reachabilityResult as reachabilityResultAtom,
     trainStations,
@@ -126,6 +127,7 @@ export const ZoneSidebar = () => {
     const excludeHeritageRailways = useStore(excludeHeritageRailwaysAtom);
     const $reachabilityResult = useStore(reachabilityResultAtom);
     const $reachabilityOverrides = useStore(reachabilityOverridesAtom);
+    const $reachabilityClassifications = useStore(reachabilityClassifications);
     const $customStations = useStore(customStationsAtom);
     // Subscribe to the scope stores so Phase A re-runs when the user
     // picks a new city / draws a new boundary.
@@ -171,17 +173,85 @@ export const ZoneSidebar = () => {
         geoJSONData: any,
         nonOverlappingStations: boolean = false,
         additionalOptions: L.GeoJSONOptions = {},
+        /**
+         * Optional lookup from OSM id → display status. When a
+         * reachability query is active, Phase B supplies this so we
+         * can color unknown / overridden circles differently from
+         * the default reachable green. Leave undefined to fall back
+         * to the old uniform-green look.
+         */
+        statusLookup?: (osmId: string | undefined) =>
+            | {
+                  status: "reachable" | "unreachable" | "unknown";
+                  override: "include" | "exclude" | undefined;
+              }
+            | undefined,
     ) => {
         if (!map) return;
 
         removeHidingZones();
 
+        const stationColor = (feature: any): {
+            color: string;
+            fillColor: string;
+            fillOpacity: number;
+        } => {
+            const osmId: string | undefined =
+                feature?.properties?.properties?.id;
+            const info = statusLookup?.(osmId);
+            if (!info) {
+                return {
+                    color: "green",
+                    fillColor: "green",
+                    fillOpacity: 0.2,
+                };
+            }
+            // Overrides win visually too, so the user sees their own
+            // decision reflected on the map.
+            if (info.override === "include") {
+                return {
+                    color: "#059669", // emerald-600
+                    fillColor: "#10b981", // emerald-500
+                    fillOpacity: 0.3,
+                };
+            }
+            if (info.override === "exclude") {
+                return {
+                    color: "#64748b", // slate-500
+                    fillColor: "#94a3b8", // slate-400
+                    fillOpacity: 0.15,
+                };
+            }
+            switch (info.status) {
+                case "reachable":
+                    return {
+                        color: "green",
+                        fillColor: "green",
+                        fillOpacity: 0.2,
+                    };
+                case "unknown":
+                    return {
+                        color: "#d97706", // amber-600
+                        fillColor: "#f59e0b", // amber-500
+                        fillOpacity: 0.25,
+                    };
+                case "unreachable":
+                    return {
+                        color: "#dc2626", // red-600
+                        fillColor: "#ef4444", // red-500
+                        fillOpacity: 0.2,
+                    };
+            }
+        };
+
         const geoJsonLayer = L.geoJSON(geoJSONData, {
-            style: {
-                color: "green",
-                fillColor: "green",
-                fillOpacity: 0.2,
-            },
+            style: statusLookup
+                ? (feature) => stationColor(feature)
+                : {
+                      color: "green",
+                      fillColor: "green",
+                      fillOpacity: 0.2,
+                  },
             onEachFeature: nonOverlappingStations
                 ? (feature, layer) => {
                       layer.on("click", async () => {
@@ -194,19 +264,47 @@ export const ZoneSidebar = () => {
                   }
                 : undefined,
             pointToLayer(geoJsonPoint, latlng) {
+                // For marker styles, statusLookup lets us tint the
+                // icon so unknown stations pop visually. Falls back
+                // to the original black-on-transparent icon when
+                // reachability isn't active.
+                const osmId: string | undefined =
+                    (geoJsonPoint as any)?.properties?.properties?.id;
+                const info = statusLookup?.(osmId);
+                const tint = !info
+                    ? "text-black"
+                    : info.override === "include"
+                      ? "text-emerald-600"
+                      : info.override === "exclude"
+                        ? "text-slate-500"
+                        : info.status === "unknown"
+                          ? "text-amber-500"
+                          : info.status === "unreachable"
+                            ? "text-red-500"
+                            : "text-black";
+
                 const marker = L.marker(latlng, {
                     icon: L.divIcon({
-                        html: `<div class="text-black bg-transparent"><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 448 512" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg"><path d="M96 0C43 0 0 43 0 96L0 352c0 48 35.2 87.7 81.1 94.9l-46 46C28.1 499.9 33.1 512 43 512l39.7 0c8.5 0 16.6-3.4 22.6-9.4L160 448l128 0 54.6 54.6c6 6 14.1 9.4 22.6 9.4l39.7 0c10 0 15-12.1 7.9-19.1l-46-46c46-7.1 81.1-46.9 81.1-94.9l0-256c0-53-43-96-96-96L96 0zM64 96c0-17.7 14.3-32 32-32l256 0c17.7 0 32 14.3 32 32l0 96c0 17.7-14.3 32-32 32L96 224c-17.7 0-32-14.3-32-32l0-96zM224 288a48 48 0 1 1 0 96 48 48 0 1 1 0-96z"></path></svg></div>`,
+                        html: `<div class="${tint} bg-transparent"><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 448 512" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg"><path d="M96 0C43 0 0 43 0 96L0 352c0 48 35.2 87.7 81.1 94.9l-46 46C28.1 499.9 33.1 512 43 512l39.7 0c8.5 0 16.6-3.4 22.6-9.4L160 448l128 0 54.6 54.6c6 6 14.1 9.4 22.6 9.4l39.7 0c10 0 15-12.1 7.9-19.1l-46-46c46-7.1 81.1-46.9 81.1-94.9l0-256c0-53-43-96-96-96L96 0zM64 96c0-17.7 14.3-32 32-32l256 0c17.7 0 32 14.3 32 32l0 96c0 17.7-14.3 32-32 32L96 224c-17.7 0-32-14.3-32-32l0-96zM224 288a48 48 0 1 1 0 96 48 48 0 1 1 0-96z"></path></svg></div>`,
                         className: "",
                     }),
                 });
 
+                const statusText = info
+                    ? info.override
+                        ? ` · forced ${info.override}`
+                        : info.status === "reachable"
+                          ? " · reachable"
+                          : info.status === "unknown"
+                            ? " · unknown (no GTFS match)"
+                            : " · unreachable"
+                    : "";
                 marker.bindPopup(
                     `<b>${
                         extractStationName(geoJsonPoint) || "No Name Found"
                     } (${lngLatToText(
                         geoJsonPoint.geometry.coordinates as [number, number],
-                    )})</b>`,
+                    )})</b>${statusText}`,
                 );
 
                 return marker;
@@ -586,7 +684,7 @@ export const ZoneSidebar = () => {
                 const overridesMap = new Map<string, "include" | "exclude">(
                     Object.entries($reachabilityOverrides),
                 );
-                const { filtered: reachFiltered } =
+                const { filtered: reachFiltered, classifications } =
                     filterCirclesByReachability({
                         circles: filtered,
                         matches: reachabilityBundle.matches,
@@ -598,6 +696,11 @@ export const ZoneSidebar = () => {
                         unknownDefault: "include",
                     });
                 final = reachFiltered;
+                reachabilityClassifications.set(classifications);
+            } else {
+                // No active query → clear stale classifications so the
+                // sidebar doesn't show status badges from an old run.
+                reachabilityClassifications.set(new Map());
             }
 
             setStations(final);
@@ -694,9 +797,26 @@ export const ZoneSidebar = () => {
                 });
             }
         } else if ($displayHidingZones) {
+            // Only supply a status lookup when reachability is
+            // actually active — otherwise the default green look
+            // from before this feature landed is what we want.
+            const statusLookup = $reachabilityResult
+                ? (osmId: string | undefined) => {
+                      if (!osmId) return undefined;
+                      const status =
+                          $reachabilityClassifications.get(osmId);
+                      if (!status) return undefined;
+                      return {
+                          status,
+                          override: $reachabilityOverrides[osmId],
+                      };
+                  }
+                : undefined;
             showGeoJSON(
                 styledGeoJSON,
                 $displayHidingZonesStyle === "zones",
+                {},
+                statusLookup,
             );
         } else {
             removeHidingZones();
@@ -709,6 +829,9 @@ export const ZoneSidebar = () => {
         hidingZoneModeStationID,
         stations,
         styledGeoJSON,
+        $reachabilityResult,
+        $reachabilityClassifications,
+        $reachabilityOverrides,
     ]);
 
     return (
@@ -1341,8 +1464,37 @@ export const ZoneSidebar = () => {
                                                     }}
                                                     disabled={$isLoading}
                                                 >
-                                                    {extractStationLabel(
-                                                        station.properties,
+                                                    <span className="flex-1 truncate">
+                                                        {extractStationLabel(
+                                                            station.properties,
+                                                        )}
+                                                    </span>
+                                                    {$reachabilityResult && (
+                                                        <StationReachabilityControl
+                                                            osmId={
+                                                                station
+                                                                    .properties
+                                                                    .properties
+                                                                    .id
+                                                            }
+                                                            status={
+                                                                $reachabilityClassifications.get(
+                                                                    station
+                                                                        .properties
+                                                                        .properties
+                                                                        .id,
+                                                                ) ?? "unknown"
+                                                            }
+                                                            override={
+                                                                $reachabilityOverrides[
+                                                                    station
+                                                                        .properties
+                                                                        .properties
+                                                                        .id
+                                                                ]
+                                                            }
+                                                            disabled={$isLoading}
+                                                        />
                                                     )}
                                                     <button
                                                         onClick={async () => {
@@ -1375,6 +1527,91 @@ export const ZoneSidebar = () => {
         </Sidebar>
     );
 };
+
+/**
+ * Per-station reachability status badge + override cycle button.
+ *
+ * Clicking cycles `auto → include → exclude → auto`. The icon reflects
+ * the combined (override | status) state so a user who forced-include
+ * an unreachable station still sees their decision, not the raw
+ * classification. Kept tiny on purpose — the station list already gets
+ * crowded at 300+ rows.
+ *
+ * Status glyphs:
+ *   reachable   →  ✓  (green)   "transit reaches this within budget"
+ *   unreachable →  ✗  (red)     "transit can't reach this in budget"
+ *   unknown     →  ?  (amber)   "no GTFS match found — we can't tell"
+ *
+ * Override glyphs (when set, take over the color):
+ *   include     →  ★  (emerald) "always include"
+ *   exclude     →  ⊘  (slate)   "always drop"
+ */
+function StationReachabilityControl({
+    osmId,
+    status,
+    override,
+    disabled,
+}: {
+    osmId: string;
+    status: "reachable" | "unreachable" | "unknown";
+    override: "include" | "exclude" | undefined;
+    disabled: boolean;
+}) {
+    const cycleOverride = (
+        e: React.MouseEvent<HTMLButtonElement, MouseEvent>,
+    ) => {
+        // Don't let the cmdk row selection trigger on click.
+        e.stopPropagation();
+        const current = reachabilityOverridesAtom.get();
+        const next = { ...current };
+        const cur = current[osmId];
+        if (cur === undefined) next[osmId] = "include";
+        else if (cur === "include") next[osmId] = "exclude";
+        else delete next[osmId];
+        reachabilityOverridesAtom.set(next);
+    };
+
+    let glyph: string;
+    let color: string;
+    let title: string;
+    if (override === "include") {
+        glyph = "★";
+        color = "bg-emerald-600 text-white";
+        title = "Forced include (click to exclude)";
+    } else if (override === "exclude") {
+        glyph = "⊘";
+        color = "bg-slate-500 text-white";
+        title = "Forced exclude (click to reset)";
+    } else if (status === "reachable") {
+        glyph = "✓";
+        color = "bg-green-600/80 text-white";
+        title = "Reachable (click to force include)";
+    } else if (status === "unreachable") {
+        glyph = "✗";
+        color = "bg-red-600/80 text-white";
+        title = "Unreachable — shown because it was included manually (click to force include)";
+    } else {
+        glyph = "?";
+        color = "bg-amber-500 text-white";
+        title = "Unknown — no GTFS match. Click to force include; click again to exclude.";
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={cycleOverride}
+            disabled={disabled}
+            title={title}
+            aria-label={title}
+            className={cn(
+                "h-5 w-5 rounded-md text-xs leading-none font-semibold inline-flex items-center justify-center shrink-0",
+                color,
+            )}
+        >
+            {glyph}
+        </button>
+    );
+}
 
 function styleStations(
     circles: StationCircle[],

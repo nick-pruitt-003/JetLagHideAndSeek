@@ -4,6 +4,7 @@ import type { Map } from "leaflet";
 import { atom, computed, onSet } from "nanostores";
 
 import type { ReachabilityResult } from "@/lib/transit/types";
+import type { ReachabilityStatus } from "@/maps/geo-utils/zonePipeline";
 import type {
     AdditionalMapGeoLocations,
     CustomStation,
@@ -205,6 +206,17 @@ export const excludeHeritageRailways = persistentAtom<boolean>(
 // imported GTFS feeds, so a page reload will simply re-run the query.
 // ---------------------------------------------------------------------------
 export const reachabilityResult = atom<ReachabilityResult | null>(null);
+
+// Per-OSM-id classification the last filter run produced. Transient —
+// regenerated every time Phase B runs. Consumed by the sidebar station
+// list + map styling to show which stations are reachable / unknown /
+// unreachable, and by the override UI so the icon can reflect the
+// underlying status vs. a user-forced decision.
+// NOTE: `Map` is aliased to the leaflet type at the top of this file, so
+// we explicitly reach for the JS built-in here.
+export const reachabilityClassifications = atom<
+    globalThis.Map<string, ReachabilityStatus>
+>(new globalThis.Map());
 
 // Per-OSM-station override for reachability filtering. "include"
 // keeps the station even if RAPTOR says unreachable; "exclude" drops
