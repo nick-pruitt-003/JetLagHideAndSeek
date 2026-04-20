@@ -1,13 +1,16 @@
 # Pin Node for Railway/Nixpacks.
 #
-# NIXPACKS_NODE_VERSION and .nvmrc were ignored (Nixpacks fell back to
-# Node 18). Force the nix package directly — equivalent to:
-#   nix-shell -p nodejs_24 pnpm
+# Nixpacks' default nixpkgs snapshot predates Node 24, so we override
+# `nixpkgsArchive` to a recent nixos-unstable commit that has nodejs_24.
+# Equivalent to:
+#   nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/<rev>.tar.gz \
+#             -p nodejs_24 pnpm
 #
-# `providers = []` disables Nixpacks' auto-detection so nothing else
-# sneaks a second nodejs into the derivation. Build and start commands
-# are owned by railway.json.
+# `providers = []` disables Nixpacks' auto-detection so nothing sneaks a
+# second nodejs into the derivation. Build and start commands are owned
+# by railway.json.
 providers = []
 
 [phases.setup]
+nixpkgsArchive = "4bd9165a9165d7b5e33ae57f3eecbcb28fb231c9"
 nixPkgs = ["nodejs_24", "pnpm"]
