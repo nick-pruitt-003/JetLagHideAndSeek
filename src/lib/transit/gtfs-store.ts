@@ -258,18 +258,6 @@ export async function listSystems(): Promise<TransitSystem[]> {
     return db.getAll("systems");
 }
 
-export async function getSystem(
-    id: string,
-): Promise<TransitSystem | undefined> {
-    const db = await openTransitDB();
-    return db.get("systems", id);
-}
-
-export async function saveSystem(system: TransitSystem): Promise<void> {
-    const db = await openTransitDB();
-    await db.put("systems", system);
-}
-
 /**
  * Bulk-delete everything belonging to a system. Runs in a single transaction
  * so the UI never sees a half-deleted state.

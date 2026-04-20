@@ -262,7 +262,7 @@ function dayOfWeekBit(d: Date): number {
     return 1 << bitPos;
 }
 
-export function activeServiceIds(
+function activeServiceIds(
     services: Map<string, TransitService>,
     date: Date,
 ): Set<string> {
@@ -519,9 +519,3 @@ function earliestBoardableTrip(
     }
     return -1;
 }
-
-// Re-export haversine for callers that want origin->stop walking in UI.
-export { haversineMeters };
-
-// Re-export defaults for the client.
-export { DEFAULT_MAX_ROUNDS };

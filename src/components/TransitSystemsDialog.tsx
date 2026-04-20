@@ -32,6 +32,7 @@ import { fetchGtfsZip, looksLikeZip } from "@/lib/transit/cors-proxy";
 import { parseGtfs } from "@/lib/transit/gtfs-parser";
 import {
     deleteSystem,
+    estimateUsage,
     listSystems,
     writeSystemBulk,
 } from "@/lib/transit/gtfs-store";
@@ -104,7 +105,19 @@ function phaseLabel(phase: ImportProgress["phase"]): string {
     }
 }
 
-export default function TransitSystemsDialog({
+function formatStorageBytes(n: number): string {
+    if (n < 1024) return `${n} B`;
+    const units = ["KB", "MB", "GB"] as const;
+    let v = n;
+    let i = -1;
+    do {
+        v /= 1024;
+        i++;
+    } while (v >= 1024 && i < units.length - 1);
+    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function TransitSystemsDialog({
     open,
     onOpenChange,
 }: TransitSystemsDialogProps) {
@@ -113,6 +126,10 @@ export default function TransitSystemsDialog({
     const [urlInput, setUrlInput] = useState("");
     const [nameInput, setNameInput] = useState("");
     const [progress, setProgress] = useState<ImportProgress | null>(null);
+    const [storageInfo, setStorageInfo] = useState<{
+        usage?: number;
+        quota?: number;
+    } | null>(null);
     const [deleting, setDeleting] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const abortRef = useRef<AbortController | null>(null);
@@ -122,6 +139,13 @@ export default function TransitSystemsDialog({
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
+        estimateUsage()
+            .then((s) => {
+                if (!cancelled) setStorageInfo(s);
+            })
+            .catch(() => {
+                if (!cancelled) setStorageInfo(null);
+            });
         // Reset to loading state before the IDB read resolves.
         // eslint-disable-next-line @eslint-react/set-state-in-effect -- loading-state reset before async load
         setSystems(null);
@@ -562,7 +586,17 @@ export default function TransitSystemsDialog({
                     </section>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="flex-col gap-2 sm:flex-col items-stretch">
+                    {storageInfo?.usage != null && (
+                        <p className="text-[11px] text-muted-foreground text-left order-first">
+                            Browser storage (approx.):{" "}
+                            {formatStorageBytes(storageInfo.usage)}
+                            {storageInfo.quota != null
+                                ? ` / ${formatStorageBytes(storageInfo.quota)}`
+                                : ""}
+                        </p>
+                    )}
+                    <div className="flex flex-wrap gap-2 justify-end">
                     <Button
                         variant="outline"
                         onClick={() => onOpenChange(false)}
@@ -578,6 +612,7 @@ export default function TransitSystemsDialog({
                             Cancel download
                         </Button>
                     )}
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

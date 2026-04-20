@@ -1,5 +1,6 @@
 {
     "recommendations": [
+        "coderabbit.coderabbit-vscode",
         "bradlc.vscode-tailwindcss",
         "astro-build.astro-vscode",
         "dbaeumer.vscode-eslint",

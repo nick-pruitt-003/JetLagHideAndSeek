@@ -1,5 +1,20 @@
 {
     "$schema": "https://unpkg.com/knip@6/schema.json",
     "tags": ["-lintignore"],
-    "ignore": [".claude/**"]
+    "entry": [
+        "src/lib/sw-register.ts",
+        "postcss.config.mjs",
+        "src/pages/**/*.astro",
+        "src/layouts/**/*.astro"
+    ],
+    "ignoreDependencies": [
+        "@astrojs/check",
+        "@react-leaflet/core",
+        "@tailwindcss/postcss"
+    ],
+    "ignoreIssues": {
+        "src/lib/**": ["types"],
+        "src/components/ui/**": ["types"],
+        "src/maps/**": ["types"]
+    }
 }

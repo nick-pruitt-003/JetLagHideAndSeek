@@ -32,7 +32,7 @@ export interface FetchResult {
     contentType: string;
 }
 
-export class GtfsFetchError extends Error {
+class GtfsFetchError extends Error {
     constructor(
         message: string,
         public readonly attempts: Array<{

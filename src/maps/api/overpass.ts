@@ -57,7 +57,7 @@ function dedupeOsmElements(elements: any[]): any[] {
  * feature collection, simplifying until the clause fits GET limits and
  * evaluates in reasonable time on the server.
  */
-export function polyClauseStringForOverpass(fc: FeatureCollection): string {
+function polyClauseStringForOverpass(fc: FeatureCollection): string {
     const build = (c: FeatureCollection) =>
         turf
             .getCoords(c.features as any)

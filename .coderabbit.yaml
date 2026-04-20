@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit: https://docs.coderabbit.ai/getting-started/yaml-configuration
+language: "en-US"
+
+reviews:
+    profile: "assertive"
+    auto_review:
+        enabled: true
+        drafts: false
+    path_filters:
+        - "!dist/**"
+        - "!pnpm-lock.yaml"
+        - "!**/*.test.ts"
+        - "src/**"
+        - "astro.config.mjs"
+        - "eslint.config.js"
+        - "knip.json"
+    path_instructions:
+        - path: "src/lib/transit/**"
+          instructions: |
+            Transit/GTFS/RAPTOR/reachability: verify IDB migrations are append-only,
+            worker-safe imports under src/lib/transit (prefer relative paths for code
+            pulled into Vite web workers), and GTFS/OSM ID consistency.
+        - path: "src/maps/**"
+          instructions: |
+            Maps/Overpass/geo: watch URL length for poly queries, timeouts and retries,
+            and correctness of multi-region vs single-region query paths.
+        - path: "src/components/**"
+          instructions: |
+            React/Leaflet: match existing hooks and nanostores patterns; map context menu
+            and draggable markers must stay accessible and predictable.
+        - path: "src/sw.ts"
+          instructions: |
+            Service worker: precache scope matches import.meta.env.BASE_URL; avoid caching
+            HTML aggressively if it would strand users on stale shells.
+
+chat:
+    auto_reply: true
