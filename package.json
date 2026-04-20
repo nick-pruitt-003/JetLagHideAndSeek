@@ -6,11 +6,13 @@
         "dev": "astro dev",
         "build": "astro build",
         "preview": "astro preview",
+        "start": "HOST=${HOST:-0.0.0.0} node ./dist/server/entry.mjs",
         "astro": "astro",
         "lint": "eslint --fix src && prettier . --write",
         "test": "vitest",
         "knip": "knip"
     },
+    "packageManager": "pnpm@10.32.1",
     "dependencies": {
         "@arcgis/core": "^5.0.17",
         "@astrojs/check": "^0.9.8",
@@ -99,6 +101,11 @@
         "node": ">=22.22.2"
     },
     "pnpm": {
+        "onlyBuiltDependencies": [
+            "@vaadin/vaadin-usage-statistics",
+            "esbuild",
+            "sharp"
+        ],
         "overrides": {
             "@xmldom/xmldom": "0.9.10",
             "serialize-javascript": "7.0.5",
