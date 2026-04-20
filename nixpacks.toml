@@ -1,10 +1,13 @@
 # Pin Node for Railway/Nixpacks.
 #
-# Nixpacks' nodejs_22 attribute currently resolves to 22.11.x in its pinned
-# nixpkgs snapshot, which fails Astro 6's >=22.12.0 requirement. Node 24 is
-# the current LTS and resolves to a recent release in Nixpacks.
+# NIXPACKS_NODE_VERSION and .nvmrc were ignored (Nixpacks fell back to
+# Node 18). Force the nix package directly — equivalent to:
+#   nix-shell -p nodejs_24 pnpm
 #
-# Both `.nvmrc` and NIXPACKS_NODE_VERSION are set so Nixpacks picks 24
-# regardless of which source it checks first.
-[variables]
-NIXPACKS_NODE_VERSION = "24"
+# `providers = []` disables Nixpacks' auto-detection so nothing else
+# sneaks a second nodejs into the derivation. Build and start commands
+# are owned by railway.json.
+providers = []
+
+[phases.setup]
+nixPkgs = ["nodejs_24", "pnpm"]
