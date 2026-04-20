@@ -24,8 +24,8 @@
 
 import KDBush from "kdbush";
 
-import { openTransitDB, replaceAutoTransfers } from "@/lib/transit/gtfs-store";
-import type { Footpath, TransitStop } from "@/lib/transit/types";
+import { openTransitDB, replaceAutoTransfers } from "./gtfs-store";
+import type { Footpath, TransitStop } from "./types";
 
 export interface AutoTransferOptions {
     /** Max straight-line distance to consider for a transfer edge. */

@@ -9,6 +9,9 @@ import { injectManifest } from "@serwist/build";
 import { defineConfig } from "astro/config";
 import { build as esbuild } from "esbuild";
 
+/** Project root (directory containing this file). */
+const projectRoot = fileURLToPath(new URL(".", import.meta.url));
+
 // Defensive env var cleanup — Railway's UI occasionally sneaks an extra `=`
 // into values (e.g. KEY==value), and users often forget the scheme on URLs.
 // Strip blanks and leading `=` from anything we touch here.
@@ -104,7 +107,6 @@ const serwistIntegration = ({ disable }) => ({
             // any bare import we resolve through Node from this
             // project's root, which always finds our pnpm-installed
             // `node_modules/`.
-            const projectRoot = fileURLToPath(new URL(".", import.meta.url));
             const require = createRequire(import.meta.url);
             /** @type {import("esbuild").Plugin} */
             const forceNodeResolve = {

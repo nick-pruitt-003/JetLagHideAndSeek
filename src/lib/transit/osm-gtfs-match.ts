@@ -20,8 +20,8 @@
 
 import KDBush from "kdbush";
 
-import { haversineMeters } from "@/lib/transit/auto-transfers";
-import type { TransitStop } from "@/lib/transit/types";
+import { haversineMeters } from "./auto-transfers";
+import type { TransitStop } from "./types";
 
 /** OSM tags we'll look at for an explicit GTFS crosswalk. Order matters. */
 const GTFS_REF_TAGS = [

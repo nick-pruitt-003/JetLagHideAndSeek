@@ -45,7 +45,7 @@
  * next day. This works naturally because we only compare/add seconds.
  */
 
-import { haversineMeters } from "@/lib/transit/auto-transfers";
+import { haversineMeters } from "./auto-transfers";
 import {
     getAllServices,
     getAllStops,
@@ -53,7 +53,7 @@ import {
     getAllTransfers,
     getAllTrips,
     listSystems,
-} from "@/lib/transit/gtfs-store";
+} from "./gtfs-store";
 import type {
     ReachabilityQuery,
     ReachabilityResult,
@@ -61,7 +61,7 @@ import type {
     TransitStop,
     TransitTrip,
     TransitTripStopTimes,
-} from "@/lib/transit/types";
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // Constants

@@ -16,8 +16,8 @@ import type {
     SerializedResult,
     WorkerRequest,
     WorkerResponse,
-} from "@/lib/transit/reachability-worker";
-import type { ReachabilityQuery, ReachabilityResult } from "@/lib/transit/types";
+} from "./reachability-worker";
+import type { ReachabilityQuery, ReachabilityResult } from "./types";
 
 export interface QueryOptions {
     maxRounds?: number;

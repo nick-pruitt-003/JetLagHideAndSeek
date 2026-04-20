@@ -21,8 +21,8 @@
  *     { id, type: "cacheStats", stats }
  */
 
-import { loadRaptorData, type RaptorData, runRaptor } from "@/lib/transit/raptor";
-import type { ReachabilityQuery, ReachabilityResult } from "@/lib/transit/types";
+import { loadRaptorData, type RaptorData, runRaptor } from "./raptor";
+import type { ReachabilityQuery, ReachabilityResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // Message protocol

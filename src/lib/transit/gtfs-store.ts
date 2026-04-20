@@ -29,7 +29,7 @@ import type {
     TransitSystem,
     TransitTrip,
     TransitTripStopTimes,
-} from "@/lib/transit/types";
+} from "./types";
 
 const DB_NAME = "jetlag-transit";
 
