@@ -7,14 +7,14 @@ reviews:
     auto_review:
         enabled: true
         drafts: false
+    # Exclusion-only: mixed include/exclude lists can make the VS Code/Cursor
+    # extension treat paths as non-reviewable ("all files ignored").
     path_filters:
         - "!dist/**"
+        - "!.astro/**"
+        - "!node_modules/**"
         - "!pnpm-lock.yaml"
         - "!**/*.test.ts"
-        - "src/**"
-        - "astro.config.mjs"
-        - "eslint.config.js"
-        - "knip.json"
     path_instructions:
         - path: "src/lib/transit/**"
           instructions: |
