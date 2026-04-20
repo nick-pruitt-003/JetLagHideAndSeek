@@ -85,6 +85,7 @@ import {
 
 import { Button } from "./ui/button";
 import { TransitSystemsButton } from "./TransitSystemsDialog";
+import ReachabilitySection from "./ReachabilitySection";
 import { Checkbox } from "./ui/checkbox";
 import {
     Command,
@@ -837,6 +838,7 @@ export const ZoneSidebar = () => {
                                     Manage transit systems…
                                 </TransitSystemsButton>
                             </SidebarMenuItem>
+                            <ReachabilitySection />
                             {useCustomStations && (
                                 <>
                                     <SidebarMenuItem

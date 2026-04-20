@@ -220,6 +220,54 @@ export const reachabilityOverrides = persistentAtom<
         decode: JSON.parse,
     },
 );
+
+// ---------------------------------------------------------------------------
+// Reachability query inputs. Persisted so a game host picking "45 min
+// from the hotel at 9am Saturday" doesn't have to reconfigure every
+// session. The result itself is transient (`reachabilityResult` above).
+// ---------------------------------------------------------------------------
+export const reachabilityBudgetMinutes = persistentAtom<number>(
+    "reachabilityBudgetMinutes",
+    45,
+    { encode: JSON.stringify, decode: JSON.parse },
+);
+export const reachabilityWalkSpeedMph = persistentAtom<number>(
+    "reachabilityWalkSpeedMph",
+    3,
+    { encode: JSON.stringify, decode: JSON.parse },
+);
+export const reachabilityMaxWalkLegMinutes = persistentAtom<number>(
+    "reachabilityMaxWalkLegMinutes",
+    20,
+    { encode: JSON.stringify, decode: JSON.parse },
+);
+// Preset IDs are resolved to a concrete Date at query time by
+// `resolveDeparturePreset`. "custom" uses `reachabilityDepartureCustomISO`.
+export type ReachabilityDeparturePreset =
+    | "now"
+    | "weekday-9am"
+    | "saturday-noon"
+    | "tonight-6pm"
+    | "custom";
+export const reachabilityDeparturePreset =
+    persistentAtom<ReachabilityDeparturePreset>(
+        "reachabilityDeparturePreset",
+        "now",
+        { encode: JSON.stringify, decode: JSON.parse },
+    );
+export const reachabilityDepartureCustomISO = persistentAtom<string>(
+    "reachabilityDepartureCustomISO",
+    "",
+);
+// Empty array means "use all imported systems" — matches the RAPTOR
+// worker's own default and avoids a chicken-and-egg problem where the
+// user has nothing selected on a fresh install.
+export const reachabilitySelectedSystemIds = persistentAtom<string[]>(
+    "reachabilitySelectedSystemIds",
+    [],
+    { encode: JSON.stringify, decode: JSON.parse },
+);
+
 export const animateMapMovements = persistentAtom<boolean>(
     "animateMapMovements",
     false,

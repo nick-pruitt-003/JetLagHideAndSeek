@@ -36,6 +36,7 @@ import {
 import { parseGtfs } from "@/lib/transit/gtfs-parser";
 import { fetchGtfsZip, looksLikeZip } from "@/lib/transit/cors-proxy";
 import { rebuildAutoTransfers } from "@/lib/transit/auto-transfers";
+import { reachabilityClient } from "@/lib/transit/reachability-client";
 import type { ImportProgress, TransitSystem } from "@/lib/transit/types";
 
 interface TransitSystemsDialogProps {
@@ -233,6 +234,9 @@ export default function TransitSystemsDialog({
             rebuildAutoTransfers().catch((err) => {
                 console.log("Auto-transfer rebuild failed:", err);
             });
+            // Force the RAPTOR worker to drop its cached graph so the
+            // next reachability query sees the new feed.
+            reachabilityClient.invalidate();
 
             toast.success(
                 `Imported ${parsed.system.name} (${parsed.stops.length.toLocaleString()} stops)`,
@@ -273,6 +277,7 @@ export default function TransitSystemsDialog({
             rebuildAutoTransfers().catch((err) => {
                 console.log("Auto-transfer rebuild failed:", err);
             });
+            reachabilityClient.invalidate();
             await refreshList();
         } catch (err) {
             console.log("Delete system failed:", err);
