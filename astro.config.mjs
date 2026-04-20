@@ -7,6 +7,7 @@ import { defineConfig } from "astro/config";
 // Defensive env var cleanup — Railway's UI occasionally sneaks an extra `=`
 // into values (e.g. KEY==value), and users often forget the scheme on URLs.
 // Strip blanks and leading `=` from anything we touch here.
+/** @param {string | undefined | null} v */
 const cleanEnv = (v) => {
     if (v == null) return undefined;
     const trimmed = String(v).trim().replace(/^=+/, "").trim();
