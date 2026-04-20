@@ -57,6 +57,7 @@ import {
     questionFinishedMapData,
     questions,
     reachabilityClassifications,
+    triggerLocalRefresh,
     reachabilityOverrides as reachabilityOverridesAtom,
     reachabilityResult as reachabilityResultAtom,
     trainStations,
@@ -131,6 +132,8 @@ export const ZoneSidebar = () => {
     const $reachabilityOverrides = useStore(reachabilityOverridesAtom);
     const $reachabilityClassifications = useStore(reachabilityClassifications);
     const $customStations = useStore(customStationsAtom);
+    const $questions = useStore(questions);
+    const $triggerLocalRefresh = useStore(triggerLocalRefresh);
     // Subscribe to the scope stores so Phase A re-runs when the user
     // picks a new city / draws a new boundary.
     const $polyGeoJSON = useStore(polyGeoJSON);
@@ -762,6 +765,8 @@ export const ZoneSidebar = () => {
         $reachabilityResult,
         $reachabilityOverrides,
         reachabilityBundle,
+        $questions,
+        $triggerLocalRefresh,
     ]);
 
     // Active stations after disabled-station filtering. Derived; cheap.
