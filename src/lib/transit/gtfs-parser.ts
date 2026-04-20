@@ -207,38 +207,36 @@ export async function parseGtfs(
     >();
     const keptStopIds = new Set<string>(); // unprefixed — stops to include
 
-    // Papaparse in "chunk" mode lets us report progress on the big file
-    // without blocking forever.
-    const totalChars = stopTimesCsv.length;
-    let charsProcessed = 0;
-
-    Papa.parse<StopTimeRow>(stopTimesCsv, {
+    // Parse synchronously. stop_times.txt is the biggest file (10-200 MB for
+    // NY-area feeds) but papaparse chews through it in <1s on modern hardware,
+    // and we're in a worker anyway. Reporting progress every N rows.
+    const parseResult = Papa.parse<StopTimeRow>(stopTimesCsv, {
         header: true,
         skipEmptyLines: true,
         dynamicTyping: false,
-        chunk: (chunk) => {
-            for (const row of chunk.data) {
-                if (!row.trip_id || !keptTripIds.has(row.trip_id)) continue;
-                const entry = tripStopsRaw.get(row.trip_id) ?? {
-                    seqs: [],
-                    stopIds: [],
-                    arrivals: [],
-                    departures: [],
-                };
-                entry.seqs.push(parseInt(row.stop_sequence, 10));
-                entry.stopIds.push(row.stop_id);
-                entry.arrivals.push(parseGtfsTime(row.arrival_time));
-                entry.departures.push(parseGtfsTime(row.departure_time));
-                keptStopIds.add(row.stop_id);
-                if (!tripStopsRaw.has(row.trip_id)) {
-                    tripStopsRaw.set(row.trip_id, entry);
-                }
-            }
-            charsProcessed += chunk.meta.cursor - charsProcessed;
-            const frac = 0.32 + 0.3 * (charsProcessed / totalChars);
-            onProgress?.({ phase: "parsing-stop-times", fraction: frac });
-        },
     });
+    const rows = parseResult.data;
+    const progressStride = Math.max(1, Math.floor(rows.length / 20));
+
+    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+        const row = rows[rowIdx];
+        if (!row.trip_id || !keptTripIds.has(row.trip_id)) continue;
+        let entry = tripStopsRaw.get(row.trip_id);
+        if (!entry) {
+            entry = { seqs: [], stopIds: [], arrivals: [], departures: [] };
+            tripStopsRaw.set(row.trip_id, entry);
+        }
+        entry.seqs.push(parseInt(row.stop_sequence, 10));
+        entry.stopIds.push(row.stop_id);
+        entry.arrivals.push(parseGtfsTime(row.arrival_time));
+        entry.departures.push(parseGtfsTime(row.departure_time));
+        keptStopIds.add(row.stop_id);
+
+        if (rowIdx % progressStride === 0) {
+            const frac = 0.32 + 0.3 * (rowIdx / rows.length);
+            onProgress?.({ phase: "parsing-stop-times", fraction: frac });
+        }
+    }
 
     // Sort each trip's stop times by stop_sequence and build the compact
     // TransitTripStopTimes records.

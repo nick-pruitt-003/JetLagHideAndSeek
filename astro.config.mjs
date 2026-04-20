@@ -53,10 +53,11 @@ export default defineConfig({
     },
     site,
     base,
-    // "hybrid" keeps most pages static-rendered while letting /api/* routes
-    // run server-side. Required for the GTFS proxy to work on Railway.
-    // On GH Pages (static-only), API routes are silently omitted.
-    output: "hybrid",
+    // Astro 6: output defaults to "static". Pages are prerendered at build
+    // time; API routes with `export const prerender = false` run on the
+    // server via the configured adapter. On GH Pages (no adapter running),
+    // those routes simply won't exist and the client falls back to the
+    // public CORS proxy. On Railway the node adapter serves them.
     adapter: node({
         mode: "standalone",
     }),
