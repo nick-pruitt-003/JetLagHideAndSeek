@@ -3,6 +3,7 @@ import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import type { Map } from "leaflet";
 import { atom, computed, onSet } from "nanostores";
 
+import type { ReachabilityResult } from "@/lib/transit/types";
 import type {
     AdditionalMapGeoLocations,
     CustomStation,
@@ -176,6 +177,44 @@ export const includeDefaultStations = persistentAtom<boolean>(
 export const activeStationsOnly = persistentAtom<boolean>(
     "activeStationsOnly",
     false,
+    {
+        encode: JSON.stringify,
+        decode: JSON.parse,
+    },
+);
+// Drop stations whose parent railway way is tagged as a heritage /
+// tourist / preserved / abandoned line. Off by default because the
+// valid/invalid distinction is game-logic, not OSM-encodable: one-way
+// tourist routes like Durango-Silverton and Cuyahoga Valley Scenic are
+// fair hiding spots, while round-trip excursions like the Essex Steam
+// Train are not. Flip on per-game as needed.
+export const excludeHeritageRailways = persistentAtom<boolean>(
+    "excludeHeritageRailways",
+    false,
+    {
+        encode: JSON.stringify,
+        decode: JSON.parse,
+    },
+);
+
+// ---------------------------------------------------------------------------
+// Reachability / GTFS filtering
+//
+// Transient: computed by the reachability worker on query. Not
+// persisted — the Map<stopId, seconds> is large and derived from
+// imported GTFS feeds, so a page reload will simply re-run the query.
+// ---------------------------------------------------------------------------
+export const reachabilityResult = atom<ReachabilityResult | null>(null);
+
+// Per-OSM-station override for reachability filtering. "include"
+// keeps the station even if RAPTOR says unreachable; "exclude" drops
+// it regardless of reachability status. Used by the Phase 4 "Unknown
+// station" UI so users can manually resolve ambiguous matches.
+export const reachabilityOverrides = persistentAtom<
+    Record<string, "include" | "exclude">
+>(
+    "reachabilityOverrides",
+    {},
     {
         encode: JSON.stringify,
         decode: JSON.parse,

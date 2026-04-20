@@ -336,6 +336,92 @@ out ${outType};
     return data;
 };
 
+/**
+ * Return the set of OSM node IDs that are members of heritage /
+ * tourist / preserved / abandoned railway ways within the current
+ * scope.
+ *
+ * We use this to post-filter station lists when the user opts to
+ * exclude heritage railways — stations themselves almost never carry
+ * the relevant tags (they usually look like a normal
+ * `railway=station`), but the way they sit on does. Node-level
+ * filtering in the Overpass query isn't sufficient for this.
+ *
+ * Cached under ZONE_CACHE so toggling the option (or editing questions)
+ * doesn't re-hit the network.
+ */
+export const findHeritageRailwayMemberNodeIds = async (): Promise<
+    Set<number>
+> => {
+    const $polyGeoJSON = polyGeoJSON.get();
+
+    // The candidate "non-active heritage" railway way tags. We pick up
+    // member nodes of any way matching one of these; those nodes are
+    // then dropped from the station list.
+    const wayFilters = [
+        '["railway:preserved"="yes"]',
+        '["railway"]["usage"="tourism"]',
+        '["railway"="abandoned"]',
+        '["railway"="disused"]',
+        '["railway"="heritage"]',
+    ];
+
+    let scopeBlock: string;
+    if ($polyGeoJSON) {
+        const poly = turf
+            .getCoords($polyGeoJSON.features)
+            .flatMap((polygon) => polygon.geometry.coordinates)
+            .flat()
+            .map((coord) => [coord[1], coord[0]].join(" "))
+            .join(" ");
+        scopeBlock = wayFilters
+            .map((f) => `way${f}(poly:"${poly}");`)
+            .join("\n");
+    } else {
+        const primaryLocation = mapGeoLocation.get();
+        const additionalLocations = additionalMapGeoLocations
+            .get()
+            .filter((entry) => entry.added)
+            .map((entry) => entry.location);
+        const allLocations = [primaryLocation, ...additionalLocations];
+        const areaBlocks = allLocations
+            .map(
+                (loc, idx) =>
+                    `relation(${loc.properties.osm_id});map_to_area->.region${idx};`,
+            )
+            .join("\n");
+        const searchBlocks = allLocations
+            .flatMap((_loc, idx) =>
+                wayFilters.map((f) => `way${f}(area.region${idx});`),
+            )
+            .join("\n");
+        scopeBlock = `${areaBlocks}\n${searchBlocks}`;
+    }
+
+    const query = `
+[out:json][timeout:60];
+(
+${scopeBlock}
+)->.heritage_ways;
+node(w.heritage_ways);
+out ids;
+`;
+
+    const data = await getOverpassData(
+        query,
+        "Finding heritage railway lines...",
+        CacheType.ZONE_CACHE,
+    );
+
+    const ids = new Set<number>();
+    for (const el of data.elements ?? []) {
+        if (el.type === "node" && typeof el.id === "number") {
+            ids.add(el.id);
+        }
+    }
+    return ids;
+};
+
 export const findPlacesSpecificInZone = async (
     location: `${QuestionSpecificLocation}`,
 ) => {

@@ -4,7 +4,7 @@ import type { Feature, FeatureCollection } from "geojson";
 import * as L from "leaflet";
 import _ from "lodash";
 import { Loader2, SidebarCloseIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sidebar-r";
 import {
     activeStationsOnly as activeStationsOnlyAtom,
+    additionalMapGeoLocations,
     animateMapMovements,
     autoZoom,
     customStations as customStationsAtom,
@@ -25,21 +26,35 @@ import {
     displayHidingZones,
     displayHidingZonesOptions,
     displayHidingZonesStyle,
+    excludeHeritageRailways as excludeHeritageRailwaysAtom,
     hidingRadius,
     hidingRadiusUnits,
     includeDefaultStations as includeDefaultStationsAtom,
     isLoading,
     leafletMapContext,
+    mapGeoLocation,
     mergeDuplicates as mergeDuplicatesAtom,
     planningModeEnabled,
+    polyGeoJSON,
     questionFinishedMapData,
     questions,
+    reachabilityOverrides as reachabilityOverridesAtom,
+    reachabilityResult as reachabilityResultAtom,
     trainStations,
     useCustomStations as useCustomStationsAtom,
 } from "@/lib/context";
+import { getAllStops } from "@/lib/transit/gtfs-store";
+import {
+    buildStopIndex,
+    matchOsmToGtfs,
+    type MatchedStation,
+    type OsmStationInput,
+} from "@/lib/transit/osm-gtfs-match";
+import type { TransitStop } from "@/lib/transit/types";
 import { cn } from "@/lib/utils";
 import {
     BLANK_GEOJSON,
+    findHeritageRailwayMemberNodeIds,
     findPlacesInZone,
     findPlacesSpecificInZone,
     findTentacleLocations,
@@ -49,17 +64,23 @@ import {
     QuestionSpecificLocation,
     type StationCircle,
     type StationPlace,
-    trainLineNodeFinder,
 } from "@/maps/api";
+import { filterCirclesByReachability } from "@/maps/geo-utils/zonePipeline";
 import osmtogeojson from "@/maps/api/osm-to-geojson";
 import {
+    applyQuestionFilters,
+    buildCirclesFromPlaces,
+    cullCirclesAgainstZone,
     extractStationLabel,
     extractStationName,
     geoSpatialVoronoi,
     holedMask,
     lngLatToText,
     mergeDuplicateStation,
+    playableBboxFromHoledMask,
+    prefetchMeasuringPoiPoints,
     safeUnion,
+    stationsSignature,
 } from "@/maps/geo-utils";
 
 import { Button } from "./ui/button";
@@ -100,10 +121,31 @@ export const ZoneSidebar = () => {
     const mergeDuplicates = useStore(mergeDuplicatesAtom);
     const includeDefaultStations = useStore(includeDefaultStationsAtom);
     const activeStationsOnly = useStore(activeStationsOnlyAtom);
+    const excludeHeritageRailways = useStore(excludeHeritageRailwaysAtom);
+    const $reachabilityResult = useStore(reachabilityResultAtom);
+    const $reachabilityOverrides = useStore(reachabilityOverridesAtom);
     const $customStations = useStore(customStationsAtom);
+    // Subscribe to the scope stores so Phase A re-runs when the user
+    // picks a new city / draws a new boundary.
+    const $polyGeoJSON = useStore(polyGeoJSON);
+    const $mapGeoLocation = useStore(mapGeoLocation);
+    const $additionalMapGeoLocations = useStore(additionalMapGeoLocations);
     const [isHidingZoneLoading, setIsHidingZoneLoading] = useState(false);
     const hidingZoneLoadingRef = useRef(false);
     const pendingRefreshRef = useRef(false);
+    // Phase-B generation counter so late-resolving async work (e.g. the
+    // McDonald's / 7-Eleven Overpass fetch, or `trainLineNodeFinder`)
+    // can't race with a newer filter pass.
+    const filterGenRef = useRef(0);
+    const [rawCircles, setRawCircles] = useState<StationCircle[] | null>(null);
+    // OSM ↔ GTFS match table + stop lookup, built lazily from `rawCircles`
+    // whenever a reachability query has been run. Null when reachability
+    // isn't in use (no bundle → no filter, no work in Phase B).
+    const [reachabilityBundle, setReachabilityBundle] = useState<{
+        matches: Map<string, MatchedStation>;
+        stopById: Map<string, TransitStop>;
+    } | null>(null);
+    const bundleGenRef = useRef(0);
     const [hidingZoneModeStationID, setHidingZoneModeStationID] =
         useState<string>("");
     const [stationSearch, setStationSearch] = useState<string>("");
@@ -176,18 +218,49 @@ export const ZoneSidebar = () => {
         geoJsonLayer.addTo(map);
     };
 
+    // Precompute the unionized, simplified holed-mask and its playable
+    // bbox once per questionFinishedMapData change. Both are consumed
+    // by Phase B, and both are expensive enough (turf.simplify + union
+    // over a world polygon with many holes) that we want to avoid
+    // redoing them on every re-run.
+    const zoneMaskMemo = useMemo(() => {
+        if (!$questionFinishedMapData) {
+            return { unionized: null, playableBbox: null };
+        }
+        const unionized = safeUnion(
+            turf.simplify($questionFinishedMapData, { tolerance: 0.001 }),
+        );
+        const playableBbox = playableBboxFromHoledMask(
+            $questionFinishedMapData,
+        );
+        return { unionized, playableBbox };
+    }, [$questionFinishedMapData]);
+
+    // ------------------------------------------------------------------
+    // Phase A: fetch + merge + circle-build.
+    //
+    // Runs only when the *scope* or *station options* change — NOT on
+    // every question edit. The expensive bits here (Overpass fetch,
+    // osmtogeojson parse, mergeDuplicateStation, circle construction)
+    // are kept cached in `rawCircles` state so Phase B can filter
+    // cheaply on every question change.
+    // ------------------------------------------------------------------
     useEffect(() => {
         if (!map) return;
+        if (!$displayHidingZones) return;
 
         if (hidingZoneLoadingRef.current) {
             pendingRefreshRef.current = true;
             return;
         }
 
-        const initializeHidingZones = async () => {
+        const fetchRawCircles = async () => {
             hidingZoneLoadingRef.current = true;
             isLoading.set(true);
             setIsHidingZoneLoading(true);
+
+            const markLabel = "ZoneSidebar/PhaseA";
+            if (import.meta.env.DEV) console.time(markLabel);
 
             try {
                 const needsDefault =
@@ -200,7 +273,6 @@ export const ZoneSidebar = () => {
                 let places: StationPlace[];
 
                 if (!needsDefault) {
-                    // Custom only
                     places = normalizeToStationFeatures(
                         $customStations,
                     ).features.map((f) => ({
@@ -214,7 +286,6 @@ export const ZoneSidebar = () => {
                         },
                     }));
                 } else {
-                    // Fetch default, optionally merge custom
                     const activeFilter = activeStationsOnly
                         ? '["disused"!="yes"]["abandoned"!="yes"]["railway:status"!="abandoned"]["railway:status"!="disused"]["railway:status"!="closed"]["operational_status"!="closed"]["passenger"!="no"]["station"!="freight"]["railway:traffic_mode"!="freight"]["historic"!="station"]'
                         : "";
@@ -229,7 +300,7 @@ export const ZoneSidebar = () => {
                             "nwr",
                             "center",
                             stationOptions.slice(1),
-                            90, // 90 s server-side timeout — station queries over large regions can be slow
+                            90,
                         ),
                     ).features;
 
@@ -272,7 +343,40 @@ export const ZoneSidebar = () => {
                     }
                 }
 
-                // merge duplicate stations if selected
+                // Heritage / tourist railway exclusion. Station nodes
+                // themselves rarely carry the heritage tag; it lives on
+                // the parent way. So we fetch the set of node IDs that
+                // are members of heritage / preserved / tourism /
+                // abandoned railway ways in scope and drop any place
+                // whose OSM id matches.
+                if (needsDefault && excludeHeritageRailways) {
+                    try {
+                        const heritageNodeIds =
+                            await findHeritageRailwayMemberNodeIds();
+                        if (heritageNodeIds.size > 0) {
+                            places = places.filter((place) => {
+                                const idStr = place.properties?.id;
+                                if (typeof idStr !== "string") return true;
+                                const slash = idStr.indexOf("/");
+                                if (slash < 0) return true;
+                                // Only OSM node ids live on railway
+                                // ways; OSM way / relation station
+                                // entries don't. Leave non-node places
+                                // alone.
+                                if (idStr.slice(0, slash) !== "node")
+                                    return true;
+                                const num = Number(idStr.slice(slash + 1));
+                                return !heritageNodeIds.has(num);
+                            });
+                        }
+                    } catch (err) {
+                        console.log(
+                            "Heritage railway filter failed; keeping all stations:",
+                            err,
+                        );
+                    }
+                }
+
                 if (mergeDuplicates) {
                     places = mergeDuplicateStation(
                         places,
@@ -281,194 +385,21 @@ export const ZoneSidebar = () => {
                     );
                 }
 
-                const unionized = safeUnion(
-                    turf.simplify($questionFinishedMapData, {
-                        tolerance: 0.001,
-                    }),
-                );
+                const circles = buildCirclesFromPlaces(places, {
+                    radius: $hidingRadius,
+                    units: $hidingRadiusUnits,
+                });
 
-                let circles = places
-                    .map((place) => {
-                        const radius = $hidingRadius;
-                        const center = turf.getCoord(place);
-                        const circle = turf.circle(center, radius, {
-                            steps: 32,
-                            units: $hidingRadiusUnits,
-                            properties: place,
-                        });
-
-                        return circle;
-                    })
-                    .filter((circle) => {
-                        return !turf.booleanWithin(circle, unionized);
-                    });
-
-                for (const question of questions.get()) {
-                    if (planningModeEnabled.get() && question.data.drag) {
-                        continue;
-                    }
-
-                    if (
-                        question.id === "matching" &&
-                        (question.data.type === "same-first-letter-station" ||
-                            question.data.type === "same-length-station" ||
-                            question.data.type === "same-train-line")
-                    ) {
-                        const location = turf.point([
-                            question.data.lng,
-                            question.data.lat,
-                        ]);
-
-                        const nearestTrainStation = turf.nearestPoint(
-                            location,
-                            turf.featureCollection(
-                                circles.map((x) => x.properties),
-                            ) as any,
-                        );
-
-                        if (question.data.type === "same-train-line") {
-                            // Custom-only lists don't have reliable OSM IDs
-                            if (useCustomStations && !includeDefaultStations) {
-                                toast.warning(
-                                    "'Same train line' isn't supported with custom-only station lists; skipping this filter.",
-                                );
-                            } else {
-                                const nid = nearestTrainStation.properties
-                                    .id as string | undefined;
-                                if (!nid || !nid.includes("/")) {
-                                    toast.warning(
-                                        "Nearest station has no OSM id; skipping 'same train line' filter.",
-                                    );
-                                    continue;
-                                }
-
-                                const nodes = await trainLineNodeFinder(nid);
-
-                                if (nodes.length === 0) {
-                                    toast.warning(
-                                        `No train line found for ${extractStationName(
-                                            nearestTrainStation,
-                                        )}`,
-                                    );
-                                    continue;
-                                } else {
-                                    circles = circles.filter((circle) => {
-                                        const idProp =
-                                            circle.properties.properties.id;
-                                        if (!idProp || !idProp.includes("/"))
-                                            return false;
-                                        const id = parseInt(
-                                            idProp.split("/")[1],
-                                        );
-
-                                        return question.data.same
-                                            ? nodes.includes(id)
-                                            : !nodes.includes(id);
-                                    });
-                                }
-                            }
-                        }
-
-                        const englishName =
-                            extractStationName(nearestTrainStation);
-
-                        if (!englishName)
-                            return toast.error("No English name found");
-
-                        if (
-                            question.data.type === "same-first-letter-station"
-                        ) {
-                            const letter = englishName[0].toUpperCase();
-
-                            circles = circles.filter((circle) => {
-                                const name = extractStationName(
-                                    circle.properties,
-                                );
-                                if (!name) return false;
-
-                                return question.data.same
-                                    ? name[0].toUpperCase() === letter
-                                    : name[0].toUpperCase() !== letter;
-                            });
-                        } else if (
-                            question.data.type === "same-length-station"
-                        ) {
-                            const seekerLength = englishName.length;
-                            const comparison = question.data.lengthComparison;
-
-                            circles = circles.filter((circle) => {
-                                const name = extractStationName(
-                                    circle.properties,
-                                );
-                                if (!name) return false;
-
-                                if (comparison === "same") {
-                                    return name.length === seekerLength;
-                                } else if (comparison === "shorter") {
-                                    return name.length < seekerLength;
-                                } else if (comparison === "longer") {
-                                    return name.length > seekerLength;
-                                }
-                                return false;
-                            });
-                        }
-                    }
-                    if (
-                        question.id === "measuring" &&
-                        (question.data.type === "mcdonalds" ||
-                            question.data.type === "seven11")
-                    ) {
-                        const points = await findPlacesSpecificInZone(
-                            question.data.type === "mcdonalds"
-                                ? QuestionSpecificLocation.McDonalds
-                                : QuestionSpecificLocation.Seven11,
-                        );
-
-                        const nearestPoint = turf.nearestPoint(
-                            turf.point([question.data.lng, question.data.lat]),
-                            points as any,
-                        );
-
-                        const distance = turf.distance(
-                            turf.point([question.data.lng, question.data.lat]),
-                            nearestPoint as any,
-                            {
-                                units: "miles",
-                            },
-                        );
-
-                        circles = circles.filter((circle) => {
-                            const point = turf.point(
-                                turf.getCoord(circle.properties),
-                            );
-
-                            const nearest = turf.nearestPoint(
-                                point,
-                                points as any,
-                            );
-
-                            return question.data.hiderCloser
-                                ? turf.distance(point, nearest as any, {
-                                      units: "miles",
-                                  }) <
-                                      distance + $hidingRadius
-                                : turf.distance(point, nearest as any, {
-                                      units: "miles",
-                                  }) >
-                                      distance - $hidingRadius;
-                        });
-                    }
-                }
-
-                setStations(circles);
+                setRawCircles(circles);
             } finally {
                 hidingZoneLoadingRef.current = false;
                 isLoading.set(false);
                 setIsHidingZoneLoading(false);
+                if (import.meta.env.DEV) console.timeEnd(markLabel);
 
                 if (pendingRefreshRef.current) {
                     pendingRefreshRef.current = false;
-                    initializeHidingZones().catch((error) => {
+                    fetchRawCircles().catch((error) => {
                         console.log(
                             "Error in hiding zone initialization:",
                             error,
@@ -482,26 +413,254 @@ export const ZoneSidebar = () => {
             }
         };
 
-        if ($displayHidingZones && $questionFinishedMapData) {
-            initializeHidingZones().catch((error) => {
-                console.log("Error in hiding zone initialization:", error);
-                toast.error(
-                    "An error occurred during hiding zone initialization",
-                    { toastId: "hiding-zone-initialization-error" },
-                );
-            });
-        }
+        fetchRawCircles().catch((error) => {
+            console.log("Error in hiding zone initialization:", error);
+            toast.error(
+                "An error occurred during hiding zone initialization",
+                { toastId: "hiding-zone-initialization-error" },
+            );
+        });
     }, [
-        $questionFinishedMapData,
+        map,
         $displayHidingZones,
         $displayHidingZonesOptions,
         $hidingRadius,
+        $hidingRadiusUnits,
         useCustomStations,
         includeDefaultStations,
         $customStations,
         mergeDuplicates,
         activeStationsOnly,
+        excludeHeritageRailways,
+        $polyGeoJSON,
+        $mapGeoLocation,
+        $additionalMapGeoLocations,
     ]);
+
+    // ------------------------------------------------------------------
+    // Phase A.5: OSM ↔ GTFS match bundle.
+    //
+    // Runs only when a reachability query has actually been executed
+    // (`$reachabilityResult` is non-null) AND we have raw circles to
+    // match against. No network work — just IDB reads + in-memory
+    // matching. Generation-counter guarded so an older bundle can't
+    // overwrite a newer one.
+    // ------------------------------------------------------------------
+    useEffect(() => {
+        if (!rawCircles || rawCircles.length === 0) {
+            setReachabilityBundle(null);
+            return;
+        }
+        if (!$reachabilityResult) {
+            // Reachability hasn't been queried yet; don't load GTFS.
+            setReachabilityBundle(null);
+            return;
+        }
+
+        const gen = ++bundleGenRef.current;
+        let cancelled = false;
+
+        (async () => {
+            const markLabel = "ZoneSidebar/ReachBundle";
+            if (import.meta.env.DEV) console.time(markLabel);
+            try {
+                const stops = await getAllStops(
+                    $reachabilityResult.query.systemIds,
+                );
+                if (cancelled || gen !== bundleGenRef.current) return;
+
+                const index = buildStopIndex(stops);
+
+                const osmInputs: OsmStationInput[] = rawCircles
+                    .map((circle): OsmStationInput | null => {
+                        const place = circle.properties;
+                        const osmId = place.properties?.id;
+                        const name = place.properties?.name;
+                        if (typeof osmId !== "string") return null;
+                        const [lng, lat] = turf.getCoord(place);
+                        return {
+                            osmId,
+                            name: typeof name === "string" ? name : "",
+                            lat,
+                            lng,
+                            // Raw OSM tags live under place.properties
+                            // when we came from Overpass. Passing the
+                            // whole property bag is fine — the matcher
+                            // only reads a short allowlist of keys.
+                            tags: place.properties as Record<
+                                string,
+                                string | undefined
+                            >,
+                        };
+                    })
+                    .filter((v): v is OsmStationInput => v !== null);
+
+                const matched = matchOsmToGtfs(osmInputs, index);
+                if (cancelled || gen !== bundleGenRef.current) return;
+
+                const matches = new Map<string, MatchedStation>();
+                for (const m of matched) matches.set(m.osmId, m);
+
+                setReachabilityBundle({ matches, stopById: index.byId });
+            } catch (err) {
+                if (!cancelled) {
+                    console.log("Reachability bundle build failed:", err);
+                }
+            } finally {
+                if (import.meta.env.DEV) console.timeEnd(markLabel);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [rawCircles, $reachabilityResult]);
+
+    // ------------------------------------------------------------------
+    // Phase B: zone cull + question-driven filters.
+    //
+    // Runs on every question edit. No network work except for
+    // already-cached Overpass calls for measuring POIs (McDonald's /
+    // 7-Eleven) and train-line lookup, both of which are parallelized
+    // / deduped via the helpers in `zonePipeline.ts`.
+    // ------------------------------------------------------------------
+    useEffect(() => {
+        if (!map) return;
+        if (!$displayHidingZones) return;
+        if (rawCircles === null) return;
+        if (!$questionFinishedMapData) return;
+
+        const { unionized, playableBbox } = zoneMaskMemo;
+        if (!unionized) return;
+
+        const gen = ++filterGenRef.current;
+
+        const run = async () => {
+            const markLabel = "ZoneSidebar/PhaseB";
+            if (import.meta.env.DEV) console.time(markLabel);
+
+            const culled = cullCirclesAgainstZone(rawCircles, {
+                playableBbox,
+                unionizedMask: unionized,
+                radiusKm: turf.convertLength(
+                    $hidingRadius,
+                    $hidingRadiusUnits,
+                    "kilometers",
+                ),
+            });
+
+            const currentQuestions = questions.get();
+            const measuringPoiCache = await prefetchMeasuringPoiPoints(
+                currentQuestions,
+            );
+            if (gen !== filterGenRef.current) {
+                if (import.meta.env.DEV) console.timeEnd(markLabel);
+                return;
+            }
+
+            const filtered = await applyQuestionFilters({
+                circles: culled,
+                questions: currentQuestions,
+                measuringPoiCache,
+                hidingRadius: $hidingRadius,
+                useCustomStations,
+                includeDefaultStations,
+                planningModeEnabled: planningModeEnabled.get(),
+                toast,
+            });
+            if (gen !== filterGenRef.current) {
+                if (import.meta.env.DEV) console.timeEnd(markLabel);
+                return;
+            }
+
+            // Reachability filter (Phase 3). Only runs if the user has
+            // executed a reachability query and the OSM↔GTFS match
+            // bundle has been built. Overrides always win and can be
+            // set even without a query — we still need the arrivals
+            // map for the classification-based keep/drop decision, so
+            // skip entirely when no result is present.
+            let final = filtered;
+            if ($reachabilityResult && reachabilityBundle) {
+                const overridesMap = new Map<string, "include" | "exclude">(
+                    Object.entries($reachabilityOverrides),
+                );
+                const { filtered: reachFiltered } =
+                    filterCirclesByReachability({
+                        circles: filtered,
+                        matches: reachabilityBundle.matches,
+                        arrivalsByStopId: $reachabilityResult.arrivalSeconds,
+                        stopById: reachabilityBundle.stopById,
+                        budgetMinutes:
+                            $reachabilityResult.query.budgetMinutes,
+                        overrides: overridesMap,
+                        unknownDefault: "include",
+                    });
+                final = reachFiltered;
+            }
+
+            setStations(final);
+            if (import.meta.env.DEV) console.timeEnd(markLabel);
+        };
+
+        run().catch((error) => {
+            console.log("Error in hiding zone filter pass:", error);
+            toast.error(
+                "An error occurred during hiding zone filtering",
+                { toastId: "hiding-zone-filter-error" },
+            );
+        });
+    }, [
+        map,
+        $displayHidingZones,
+        rawCircles,
+        $questionFinishedMapData,
+        zoneMaskMemo,
+        $hidingRadius,
+        $hidingRadiusUnits,
+        useCustomStations,
+        includeDefaultStations,
+        setStations,
+        $reachabilityResult,
+        $reachabilityOverrides,
+        reachabilityBundle,
+    ]);
+
+    // Active stations after disabled-station filtering. Derived; cheap.
+    const activeStations = useMemo(
+        () =>
+            stations.filter(
+                (x) => !$disabledStations.includes(x.properties.properties.id),
+            ),
+        [stations, $disabledStations],
+    );
+
+    // Memoize the styled GeoJSON. `styleStations` with the
+    // `no-overlap` style runs `turf.union` across every circle, which
+    // is O(N log N) at best and noticeable at a few hundred circles.
+    // Key on a stable signature so unrelated store changes
+    // (hidingZoneModeStationID, planning-mode flags) don't redo the
+    // union.
+    const styledGeoJSON = useMemo(
+        () =>
+            styleStations(
+                activeStations,
+                $displayHidingZonesStyle,
+                $hidingRadius,
+                $hidingRadiusUnits,
+            ),
+        // Signature string captures the set of station ids + radius +
+        // units. We intentionally exclude `activeStations` identity so
+        // a re-filter that produces the same set doesn't re-run union.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [
+            stationsSignature(
+                activeStations,
+                $hidingRadius,
+                $hidingRadiusUnits,
+            ),
+            $displayHidingZonesStyle,
+        ],
+    );
 
     useEffect(() => {
         if (!map || isLoading.get()) return;
@@ -533,24 +692,21 @@ export const ZoneSidebar = () => {
                 });
             }
         } else if ($displayHidingZones) {
-            const activeStations = stations.filter(
-                (x) => !$disabledStations.includes(x.properties.properties.id),
-            );
             showGeoJSON(
-                styleStations(activeStations, $displayHidingZonesStyle),
+                styledGeoJSON,
                 $displayHidingZonesStyle === "zones",
             );
         } else {
             removeHidingZones();
         }
     }, [
-        $disabledStations,
         $displayHidingZones,
         $displayHidingZonesStyle,
         $hidingRadius,
         $questionFinishedMapData,
         hidingZoneModeStationID,
         stations,
+        styledGeoJSON,
     ]);
 
     return (
@@ -642,6 +798,35 @@ export const ZoneSidebar = () => {
                                         disabled={$isLoading}
                                     />
                                 </div>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
+                                <div className="flex flex-row items-center justify-between w-full">
+                                    <Label className="font-semibold font-poppins flex items-center gap-1.5">
+                                        Exclude heritage / tourist railways?
+                                        {isHidingZoneLoading && (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin opacity-70" />
+                                        )}
+                                    </Label>
+                                    <Checkbox
+                                        checked={excludeHeritageRailways}
+                                        onCheckedChange={(v) =>
+                                            excludeHeritageRailwaysAtom.set(!!v)
+                                        }
+                                        disabled={$isLoading}
+                                    />
+                                </div>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem
+                                className={cn(
+                                    MENU_ITEM_CLASSNAME,
+                                    "text-xs text-muted-foreground leading-4 -mt-1",
+                                )}
+                            >
+                                Drops stops on preserved / tourism /
+                                abandoned railway lines. Leave off for
+                                one-way scenic routes like Durango–Silverton
+                                or Cuyahoga Valley Scenic, where stations
+                                are still meaningful hiding spots.
                             </SidebarMenuItem>
                             {useCustomStations && (
                                 <>
@@ -1183,13 +1368,27 @@ export const ZoneSidebar = () => {
 function styleStations(
     circles: StationCircle[],
     style: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _radius: number,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _units: turf.Units,
 ): FeatureCollection | Feature {
     switch (style) {
         case "no-display":
             return { type: "FeatureCollection", features: [] };
 
-        case "no-overlap":
+        case "no-overlap": {
+            // Fast-path: union of 0 or 1 circle is trivial; skip the
+            // expensive turf.union and just return the circle (or an
+            // empty collection).
+            if (circles.length === 0) {
+                return { type: "FeatureCollection", features: [] };
+            }
+            if (circles.length === 1) {
+                return circles[0];
+            }
             return safeUnion(turf.featureCollection(circles));
+        }
 
         case "stations":
             return turf.featureCollection(circles.map((c) => c.properties));
