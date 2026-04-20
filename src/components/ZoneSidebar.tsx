@@ -80,6 +80,7 @@ import {
     nearestToQuestion,
     normalizeToStationFeatures,
     OVERPASS_ACTIVE_RAIL_STATION_EXCLUSIONS,
+    overpassZoneCacheKey,
     parseCustomStationsFromText,
     QuestionSpecificLocation,
     type StationCircle,
@@ -97,6 +98,7 @@ import {
     lngLatToText,
     mergeDuplicateStation,
     playableBboxFromHoledMask,
+    prefetchMatchingFacilityPoints,
     prefetchMeasuringPoiPoints,
     safeUnion,
     stationsSignature,
@@ -675,8 +677,16 @@ export const ZoneSidebar = () => {
             });
 
             const currentQuestions = questions.get();
-            const measuringPoiCache =
-                await prefetchMeasuringPoiPoints(currentQuestions);
+            const matchingZoneKey = overpassZoneCacheKey();
+            const [measuringPoiCache, matchingFacilityCache] = await Promise.all(
+                [
+                    prefetchMeasuringPoiPoints(currentQuestions),
+                    prefetchMatchingFacilityPoints(
+                        currentQuestions,
+                        matchingZoneKey,
+                    ),
+                ],
+            );
             if (gen !== filterGenRef.current) {
                 if (import.meta.env.DEV) console.timeEnd(markLabel);
                 return;
@@ -686,6 +696,8 @@ export const ZoneSidebar = () => {
                 circles: culled,
                 questions: currentQuestions,
                 measuringPoiCache,
+                matchingFacilityCache,
+                matchingZoneKey,
                 hidingRadius: $hidingRadius,
                 useCustomStations,
                 includeDefaultStations,

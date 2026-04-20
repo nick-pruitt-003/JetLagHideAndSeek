@@ -36,7 +36,7 @@ import type {
     QuestionSpecificLocation,
 } from "@/maps/api/types";
 import { CacheType } from "@/maps/api/types";
-import { safeUnion } from "@/maps/geo-utils";
+import { safeUnion } from "@/maps/geo-utils/operators";
 
 function dedupeOsmElements(elements: any[]): any[] {
     const seen = new Set<string>();
@@ -79,6 +79,31 @@ function polyClauseStringForOverpass(fc: FeatureCollection): string {
         str = build(current);
     }
     return str;
+}
+
+/**
+ * Stable string for deduping Overpass-backed fetches that scope to the
+ * current game territory (same inputs as {@link findPlacesInZone}).
+ */
+export function overpassZoneCacheKey(): string {
+    const $polyGeoJSON = polyGeoJSON.get();
+    if ($polyGeoJSON) {
+        return `poly:${polyClauseStringForOverpass($polyGeoJSON)}`;
+    }
+    const primaryLocation = mapGeoLocation.get();
+    const additionalLocations = additionalMapGeoLocations
+        .get()
+        .filter((entry) => entry.added)
+        .map((entry) => entry.location);
+    const all = [primaryLocation, ...additionalLocations];
+    const ids = all
+        .map(
+            (loc) =>
+                `${loc.properties?.osm_type ?? ""}:${loc.properties?.osm_id ?? ""}`,
+        )
+        .sort()
+        .join("|");
+    return `rel:${ids}`;
 }
 
 const getOverpassData = async (
@@ -160,13 +185,8 @@ const getOverpassData = async (
     }
 
     if (!response.ok) {
-        if (
-            !_retry &&
-            OVERPASS_RETRYABLE_HTTP.has(response.status)
-        ) {
-            await new Promise((r) =>
-                setTimeout(r, OVERPASS_RETRY_DELAY_MS),
-            );
+        if (!_retry && OVERPASS_RETRYABLE_HTTP.has(response.status)) {
+            await new Promise((r) => setTimeout(r, OVERPASS_RETRY_DELAY_MS));
             return getOverpassData(query, loadingText, cacheType, true);
         }
         toast.error(

@@ -16,7 +16,12 @@
  */
 
 import * as turf from "@turf/turf";
-import type { BBox, Feature, FeatureCollection } from "geojson";
+import type {
+    BBox,
+    Feature,
+    FeatureCollection,
+    Point,
+} from "geojson";
 import type { toast as toastFn } from "react-toastify";
 
 import {
@@ -31,8 +36,11 @@ import {
     type StationPlace,
     trainLineNodeFinder,
 } from "@/maps/api";
+import { overpassZoneCacheKey } from "@/maps/api/overpass";
 import { extractStationName } from "@/maps/geo-utils/special";
-import type { Question } from "@/maps/schema";
+import { geoSpatialVoronoi } from "@/maps/geo-utils/voronoi";
+import { findMatchingPlaces } from "@/maps/questions/matching";
+import type { MatchingQuestion, Question } from "@/maps/schema";
 
 // ---------------------------------------------------------------------------
 // Phase A: build the raw circle set (no question filtering)
@@ -206,6 +214,94 @@ export function cullCirclesAgainstZone(
 
 export type ToastFn = typeof toastFn;
 
+/**
+ * Stable cache key for Voronoi-style matching. Zone-scoped types share one
+ * Overpass result per territory + flags (seeker lat/lng does not affect
+ * {@link findMatchingPlaces} for airport / major-city / *-full).
+ */
+export function matchingFacilityCacheKey(
+    data: MatchingQuestion,
+    zoneKey: string = overpassZoneCacheKey(),
+): string {
+    if (data.type === "airport") {
+        return JSON.stringify({
+            type: data.type,
+            zone: zoneKey,
+            activeOnly: data.activeOnly === true,
+        });
+    }
+    if (data.type === "major-city") {
+        return JSON.stringify({ type: data.type, zone: zoneKey });
+    }
+    if (typeof data.type === "string" && data.type.endsWith("-full")) {
+        return JSON.stringify({ type: data.type, zone: zoneKey });
+    }
+    if (data.type === "custom-points") {
+        return JSON.stringify({
+            type: data.type,
+            lat: data.lat,
+            lng: data.lng,
+            geo: data.geo,
+        });
+    }
+    return JSON.stringify({
+        type: data.type,
+        zone: zoneKey,
+    });
+}
+
+function isVoronoiMatchingType(data: Question["data"]): boolean {
+    if (!data || typeof data !== "object" || !("type" in data)) return false;
+    const t = (data as { type: string }).type;
+    if (t === "airport" || t === "major-city" || t === "custom-points")
+        return true;
+    return typeof t === "string" && t.endsWith("-full");
+}
+
+function normalizeMatchingPointsToFc(
+    raw:
+        | FeatureCollection<Point>
+        | Feature<Point>
+        | Feature<Point>[]
+        | null
+        | undefined,
+): FeatureCollection<Point> {
+    if (!raw) return turf.featureCollection([]);
+    if (Array.isArray(raw)) return turf.featureCollection(raw);
+    if (raw.type === "FeatureCollection") return raw as FeatureCollection<Point>;
+    if (raw.type === "Feature") {
+        return turf.featureCollection([raw as Feature<Point>]);
+    }
+    return turf.featureCollection([]);
+}
+
+/**
+ * Pre-fetch facility point sets used by Voronoi matching questions so
+ * {@link applyQuestionFilters} can classify each hiding circle by nearest
+ * site (same logic as {@link findMatchingPlaces} / map Voronoi).
+ */
+export async function prefetchMatchingFacilityPoints(
+    questions: Question[],
+    zoneKey: string = overpassZoneCacheKey(),
+): Promise<Map<string, FeatureCollection<Point>>> {
+    const unique = new Map<string, MatchingQuestion>();
+    for (const q of questions) {
+        if (q.id !== "matching") continue;
+        if (!isVoronoiMatchingType(q.data)) continue;
+        const key = matchingFacilityCacheKey(q.data as MatchingQuestion, zoneKey);
+        if (!unique.has(key)) unique.set(key, q.data as MatchingQuestion);
+    }
+    if (unique.size === 0) return new Map();
+
+    const entries = await Promise.all(
+        [...unique.entries()].map(async ([key, mq]) => {
+            const raw = await findMatchingPlaces(mq);
+            return [key, normalizeMatchingPointsToFc(raw)] as const;
+        }),
+    );
+    return new Map(entries);
+}
+
 export interface ApplyQuestionFiltersOptions {
     circles: StationCircle[];
     questions: Question[];
@@ -214,6 +310,11 @@ export interface ApplyQuestionFiltersOptions {
      *  {@link prefetchMeasuringPoiPoints} so we don't serialize one
      *  Overpass fetch per measuring question. */
     measuringPoiCache: Map<string, FeatureCollection<any>>;
+    /** Pre-fetched points for Voronoi-style matching; keyed by
+     *  {@link matchingFacilityCacheKey} with this zone suffix. */
+    matchingFacilityCache?: Map<string, FeatureCollection<Point>>;
+    /** Territory key aligned with {@link prefetchMatchingFacilityPoints}. */
+    matchingZoneKey?: string;
     hidingRadius: number;
     useCustomStations: boolean;
     includeDefaultStations: boolean;
@@ -235,6 +336,8 @@ export async function applyQuestionFilters({
     circles,
     questions,
     measuringPoiCache,
+    matchingFacilityCache = new Map(),
+    matchingZoneKey = overpassZoneCacheKey(),
     hidingRadius,
     useCustomStations,
     includeDefaultStations,
@@ -246,6 +349,37 @@ export async function applyQuestionFilters({
 
     for (const question of questions) {
         if (planningModeEnabled && question.data.drag) continue;
+
+        if (question.id === "matching" && isVoronoiMatchingType(question.data)) {
+            if (current.length === 0) break;
+
+            const key = matchingFacilityCacheKey(
+                question.data as MatchingQuestion,
+                matchingZoneKey,
+            );
+            const points = matchingFacilityCache.get(key);
+            if (!points || points.features.length === 0) continue;
+
+            const seekerPoint = turf.point([
+                question.data.lng,
+                question.data.lat,
+            ]);
+            const seekerNearest = turf.nearestPoint(seekerPoint, points as any);
+            const seekerIdx = seekerNearest.properties.featureIndex;
+            if (seekerIdx === undefined) continue;
+
+            const voronoiFc = geoSpatialVoronoi(points as FeatureCollection<Point>);
+            const seekerCell = voronoiFc.features[seekerIdx];
+            if (!seekerCell?.geometry) continue;
+
+            const wantSame = question.data.same === true;
+            current = current.filter((circle) => {
+                if (wantSame) {
+                    return turf.booleanIntersects(circle, seekerCell as any);
+                }
+                return !turf.booleanContains(seekerCell as any, circle);
+            });
+        }
 
         if (
             question.id === "matching" &&

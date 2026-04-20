@@ -131,6 +131,8 @@ function TransitSystemsDialog({
         quota?: number;
     } | null>(null);
     const [deleting, setDeleting] = useState<string | null>(null);
+    /** True only while a URL zip download is in flight (not unzip/parse/store). */
+    const [downloadInFlight, setDownloadInFlight] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const abortRef = useRef<AbortController | null>(null);
 
@@ -252,26 +254,32 @@ function TransitSystemsDialog({
                 importMethod = "upload";
             } else {
                 abortRef.current = new AbortController();
-                const result = await fetchGtfsZip(
-                    source.url,
-                    (loaded, total) => {
-                        onProgress({
-                            phase: "fetching",
-                            fraction: total
-                                ? Math.min(0.1, (loaded / total) * 0.1)
-                                : 0.05,
-                            message: `${(loaded / 1024 / 1024).toFixed(1)} MB`,
-                        });
-                    },
-                    abortRef.current.signal,
-                );
-                if (!looksLikeZip(result.bytes)) {
-                    throw new Error(
-                        "Server returned non-zip content. The URL may require a different fetch method — try downloading manually and uploading the zip.",
+                setDownloadInFlight(true);
+                try {
+                    const result = await fetchGtfsZip(
+                        source.url,
+                        (loaded, total) => {
+                            onProgress({
+                                phase: "fetching",
+                                fraction: total
+                                    ? Math.min(0.1, (loaded / total) * 0.1)
+                                    : 0.05,
+                                message: `${(loaded / 1024 / 1024).toFixed(1)} MB`,
+                            });
+                        },
+                        abortRef.current.signal,
                     );
+                    if (!looksLikeZip(result.bytes)) {
+                        throw new Error(
+                            "Server returned non-zip content. The URL may require a different fetch method — try downloading manually and uploading the zip.",
+                        );
+                    }
+                    bytes = result.bytes;
+                    importMethod = result.method;
+                } finally {
+                    setDownloadInFlight(false);
+                    abortRef.current = null;
                 }
-                bytes = result.bytes;
-                importMethod = result.method;
             }
 
             const parsed = await parseGtfs(bytes, {
@@ -322,7 +330,7 @@ function TransitSystemsDialog({
         } finally {
             setLoading(false);
             setProgress(null);
-            abortRef.current = null;
+            if (abortRef.current) abortRef.current = null;
         }
     };
 
@@ -597,21 +605,25 @@ function TransitSystemsDialog({
                         </p>
                     )}
                     <div className="flex flex-wrap gap-2 justify-end">
-                    <Button
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                        disabled={loading}
-                    >
-                        {loading ? "Importing…" : "Close"}
-                    </Button>
-                    {loading && abortRef.current && (
                         <Button
-                            variant="ghost"
-                            onClick={() => abortRef.current?.abort()}
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            disabled={downloadInFlight}
                         >
-                            Cancel download
+                            {downloadInFlight
+                                ? "Downloading…"
+                                : loading
+                                  ? "Importing…"
+                                  : "Close"}
                         </Button>
-                    )}
+                        {downloadInFlight && abortRef.current && (
+                            <Button
+                                variant="ghost"
+                                onClick={() => abortRef.current?.abort()}
+                            >
+                                Cancel download
+                            </Button>
+                        )}
                     </div>
                 </DialogFooter>
             </DialogContent>

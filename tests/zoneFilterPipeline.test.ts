@@ -10,6 +10,7 @@ import {
     buildCirclesFromPlaces,
     cullCirclesAgainstZone,
     filterCirclesByReachability,
+    matchingFacilityCacheKey,
     playableBboxFromHoledMask,
     stationsSignature,
 } from "@/maps/geo-utils/zonePipeline";
@@ -436,6 +437,70 @@ describe("applyQuestionFilters", () => {
         });
         const ids = out.map((c) => c.properties.properties.id).sort();
         expect(ids).toEqual(["near"]);
+    });
+
+    it("filters airport matching by nearest commercial airport (Voronoi cell)", async () => {
+        const hvn = turf.point([-72.999, 41.265]);
+        const jfk = turf.point([-73.778, 40.641]);
+        const airports = turf.featureCollection([hvn, jfk]);
+        const airportQuestionData = {
+            type: "airport" as const,
+            lat: 41.25,
+            lng: -72.95,
+            same: false,
+            activeOnly: false,
+            drag: false,
+            color: "black",
+            collapsed: false,
+        };
+        const zoneKey = "fixture-overpass-zone";
+        const key = matchingFacilityCacheKey(airportQuestionData as any, zoneKey);
+        const cache = new Map([[key, airports]]);
+
+        const circles = build([
+            { id: "near-hvn", lng: -72.99, lat: 41.27, name: "Near HVN" },
+            { id: "near-jfk", lng: -73.9, lat: 40.7, name: "Near JFK" },
+        ]);
+        const question = {
+            id: "matching",
+            key: 1,
+            data: airportQuestionData,
+        } as unknown as Question;
+
+        const out = await applyQuestionFilters({
+            circles,
+            questions: [question],
+            measuringPoiCache: new Map(),
+            matchingFacilityCache: cache,
+            matchingZoneKey: zoneKey,
+            hidingRadius: 0.25,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+        });
+        expect(out.map((c) => c.properties.properties.id).sort()).toEqual([
+            "near-jfk",
+        ]);
+
+        const outSame = await applyQuestionFilters({
+            circles,
+            questions: [
+                {
+                    ...question,
+                    data: { ...airportQuestionData, same: true },
+                } as Question,
+            ],
+            measuringPoiCache: new Map(),
+            matchingFacilityCache: cache,
+            matchingZoneKey: zoneKey,
+            hidingRadius: 0.25,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+        });
+        expect(outSame.map((c) => c.properties.properties.id).sort()).toEqual([
+            "near-hvn",
+        ]);
     });
 
     it("returns the same circles when measuring cache misses for an mcdonalds question", async () => {
