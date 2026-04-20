@@ -2,7 +2,6 @@
 import node from "@astrojs/node";
 import partytown from "@astrojs/partytown";
 import react from "@astrojs/react";
-import AstroPWA from "@vite-pwa/astro";
 import { defineConfig } from "astro/config";
 
 // Railway sets RAILWAY_PUBLIC_DOMAIN automatically on deploy. Use it to
@@ -15,7 +14,7 @@ const isRailway = !!railwayDomain || !!process.env.RAILWAY_ENVIRONMENT;
 const base =
     process.env.PUBLIC_BASE_PATH ?? (isRailway ? "/" : "/JetLagHideAndSeek");
 
-// Site URL: used for absolute links, sitemap, PWA manifest, etc.
+// Site URL: used for absolute links, sitemap, manifest, etc.
 const site =
     process.env.PUBLIC_SITE_URL ??
     (railwayDomain
@@ -29,32 +28,6 @@ export default defineConfig({
         partytown({
             config: {
                 forward: ["dataLayer.push"],
-            },
-        }),
-        AstroPWA({
-            manifest: {
-                name: "Jet Lag Hide and Seek Map Generator",
-                short_name: "Map Generator",
-                description:
-                    "Automatically generate maps for Jet Lag The Game: Hide and Seek with ease! Simply name the questions and watch the map eliminate hundreds of possibilities in seconds.",
-                icons: [
-                    {
-                        src: "https://taibeled.github.io/JetLagHideAndSeek/JLIcon.png",
-                        sizes: "1080x1080",
-                        type: "image/png",
-                    },
-                    {
-                        src: "https://taibeled.github.io/JetLagHideAndSeek/android-chrome-192x192.png",
-                        sizes: "192x192",
-                        type: "image/png",
-                    },
-                    {
-                        src: "https://taibeled.github.io/JetLagHideAndSeek/android-chrome-512x512.png",
-                        sizes: "512x512",
-                        type: "image/png",
-                    },
-                ],
-                theme_color: "#1F2F3F",
             },
         }),
     ],
