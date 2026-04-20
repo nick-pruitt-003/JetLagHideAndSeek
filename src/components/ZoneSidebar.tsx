@@ -84,6 +84,7 @@ import {
 } from "@/maps/geo-utils";
 
 import { Button } from "./ui/button";
+import { TransitSystemsButton } from "./TransitSystemsDialog";
 import { Checkbox } from "./ui/checkbox";
 import {
     Command,
@@ -827,6 +828,14 @@ export const ZoneSidebar = () => {
                                 one-way scenic routes like Durango–Silverton
                                 or Cuyahoga Valley Scenic, where stations
                                 are still meaningful hiding spots.
+                            </SidebarMenuItem>
+                            <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
+                                <TransitSystemsButton
+                                    className="w-full"
+                                    variant="outline"
+                                >
+                                    Manage transit systems…
+                                </TransitSystemsButton>
                             </SidebarMenuItem>
                             {useCustomStations && (
                                 <>
