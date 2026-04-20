@@ -16,7 +16,7 @@ export const determineUnionizedStrings = (
     } else if (obj instanceof z.ZodLiteral) {
         return [obj];
     } else if (obj instanceof z.ZodDefault) {
-        return determineUnionizedStrings(obj._zod.def.innerType);
+        return determineUnionizedStrings(obj.removeDefault());
     }
     return [];
 };

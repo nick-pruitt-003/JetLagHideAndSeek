@@ -25,6 +25,7 @@ import { useTutorialStep } from "@/hooks/use-tutorial-step";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
     additionalMapGeoLocations,
+    DEFAULT_MAP_GEO_LOCATION_OSM_ID,
     isLoading,
     mapGeoJSON,
     mapGeoLocation,
@@ -283,18 +284,31 @@ export const PlacePicker = ({
                                 <CommandItem
                                     key={`${result.properties.osm_id}${result.properties.name}`}
                                     onSelect={() => {
-                                        additionalMapGeoLocations.set([
-                                            ...additionalMapGeoLocations.get(),
-                                            {
-                                                added: true,
-                                                location: result,
-                                                base: false,
-                                            },
-                                        ]);
+                                        const currentBase =
+                                            mapGeoLocation.get();
+                                        const currentAdditionals =
+                                            additionalMapGeoLocations.get();
+                                        const isDefaultBase =
+                                            currentBase.properties.osm_id ===
+                                                DEFAULT_MAP_GEO_LOCATION_OSM_ID &&
+                                            currentAdditionals.length === 0;
 
+                                        if (isDefaultBase) {
+                                            mapGeoLocation.set(result);
+                                        } else {
+                                            additionalMapGeoLocations.set([
+                                                ...currentAdditionals,
+                                                {
+                                                    added: true,
+                                                    location: result,
+                                                    base: false,
+                                                },
+                                            ]);
+                                        }
                                         mapGeoJSON.set(null);
                                         polyGeoJSON.set(null);
                                         questions.set([...questions.get()]);
+                                        setOpen(false);
                                     }}
                                     className="cursor-pointer"
                                 >

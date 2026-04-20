@@ -19,6 +19,8 @@ import {
     type Units,
 } from "@/maps/schema";
 
+export const DEFAULT_MAP_GEO_LOCATION_OSM_ID = 382313;
+
 export const mapGeoLocation = persistentAtom<OpenStreetMap>(
     "mapGeoLocation",
     {
@@ -29,7 +31,7 @@ export const mapGeoLocation = persistentAtom<OpenStreetMap>(
         type: "Feature",
         properties: {
             osm_type: "R",
-            osm_id: 382313,
+            osm_id: DEFAULT_MAP_GEO_LOCATION_OSM_ID,
             extent: [45.7112046, 122.7141754, 20.2145811, 154.205541],
             country: "Japan",
             osm_key: "place",
