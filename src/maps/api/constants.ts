@@ -68,9 +68,7 @@ export function overpassAirportIataFilter(options?: {
     activeOnly?: boolean;
 }): string {
     const activeOnly = options?.activeOnly === true;
-    const active = activeOnly
-        ? '["disused"!="yes"]["closed"!="yes"]'
-        : "";
+    const active = activeOnly ? '["disused"!="yes"]["closed"!="yes"]' : "";
     return (
         '["aeroway"="aerodrome"]["iata"]' +
         '["heliport"!="yes"]' +

@@ -86,7 +86,7 @@
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
         "@types/terraformer__arcgis": "^2.0.5",
-        "@typescript-eslint/parser": "^8.58.2",
+        "@typescript-eslint/parser": "^8.59.0",
         "esbuild": "^0.28.0",
         "eslint": "^10.2.1",
         "eslint-plugin-astro": "^1.7.0",
@@ -97,7 +97,7 @@
         "prettier": "3.8.3",
         "serwist": "^9.5.7",
         "typescript": "^6.0.3",
-        "typescript-eslint": "^8.58.2",
+        "typescript-eslint": "^8.59.0",
         "vitest": "^4.1.4"
     },
     "engines": {

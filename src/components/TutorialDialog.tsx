@@ -510,8 +510,8 @@ const tutorialSteps: TutorialStep[] = [
                 <br />• <strong>Coastline:</strong> Distance to nearest coast
                 using detailed coastline data
                 <br />• <strong>Commercial Airports:</strong> Distance to
-                nearest IATA aerodrome (helipads / heliport-tagged /
-                balloonport facilities excluded, same as matching)
+                nearest IATA aerodrome (helipads / heliport-tagged / balloonport
+                facilities excluded, same as matching)
                 <br />• <strong>Major Cities:</strong> Distance to cities with
                 1M+ population
                 <br />• <strong>High-Speed Rail:</strong> Distance to high-speed

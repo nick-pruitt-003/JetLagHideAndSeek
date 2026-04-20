@@ -43,6 +43,10 @@ export const findMatchingPlaces = async (question: MatchingQuestion) => {
                             activeOnly: (question as any).activeOnly === true,
                         }),
                         "Finding airports...",
+                        "nwr",
+                        "center",
+                        [],
+                        240,
                     )
                 ).elements,
                 (feature: any) => feature.tags.iata,

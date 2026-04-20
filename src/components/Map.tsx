@@ -31,6 +31,7 @@ import {
     polyGeoJSON,
     questionFinishedMapData,
     questions,
+    startingLocation,
     thunderforestApiKey,
     triggerLocalRefresh,
 } from "@/lib/context";
@@ -292,7 +293,7 @@ export const Map = ({ className }: { className?: string }) => {
                 ref={leafletMapContext.set}
                 // @ts-expect-error Typing doesn't update from react-contextmenu
                 contextmenu={true}
-                contextmenuWidth={140}
+                contextmenuWidth={180}
                 contextmenuItems={[
                     {
                         text: "Add Radius",
@@ -362,6 +363,19 @@ export const Map = ({ className }: { className?: string }) => {
                                     lng: e.latlng.lng,
                                 },
                             });
+                        },
+                    },
+                    {
+                        text: "Set starting location",
+                        callback: (e: any) => {
+                            startingLocation.set({
+                                latitude: e.latlng.lat,
+                                longitude: e.latlng.lng,
+                            });
+                            toast.success(
+                                "Starting location set — used for transit reachability.",
+                                { toastId: "starting-location-set" },
+                            );
                         },
                     },
                     {

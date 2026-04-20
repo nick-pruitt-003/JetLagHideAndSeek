@@ -148,6 +148,10 @@ export const determineMeasuringBoundary = async (
                                 await findPlacesInZone(
                                     overpassAirportIataFilter(),
                                     "Finding airports...",
+                                    "nwr",
+                                    "center",
+                                    [],
+                                    240,
                                 )
                             ).elements,
                             (feature: any) => feature.tags.iata,

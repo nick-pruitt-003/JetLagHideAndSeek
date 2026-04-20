@@ -9,6 +9,10 @@ const MULTI_AREA_SPLIT_THRESHOLD = 4;
 const MULTI_AREA_PARALLEL_CHUNK = 4;
 /** Keep `poly:"…"` clauses small enough for GET and faster server-side evaluation. */
 const MAX_POLY_INLINE_LENGTH = 5200;
+
+/** HTTP statuses where a single delayed retry sometimes succeeds (busy public Overpass). */
+const OVERPASS_RETRYABLE_HTTP = new Set([502, 503, 504, 529]);
+const OVERPASS_RETRY_DELAY_MS = 3000;
 import _ from "lodash";
 import { toast } from "react-toastify";
 
@@ -53,9 +57,7 @@ function dedupeOsmElements(elements: any[]): any[] {
  * feature collection, simplifying until the clause fits GET limits and
  * evaluates in reasonable time on the server.
  */
-export function polyClauseStringForOverpass(
-    fc: FeatureCollection,
-): string {
+export function polyClauseStringForOverpass(fc: FeatureCollection): string {
     const build = (c: FeatureCollection) =>
         turf
             .getCoords(c.features as any)
@@ -83,6 +85,7 @@ const getOverpassData = async (
     query: string,
     loadingText?: string,
     cacheType: CacheType = CacheType.CACHE,
+    _retry = false,
 ) => {
     const encodedQuery = encodeURIComponent(query);
     const primaryUrl = `${OVERPASS_API}?data=${encodedQuery}`;
@@ -121,12 +124,17 @@ const getOverpassData = async (
             response = cachedResponse.clone();
         } else {
             const pending = fetchOverpassPost();
-            response = loadingText
-                ? await toast.promise(pending, { pending: loadingText })
-                : await pending;
+            response =
+                loadingText && !_retry
+                    ? await toast.promise(pending, { pending: loadingText })
+                    : await pending;
         }
     } else {
-        response = await cacheFetch(primaryUrl, loadingText, cacheType);
+        response = await cacheFetch(
+            primaryUrl,
+            _retry ? undefined : loadingText,
+            cacheType,
+        );
     }
 
     if (!response.ok && !usePost) {
@@ -134,7 +142,7 @@ const getOverpassData = async (
         try {
             const fallbackResponse = await cacheFetch(
                 `${OVERPASS_API_FALLBACK}?data=${encodedQuery}`,
-                loadingText,
+                _retry ? undefined : loadingText,
                 cacheType,
             );
             if (fallbackResponse.ok) {
@@ -152,6 +160,15 @@ const getOverpassData = async (
     }
 
     if (!response.ok) {
+        if (
+            !_retry &&
+            OVERPASS_RETRYABLE_HTTP.has(response.status)
+        ) {
+            await new Promise((r) =>
+                setTimeout(r, OVERPASS_RETRY_DELAY_MS),
+            );
+            return getOverpassData(query, loadingText, cacheType, true);
+        }
         toast.error(
             `Could not load data from Overpass: ${response.status} ${response.statusText}`,
             { toastId: "overpass-error" },
@@ -469,11 +486,7 @@ ${
 );
 out ${outType};
 `;
-        data = await getOverpassData(
-            query,
-            loadingText,
-            CacheType.ZONE_CACHE,
-        );
+        data = await getOverpassData(query, loadingText, CacheType.ZONE_CACHE);
     } else {
         const primaryLocation = mapGeoLocation.get();
         const additionalLocations = additionalMapGeoLocations
@@ -518,7 +531,10 @@ out ${outType};
                     i < queries.length;
                     i += MULTI_AREA_PARALLEL_CHUNK
                 ) {
-                    const chunk = queries.slice(i, i + MULTI_AREA_PARALLEL_CHUNK);
+                    const chunk = queries.slice(
+                        i,
+                        i + MULTI_AREA_PARALLEL_CHUNK,
+                    );
                     const parts = await Promise.all(
                         chunk.map((q) =>
                             getOverpassData(q, undefined, CacheType.ZONE_CACHE),
@@ -695,7 +711,11 @@ out ids;
 `;
             });
 
-            for (let i = 0; i < queries.length; i += MULTI_AREA_PARALLEL_CHUNK) {
+            for (
+                let i = 0;
+                i < queries.length;
+                i += MULTI_AREA_PARALLEL_CHUNK
+            ) {
                 const chunk = queries.slice(i, i + MULTI_AREA_PARALLEL_CHUNK);
                 const parts = await Promise.all(
                     chunk.map((q) =>

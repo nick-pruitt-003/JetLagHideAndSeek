@@ -7,8 +7,8 @@
  * `reachabilityResult` atom; the existing Phase B station filter picks
  * it up from there.
  *
- * Origin is reused from `startingLocation` (the existing game-center
- * marker) — this component never asks the user to re-pick an origin.
+ * Origin is reused from `startingLocation` (draggable marker, options
+ * drawer, or map right-click → "Set starting location").
  */
 import { useStore } from "@nanostores/react";
 import { Loader2, Navigation, Play, RotateCcw, X } from "lucide-react";
