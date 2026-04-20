@@ -75,6 +75,61 @@ export const polyGeoJSON = persistentAtom<FeatureCollection<
     decode: JSON.parse,
 });
 
+/**
+ * Tracks whether the current game-territory polygon was fetched from
+ * Nominatim's pre-simplified `/lookup?polygon_geojson=1` endpoint
+ * ("simple") or from Overpass's full `out geom` query ("detailed").
+ *
+ * The distinction matters because Nominatim polygons are ~190KB for
+ * a whole country and appear in under a second, but they omit tiny
+ * outlying islands and coastline detail. For games that need precise
+ * coastline play the user can click "Load detailed boundary" and the
+ * app swaps in the Overpass version.
+ *
+ * Reset to "simple" whenever the picked region changes (see onSet
+ * hooks below) so the upgrade button re-appears for the new region.
+ */
+export const boundaryDetailLevel = atom<"simple" | "detailed">("simple");
+
+/**
+ * Bumped by code paths that need to force `Map.tsx`'s refresh effect
+ * to run again without any of its other dependencies changing. The
+ * detailed-boundary upgrade uses this: it sets `mapGeoJSON` directly
+ * to the Overpass result, then bumps this nonce so the map re-renders
+ * with the new polygon.
+ */
+export const mapRefreshNonce = atom(0);
+
+onSet(mapGeoLocation, ({ newValue }) => {
+    // Picking a new region resets the upgrade state - the new
+    // polygon starts life as Nominatim-simplified again. We gate on
+    // osm_id actually changing so that no-op re-sets (e.g. hydration
+    // from localStorage into the same value) don't wipe a just-loaded
+    // detailed polygon.
+    const prevId = mapGeoLocation.get()?.properties?.osm_id;
+    const nextId = newValue?.properties?.osm_id;
+    if (
+        prevId !== nextId &&
+        boundaryDetailLevel.get() !== "simple"
+    ) {
+        boundaryDetailLevel.set("simple");
+    }
+});
+onSet(additionalMapGeoLocations, ({ newValue }) => {
+    const prevIds = additionalMapGeoLocations
+        .get()
+        .map((l) => l.location.properties.osm_id)
+        .sort()
+        .join(",");
+    const nextIds = (newValue ?? [])
+        .map((l) => l.location.properties.osm_id)
+        .sort()
+        .join(",");
+    if (prevIds !== nextIds && boundaryDetailLevel.get() !== "simple") {
+        boundaryDetailLevel.set("simple");
+    }
+});
+
 export const questions = persistentAtom<Questions>("questions", [], {
     encode: JSON.stringify,
     decode: (x) => questionsSchema.parse(JSON.parse(x)),

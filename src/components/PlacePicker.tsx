@@ -1,9 +1,11 @@
 import { useStore } from "@nanostores/react";
 import {
     ChevronsUpDown,
+    Loader2,
     LucideMinusSquare,
     LucidePlusSquare,
     LucideX,
+    Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
@@ -25,10 +27,12 @@ import { useTutorialStep } from "@/hooks/use-tutorial-step";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
     additionalMapGeoLocations,
+    boundaryDetailLevel,
     DEFAULT_MAP_GEO_LOCATION_OSM_ID,
     isLoading,
     mapGeoJSON,
     mapGeoLocation,
+    mapRefreshNonce,
     polyGeoJSON,
     questions,
 } from "@/lib/context";
@@ -36,6 +40,7 @@ import { cn } from "@/lib/utils";
 import {
     CacheType,
     clearCache,
+    determineMapBoundaries,
     determineName,
     geocode,
     type OpenStreetMap,
@@ -57,12 +62,65 @@ export const PlacePicker = ({
     const $additionalMapGeoLocations = useStore(additionalMapGeoLocations);
     const $polyGeoJSON = useStore(polyGeoJSON);
     const $isLoading = useStore(isLoading);
+    const $boundaryDetailLevel = useStore(boundaryDetailLevel);
     const [open, setOpen] = useState(false);
     const [inputValue, setInputValue] = useState("");
     const debouncedValue = useDebounce<string>(inputValue);
     const [results, setResults] = useState<OpenStreetMap[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(false);
+    const [upgradingBoundary, setUpgradingBoundary] = useState(false);
+
+    // Stringify the current set of region ids so we can detect if the
+    // user switched regions while a detailed-boundary fetch is
+    // in-flight. If the snapshot we captured at click-time no longer
+    // matches when the fetch returns, the result is for the old region
+    // and we must discard it rather than overwrite the new polygon.
+    const captureRegionSignature = () =>
+        JSON.stringify([
+            mapGeoLocation.get()?.properties?.osm_id,
+            additionalMapGeoLocations
+                .get()
+                .map((l) => [
+                    l.location.properties.osm_id,
+                    l.added,
+                    l.base,
+                ]),
+        ]);
+
+    const handleUpgradeBoundary = async () => {
+        if (upgradingBoundary) return;
+        setUpgradingBoundary(true);
+        const signatureBefore = captureRegionSignature();
+        try {
+            const detailed = await toast.promise(
+                determineMapBoundaries({ forceDetailed: true }),
+                {
+                    pending: "Loading detailed boundary from Overpass...",
+                    error: "Couldn't load detailed boundary (Overpass may be rate-limited). Falling back to simplified polygon.",
+                    success: "Detailed boundary loaded.",
+                },
+                { toastId: "boundary-upgrade" },
+            );
+            if (captureRegionSignature() !== signatureBefore) {
+                // User picked a different region while we were fetching.
+                // The detailed polygon is for the old region - toss it.
+                return;
+            }
+            mapGeoJSON.set(detailed);
+            boundaryDetailLevel.set("detailed");
+            // Tell Map.tsx to re-render - its refresh effect keys off
+            // this nonce in addition to the normal region atoms.
+            mapRefreshNonce.set(mapRefreshNonce.get() + 1);
+        } catch (err) {
+            console.error("Detailed boundary upgrade failed:", err);
+        } finally {
+            setUpgradingBoundary(false);
+        }
+    };
+
+    const canUpgradeBoundary =
+        !$polyGeoJSON && $boundaryDetailLevel === "simple";
 
     useEffect(() => {
         if (debouncedValue === "") {
@@ -252,6 +310,39 @@ export const PlacePicker = ({
                         </div>
                     ))}
                 </div>
+                {canUpgradeBoundary && (
+                    <>
+                        <Separator className="h-[0.5px]" />
+                        <button
+                            type="button"
+                            onClick={handleUpgradeBoundary}
+                            disabled={upgradingBoundary || $isLoading}
+                            className={cn(
+                                "flex w-full items-start gap-2 px-3 py-2 text-left text-sm",
+                                "text-slate-700 transition-colors duration-150",
+                                "hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60",
+                            )}
+                            aria-label="Load detailed boundary from Overpass"
+                        >
+                            {upgradingBoundary ? (
+                                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                            ) : (
+                                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                            )}
+                            <span className="flex flex-col">
+                                <span className="font-medium">
+                                    {upgradingBoundary
+                                        ? "Loading detailed boundary..."
+                                        : "Load detailed boundary"}
+                                </span>
+                                <span className="text-xs text-slate-500">
+                                    Coastline-precision geometry from
+                                    Overpass. Slower, sometimes times out.
+                                </span>
+                            </span>
+                        </button>
+                    </>
+                )}
                 <Separator className="h-[0.5px]" />
                 <Command shouldFilter={false}>
                     <CommandInput

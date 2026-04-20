@@ -160,28 +160,44 @@ const fetchNominatimBoundary = async (
     return parseNominatimBoundaryPayload(raw);
 };
 
+export interface DetermineGeoJSONOptions {
+    /**
+     * Skip Nominatim and go straight to Overpass's `out geom` query.
+     * Used by the "Load detailed boundary" upgrade flow when the user
+     * explicitly wants coastline-precision geometry and is willing to
+     * wait for the larger payload.
+     */
+    forceDetailed?: boolean;
+}
+
 const determineGeoJSON = async (
     osmId: string,
     osmTypeLetter: "W" | "R" | "N",
+    opts: DetermineGeoJSONOptions = {},
 ): Promise<any> => {
     // Nominatim first: its pre-simplified polygons are one to two orders
     // of magnitude smaller than Overpass `out geom` and survive periods
     // when Overpass is timing out. We only fall back to Overpass when
-    // Nominatim returns nothing usable.
-    const nominatimResult = await fetchNominatimBoundary(
-        osmId,
-        osmTypeLetter,
-        "Loading map data...",
-    );
-    if (nominatimResult) {
-        return nominatimResult;
+    // Nominatim returns nothing usable, or when the caller has
+    // explicitly requested detailed geometry.
+    if (!opts.forceDetailed) {
+        const nominatimResult = await fetchNominatimBoundary(
+            osmId,
+            osmTypeLetter,
+            "Loading map data...",
+        );
+        if (nominatimResult) {
+            return nominatimResult;
+        }
     }
 
     const osmType = OSM_TYPE_LONG[osmTypeLetter];
     const query = `[out:json];${osmType}(${osmId});out geom;`;
     const data = await getOverpassData(
         query,
-        "Loading map data (fallback)...",
+        opts.forceDetailed
+            ? "Loading detailed boundary..."
+            : "Loading map data (fallback)...",
         CacheType.PERMANENT_CACHE,
     );
     const geo = osmtogeojson(data);
@@ -571,7 +587,9 @@ export const nearestToQuestion = async (
     return turf.nearestPoint(questionPoint, instances as any);
 };
 
-export const determineMapBoundaries = async () => {
+export const determineMapBoundaries = async (
+    opts: DetermineGeoJSONOptions = {},
+) => {
     const mapGeoDatum = await Promise.all(
         [
             {
@@ -585,6 +603,7 @@ export const determineMapBoundaries = async () => {
             data: await determineGeoJSON(
                 location.location.properties.osm_id.toString(),
                 location.location.properties.osm_type,
+                opts,
             ),
         })),
     );

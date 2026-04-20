@@ -21,6 +21,7 @@ import {
     leafletMapContext,
     mapGeoJSON,
     mapGeoLocation,
+    mapRefreshNonce,
     permanentOverlay,
     planningModeEnabled,
     polyGeoJSON,
@@ -124,6 +125,7 @@ export const Map = ({ className }: { className?: string }) => {
     const $hiderMode = useStore(hiderMode);
     const $followMe = useStore(followMe);
     const $permanentOverlay = useStore(permanentOverlay);
+    const $mapRefreshNonce = useStore(mapRefreshNonce);
     const map = useStore(leafletMapContext);
 
     const followMeMarkerRef = useMemo(
@@ -447,6 +449,10 @@ export const Map = ({ className }: { className?: string }) => {
         $hiderMode,
         $mapGeoLocation,
         $additionalMapGeoLocations,
+        // Bumped by the detailed-boundary upgrade flow after it swaps
+        // in the Overpass polygon, so we re-render the new geometry
+        // without waiting on some other dep to change.
+        $mapRefreshNonce,
     ]);
 
     useEffect(() => {
