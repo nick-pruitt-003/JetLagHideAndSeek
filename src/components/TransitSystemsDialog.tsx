@@ -37,6 +37,11 @@ import { parseGtfs } from "@/lib/transit/gtfs-parser";
 import { fetchGtfsZip, looksLikeZip } from "@/lib/transit/cors-proxy";
 import { rebuildAutoTransfers } from "@/lib/transit/auto-transfers";
 import { reachabilityClient } from "@/lib/transit/reachability-client";
+import {
+    GTFS_PRESETS,
+    type ByoUrlPreset,
+    type GtfsPreset,
+} from "@/lib/transit/presets";
 import type { ImportProgress, TransitSystem } from "@/lib/transit/types";
 
 interface TransitSystemsDialogProps {
@@ -153,19 +158,37 @@ export default function TransitSystemsDialog({
     };
 
     const handleImport = async (
-        source: { kind: "url"; url: string } | { kind: "file"; file: File },
+        source:
+            | {
+                  kind: "url";
+                  url: string;
+                  /**
+                   * If set, use this as the system id verbatim (skips the
+                   * slug + collision search). Presets pin their id so
+                   * "already installed?" checks work across sessions.
+                   */
+                  systemId?: string;
+                  /** Override display name (also from presets). */
+                  name?: string;
+              }
+            | { kind: "file"; file: File },
     ) => {
         if (loading) return;
 
+        const overrideName =
+            source.kind === "url" ? source.name : undefined;
         const rawName =
+            overrideName ||
             nameInput.trim() ||
             (source.kind === "file"
                 ? source.file.name.replace(/\.zip$/i, "")
                 : source.url.split("/").pop()?.replace(/\.zip.*$/i, "") ||
                   "Imported system");
 
-        const baseId = slugify(rawName);
-        const systemId = await uniqueSystemId(baseId);
+        const systemId =
+            source.kind === "url" && source.systemId
+                ? source.systemId
+                : await uniqueSystemId(slugify(rawName));
 
         setLoading(true);
         setProgress({ phase: "fetching", fraction: 0, message: "" });
@@ -354,15 +377,37 @@ export default function TransitSystemsDialog({
                         )}
                     </section>
 
-                    {/* Curated presets — filled in by p4-presets. */}
+                    {/* Curated presets */}
                     <section>
                         <h3 className="text-sm font-semibold mb-2">
                             Curated presets
                         </h3>
-                        <p className="text-sm text-muted-foreground">
-                            One-click installs for common agencies coming
-                            soon (NYCT, LIRR, Metro-North, NJ Transit, SLE).
-                        </p>
+                        <ul className="space-y-2">
+                            {GTFS_PRESETS.map((preset) => (
+                                <PresetCard
+                                    key={preset.id}
+                                    preset={preset}
+                                    installed={
+                                        systems?.some(
+                                            (s) => s.id === preset.id,
+                                        ) ?? false
+                                    }
+                                    disabled={loading}
+                                    onInstall={(urlOverride) =>
+                                        handleImport({
+                                            kind: "url",
+                                            url:
+                                                urlOverride ??
+                                                (preset.kind === "public"
+                                                    ? preset.url
+                                                    : ""),
+                                            systemId: preset.id,
+                                            name: preset.name,
+                                        })
+                                    }
+                                />
+                            ))}
+                        </ul>
                     </section>
 
                     {/* Import from URL / file */}
@@ -516,6 +561,124 @@ export default function TransitSystemsDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+/**
+ * One preset row. Renders as an install card for `public` presets and as
+ * an expandable URL-input card for `byo-url` ones. Once the matching
+ * system id is in IDB, the card shows "Installed" and a refresh button.
+ */
+function PresetCard({
+    preset,
+    installed,
+    disabled,
+    onInstall,
+}: {
+    preset: GtfsPreset;
+    installed: boolean;
+    disabled: boolean;
+    onInstall: (urlOverride?: string) => void;
+}) {
+    const [byoUrl, setByoUrl] = useState("");
+
+    const header = (
+        <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+                <span className="font-medium truncate">{preset.name}</span>
+                {installed && (
+                    <span className="text-xs text-muted-foreground border rounded px-1.5 py-0.5">
+                        Installed
+                    </span>
+                )}
+            </div>
+            <div className="text-xs text-muted-foreground">
+                {preset.agency} · {preset.region}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 leading-4">
+                {preset.description}
+            </p>
+        </div>
+    );
+
+    if (preset.kind === "public") {
+        return (
+            <li className="rounded-md border px-3 py-2 flex items-start gap-2">
+                {header}
+                <div className="flex flex-col gap-1 items-end shrink-0">
+                    <Button
+                        size="sm"
+                        variant={installed ? "outline" : "default"}
+                        onClick={() => onInstall()}
+                        disabled={disabled}
+                    >
+                        {installed ? "Refresh" : "Install"}
+                    </Button>
+                    {preset.licenseUrl && (
+                        <a
+                            href={preset.licenseUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-muted-foreground underline hover:text-foreground"
+                        >
+                            Terms
+                        </a>
+                    )}
+                </div>
+            </li>
+        );
+    }
+
+    // byo-url
+    const byoPreset = preset as ByoUrlPreset;
+    const canInstall = byoUrl.trim().length > 0;
+    return (
+        <li className="rounded-md border px-3 py-2 flex flex-col gap-2">
+            <div className="flex items-start gap-2">{header}</div>
+            <p className="text-xs text-amber-500 leading-4">
+                {byoPreset.reason}{" "}
+                <a
+                    href={byoPreset.portalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                >
+                    Get a URL →
+                </a>
+            </p>
+            <div className="flex gap-2">
+                <Input
+                    placeholder="Paste your GTFS zip URL"
+                    value={byoUrl}
+                    onChange={(e) => setByoUrl(e.target.value)}
+                    disabled={disabled}
+                    className="h-8"
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && canInstall) {
+                            onInstall(byoUrl.trim());
+                        }
+                    }}
+                />
+                <Button
+                    size="sm"
+                    variant={installed ? "outline" : "default"}
+                    onClick={() => onInstall(byoUrl.trim())}
+                    disabled={disabled || !canInstall}
+                >
+                    {installed ? "Refresh" : "Install"}
+                </Button>
+            </div>
+            {byoPreset.licenseUrl && (
+                <a
+                    href={byoPreset.licenseUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-muted-foreground underline hover:text-foreground self-end"
+                >
+                    Terms
+                </a>
+            )}
+        </li>
     );
 }
 
