@@ -190,264 +190,277 @@ export const ZoneSidebar = () => {
             setIsHidingZoneLoading(true);
 
             try {
-
-            const needsDefault = !useCustomStations || includeDefaultStations;
-            if (needsDefault && $displayHidingZonesOptions.length === 0) {
-                toast.error("At least one place type must be selected");
-                return;
-            }
-
-            let places: StationPlace[];
-
-            if (!needsDefault) {
-                // Custom only
-                places = normalizeToStationFeatures(
-                    $customStations,
-                ).features.map((f) => ({
-                    type: "Feature",
-                    geometry: f.geometry,
-                    properties: {
-                        id:
-                            f.properties?.id ||
-                            `${(f.geometry as any).coordinates[1]},${(f.geometry as any).coordinates[0]}`,
-                        name: f.properties?.name,
-                    },
-                }));
-            } else {
-                // Fetch default, optionally merge custom
-                const activeFilter = activeStationsOnly
-                    ? '["disused"!="yes"]["abandoned"!="yes"]["railway:status"!="abandoned"]["railway:status"!="disused"]'
-                    : "";
-                const stationOptions = $displayHidingZonesOptions.map(
-                    (opt) => `${opt}${activeFilter}`,
-                );
-                // @ts-expect-error osmtogeojson always defines properties with an "id" string
-                places = osmtogeojson(
-                    await findPlacesInZone(
-                        stationOptions[0],
-                        "Finding stations. This may take a while. Do not press any buttons while this is processing. Don't worry, it will be cached.",
-                        "nwr",
-                        "center",
-                        stationOptions.slice(1),
-                    ),
-                ).features;
-
-                if (
-                    useCustomStations &&
-                    $customStations.length > 0 &&
-                    includeDefaultStations
-                ) {
-                    const customFeatures = normalizeToStationFeatures(
-                        $customStations,
-                    ).features.map(
-                        (f) =>
-                            ({
-                                type: "Feature",
-                                geometry: f.geometry,
-                                properties: {
-                                    id:
-                                        f.properties?.id ||
-                                        `${f.geometry.coordinates[1]},${f.geometry.coordinates[0]}`,
-                                    name: f.properties?.name,
-                                },
-                            }) as StationPlace,
-                    );
-                    const seen = new Set<string>();
-                    const merged: StationPlace[] = [];
-                    const add = (feat: StationPlace) => {
-                        const id = feat.properties.id as string | undefined;
-                        const key =
-                            id && id.includes("/")
-                                ? `id:${id}`
-                                : `pt:${feat.geometry.coordinates[1]},${feat.geometry.coordinates[0]}`;
-                        if (!seen.has(key)) {
-                            seen.add(key);
-                            merged.push(feat);
-                        }
-                    };
-                    places.forEach(add);
-                    customFeatures.forEach(add);
-                    places = merged;
+                const needsDefault =
+                    !useCustomStations || includeDefaultStations;
+                if (needsDefault && $displayHidingZonesOptions.length === 0) {
+                    toast.error("At least one place type must be selected");
+                    return;
                 }
-            }
 
-            // merge duplicate stations if selected
-            if (mergeDuplicates) {
-                places = mergeDuplicateStation(
-                    places,
-                    $hidingRadius,
-                    $hidingRadiusUnits,
+                let places: StationPlace[];
+
+                if (!needsDefault) {
+                    // Custom only
+                    places = normalizeToStationFeatures(
+                        $customStations,
+                    ).features.map((f) => ({
+                        type: "Feature",
+                        geometry: f.geometry,
+                        properties: {
+                            id:
+                                f.properties?.id ||
+                                `${(f.geometry as any).coordinates[1]},${(f.geometry as any).coordinates[0]}`,
+                            name: f.properties?.name,
+                        },
+                    }));
+                } else {
+                    // Fetch default, optionally merge custom
+                    const activeFilter = activeStationsOnly
+                        ? '["disused"!="yes"]["abandoned"!="yes"]["railway:status"!="abandoned"]["railway:status"!="disused"]["railway:status"!="closed"]["operational_status"!="closed"]["passenger"!="no"]["station"!="freight"]["railway:traffic_mode"!="freight"]["historic"!="station"]'
+                        : "";
+                    const stationOptions = $displayHidingZonesOptions.map(
+                        (opt) => `${opt}${activeFilter}`,
+                    );
+                    // @ts-expect-error osmtogeojson always defines properties with an "id" string
+                    places = osmtogeojson(
+                        await findPlacesInZone(
+                            stationOptions[0],
+                            "Finding stations. This may take a while. Do not press any buttons while this is processing. Don't worry, it will be cached.",
+                            "nwr",
+                            "center",
+                            stationOptions.slice(1),
+                            90, // 90 s server-side timeout — station queries over large regions can be slow
+                        ),
+                    ).features;
+
+                    if (
+                        useCustomStations &&
+                        $customStations.length > 0 &&
+                        includeDefaultStations
+                    ) {
+                        const customFeatures = normalizeToStationFeatures(
+                            $customStations,
+                        ).features.map(
+                            (f) =>
+                                ({
+                                    type: "Feature",
+                                    geometry: f.geometry,
+                                    properties: {
+                                        id:
+                                            f.properties?.id ||
+                                            `${f.geometry.coordinates[1]},${f.geometry.coordinates[0]}`,
+                                        name: f.properties?.name,
+                                    },
+                                }) as StationPlace,
+                        );
+                        const seen = new Set<string>();
+                        const merged: StationPlace[] = [];
+                        const add = (feat: StationPlace) => {
+                            const id = feat.properties.id as string | undefined;
+                            const key =
+                                id && id.includes("/")
+                                    ? `id:${id}`
+                                    : `pt:${feat.geometry.coordinates[1]},${feat.geometry.coordinates[0]}`;
+                            if (!seen.has(key)) {
+                                seen.add(key);
+                                merged.push(feat);
+                            }
+                        };
+                        places.forEach(add);
+                        customFeatures.forEach(add);
+                        places = merged;
+                    }
+                }
+
+                // merge duplicate stations if selected
+                if (mergeDuplicates) {
+                    places = mergeDuplicateStation(
+                        places,
+                        $hidingRadius,
+                        $hidingRadiusUnits,
+                    );
+                }
+
+                const unionized = safeUnion(
+                    turf.simplify($questionFinishedMapData, {
+                        tolerance: 0.001,
+                    }),
                 );
-            }
 
-            const unionized = safeUnion(
-                turf.simplify($questionFinishedMapData, {
-                    tolerance: 0.001,
-                }),
-            );
+                let circles = places
+                    .map((place) => {
+                        const radius = $hidingRadius;
+                        const center = turf.getCoord(place);
+                        const circle = turf.circle(center, radius, {
+                            steps: 32,
+                            units: $hidingRadiusUnits,
+                            properties: place,
+                        });
 
-            let circles = places
-                .map((place) => {
-                    const radius = $hidingRadius;
-                    const center = turf.getCoord(place);
-                    const circle = turf.circle(center, radius, {
-                        steps: 32,
-                        units: $hidingRadiusUnits,
-                        properties: place,
+                        return circle;
+                    })
+                    .filter((circle) => {
+                        return !turf.booleanWithin(circle, unionized);
                     });
 
-                    return circle;
-                })
-                .filter((circle) => {
-                    return !turf.booleanWithin(circle, unionized);
-                });
-
-            for (const question of questions.get()) {
-                if (planningModeEnabled.get() && question.data.drag) {
-                    continue;
-                }
-
-                if (
-                    question.id === "matching" &&
-                    (question.data.type === "same-first-letter-station" ||
-                        question.data.type === "same-length-station" ||
-                        question.data.type === "same-train-line")
-                ) {
-                    const location = turf.point([
-                        question.data.lng,
-                        question.data.lat,
-                    ]);
-
-                    const nearestTrainStation = turf.nearestPoint(
-                        location,
-                        turf.featureCollection(
-                            circles.map((x) => x.properties),
-                        ) as any,
-                    );
-
-                    if (question.data.type === "same-train-line") {
-                        // Custom-only lists don't have reliable OSM IDs
-                        if (useCustomStations && !includeDefaultStations) {
-                            toast.warning(
-                                "'Same train line' isn't supported with custom-only station lists; skipping this filter.",
-                            );
-                        } else {
-                            const nid = nearestTrainStation.properties.id as
-                                | string
-                                | undefined;
-                            if (!nid || !nid.includes("/")) {
-                                toast.warning(
-                                    "Nearest station has no OSM id; skipping 'same train line' filter.",
-                                );
-                                continue;
-                            }
-
-                            const nodes = await trainLineNodeFinder(nid);
-
-                            if (nodes.length === 0) {
-                                toast.warning(
-                                    `No train line found for ${extractStationName(
-                                        nearestTrainStation,
-                                    )}`,
-                                );
-                                continue;
-                            } else {
-                                circles = circles.filter((circle) => {
-                                    const idProp =
-                                        circle.properties.properties.id;
-                                    if (!idProp || !idProp.includes("/"))
-                                        return false;
-                                    const id = parseInt(idProp.split("/")[1]);
-
-                                    return question.data.same
-                                        ? nodes.includes(id)
-                                        : !nodes.includes(id);
-                                });
-                            }
-                        }
+                for (const question of questions.get()) {
+                    if (planningModeEnabled.get() && question.data.drag) {
+                        continue;
                     }
 
-                    const englishName = extractStationName(nearestTrainStation);
+                    if (
+                        question.id === "matching" &&
+                        (question.data.type === "same-first-letter-station" ||
+                            question.data.type === "same-length-station" ||
+                            question.data.type === "same-train-line")
+                    ) {
+                        const location = turf.point([
+                            question.data.lng,
+                            question.data.lat,
+                        ]);
 
-                    if (!englishName)
-                        return toast.error("No English name found");
-
-                    if (question.data.type === "same-first-letter-station") {
-                        const letter = englishName[0].toUpperCase();
-
-                        circles = circles.filter((circle) => {
-                            const name = extractStationName(circle.properties);
-                            if (!name) return false;
-
-                            return question.data.same
-                                ? name[0].toUpperCase() === letter
-                                : name[0].toUpperCase() !== letter;
-                        });
-                    } else if (question.data.type === "same-length-station") {
-                        const seekerLength = englishName.length;
-                        const comparison = question.data.lengthComparison;
-
-                        circles = circles.filter((circle) => {
-                            const name = extractStationName(circle.properties);
-                            if (!name) return false;
-
-                            if (comparison === "same") {
-                                return name.length === seekerLength;
-                            } else if (comparison === "shorter") {
-                                return name.length < seekerLength;
-                            } else if (comparison === "longer") {
-                                return name.length > seekerLength;
-                            }
-                            return false;
-                        });
-                    }
-                }
-                if (
-                    question.id === "measuring" &&
-                    (question.data.type === "mcdonalds" ||
-                        question.data.type === "seven11")
-                ) {
-                    const points = await findPlacesSpecificInZone(
-                        question.data.type === "mcdonalds"
-                            ? QuestionSpecificLocation.McDonalds
-                            : QuestionSpecificLocation.Seven11,
-                    );
-
-                    const nearestPoint = turf.nearestPoint(
-                        turf.point([question.data.lng, question.data.lat]),
-                        points as any,
-                    );
-
-                    const distance = turf.distance(
-                        turf.point([question.data.lng, question.data.lat]),
-                        nearestPoint as any,
-                        {
-                            units: "miles",
-                        },
-                    );
-
-                    circles = circles.filter((circle) => {
-                        const point = turf.point(
-                            turf.getCoord(circle.properties),
+                        const nearestTrainStation = turf.nearestPoint(
+                            location,
+                            turf.featureCollection(
+                                circles.map((x) => x.properties),
+                            ) as any,
                         );
 
-                        const nearest = turf.nearestPoint(point, points as any);
+                        if (question.data.type === "same-train-line") {
+                            // Custom-only lists don't have reliable OSM IDs
+                            if (useCustomStations && !includeDefaultStations) {
+                                toast.warning(
+                                    "'Same train line' isn't supported with custom-only station lists; skipping this filter.",
+                                );
+                            } else {
+                                const nid = nearestTrainStation.properties
+                                    .id as string | undefined;
+                                if (!nid || !nid.includes("/")) {
+                                    toast.warning(
+                                        "Nearest station has no OSM id; skipping 'same train line' filter.",
+                                    );
+                                    continue;
+                                }
 
-                        return question.data.hiderCloser
-                            ? turf.distance(point, nearest as any, {
-                                  units: "miles",
-                              }) <
-                                  distance + $hidingRadius
-                            : turf.distance(point, nearest as any, {
-                                  units: "miles",
-                              }) >
-                                  distance - $hidingRadius;
-                    });
+                                const nodes = await trainLineNodeFinder(nid);
+
+                                if (nodes.length === 0) {
+                                    toast.warning(
+                                        `No train line found for ${extractStationName(
+                                            nearestTrainStation,
+                                        )}`,
+                                    );
+                                    continue;
+                                } else {
+                                    circles = circles.filter((circle) => {
+                                        const idProp =
+                                            circle.properties.properties.id;
+                                        if (!idProp || !idProp.includes("/"))
+                                            return false;
+                                        const id = parseInt(
+                                            idProp.split("/")[1],
+                                        );
+
+                                        return question.data.same
+                                            ? nodes.includes(id)
+                                            : !nodes.includes(id);
+                                    });
+                                }
+                            }
+                        }
+
+                        const englishName =
+                            extractStationName(nearestTrainStation);
+
+                        if (!englishName)
+                            return toast.error("No English name found");
+
+                        if (
+                            question.data.type === "same-first-letter-station"
+                        ) {
+                            const letter = englishName[0].toUpperCase();
+
+                            circles = circles.filter((circle) => {
+                                const name = extractStationName(
+                                    circle.properties,
+                                );
+                                if (!name) return false;
+
+                                return question.data.same
+                                    ? name[0].toUpperCase() === letter
+                                    : name[0].toUpperCase() !== letter;
+                            });
+                        } else if (
+                            question.data.type === "same-length-station"
+                        ) {
+                            const seekerLength = englishName.length;
+                            const comparison = question.data.lengthComparison;
+
+                            circles = circles.filter((circle) => {
+                                const name = extractStationName(
+                                    circle.properties,
+                                );
+                                if (!name) return false;
+
+                                if (comparison === "same") {
+                                    return name.length === seekerLength;
+                                } else if (comparison === "shorter") {
+                                    return name.length < seekerLength;
+                                } else if (comparison === "longer") {
+                                    return name.length > seekerLength;
+                                }
+                                return false;
+                            });
+                        }
+                    }
+                    if (
+                        question.id === "measuring" &&
+                        (question.data.type === "mcdonalds" ||
+                            question.data.type === "seven11")
+                    ) {
+                        const points = await findPlacesSpecificInZone(
+                            question.data.type === "mcdonalds"
+                                ? QuestionSpecificLocation.McDonalds
+                                : QuestionSpecificLocation.Seven11,
+                        );
+
+                        const nearestPoint = turf.nearestPoint(
+                            turf.point([question.data.lng, question.data.lat]),
+                            points as any,
+                        );
+
+                        const distance = turf.distance(
+                            turf.point([question.data.lng, question.data.lat]),
+                            nearestPoint as any,
+                            {
+                                units: "miles",
+                            },
+                        );
+
+                        circles = circles.filter((circle) => {
+                            const point = turf.point(
+                                turf.getCoord(circle.properties),
+                            );
+
+                            const nearest = turf.nearestPoint(
+                                point,
+                                points as any,
+                            );
+
+                            return question.data.hiderCloser
+                                ? turf.distance(point, nearest as any, {
+                                      units: "miles",
+                                  }) <
+                                      distance + $hidingRadius
+                                : turf.distance(point, nearest as any, {
+                                      units: "miles",
+                                  }) >
+                                      distance - $hidingRadius;
+                        });
+                    }
                 }
-            }
 
-            setStations(circles);
-
+                setStations(circles);
             } finally {
                 hidingZoneLoadingRef.current = false;
                 isLoading.set(false);
@@ -456,7 +469,10 @@ export const ZoneSidebar = () => {
                 if (pendingRefreshRef.current) {
                     pendingRefreshRef.current = false;
                     initializeHidingZones().catch((error) => {
-                        console.log("Error in hiding zone initialization:", error);
+                        console.log(
+                            "Error in hiding zone initialization:",
+                            error,
+                        );
                         toast.error(
                             "An error occurred during hiding zone initialization",
                             { toastId: "hiding-zone-initialization-error" },

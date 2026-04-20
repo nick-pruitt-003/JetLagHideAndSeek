@@ -1,8 +1,16 @@
 // @ts-check
+import node from "@astrojs/node";
 import partytown from "@astrojs/partytown";
 import react from "@astrojs/react";
 import AstroPWA from "@vite-pwa/astro";
 import { defineConfig } from "astro/config";
+
+// Base path: GH Pages needs "/JetLagHideAndSeek", Railway serves at root.
+// Override with PUBLIC_BASE_PATH at build time.
+const base = process.env.PUBLIC_BASE_PATH ?? "JetLagHideAndSeek";
+
+// Site URL: used for absolute links, sitemap, etc. Override per deployment.
+const site = process.env.PUBLIC_SITE_URL ?? "https://taibeled.github.io";
 
 // https://astro.build/config
 export default defineConfig({
@@ -43,6 +51,13 @@ export default defineConfig({
     devToolbar: {
         enabled: false,
     },
-    site: "https://taibeled.github.io",
-    base: "JetLagHideAndSeek",
+    site,
+    base,
+    // "hybrid" keeps most pages static-rendered while letting /api/* routes
+    // run server-side. Required for the GTFS proxy to work on Railway.
+    // On GH Pages (static-only), API routes are silently omitted.
+    output: "hybrid",
+    adapter: node({
+        mode: "standalone",
+    }),
 });

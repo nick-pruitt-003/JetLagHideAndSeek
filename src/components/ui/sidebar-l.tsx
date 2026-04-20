@@ -30,8 +30,6 @@ const SIDEBAR_TUTORIAL_STEPS = [6];
 export const MENU_ITEM_CLASSNAME =
     "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0";
 
-
-
 const SidebarProvider = React.forwardRef<
     HTMLDivElement,
     React.ComponentProps<"div"> & {
@@ -267,7 +265,7 @@ const Sidebar = React.forwardRef<
 Sidebar.displayName = "Sidebar";
 
 const SidebarTrigger = React.forwardRef<
-    React.ElementRef<typeof Button>,
+    React.ComponentRef<typeof Button>,
     React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
     const { toggleSidebar } = useStore(SidebarContext);
@@ -342,7 +340,7 @@ const SidebarInset = React.forwardRef<
 SidebarInset.displayName = "SidebarInset";
 
 const SidebarInput = React.forwardRef<
-    React.ElementRef<typeof Input>,
+    React.ComponentRef<typeof Input>,
     React.ComponentProps<typeof Input>
 >(({ className, ...props }, ref) => {
     return (
@@ -390,7 +388,7 @@ const SidebarFooter = React.forwardRef<
 SidebarFooter.displayName = "SidebarFooter";
 
 const SidebarSeparator = React.forwardRef<
-    React.ElementRef<typeof Separator>,
+    React.ComponentRef<typeof Separator>,
     React.ComponentProps<typeof Separator>
 >(({ className, ...props }, ref) => {
     return (

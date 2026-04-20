@@ -1,7 +1,9 @@
 ---
-import Layout from "@/layouts/Layout.astro";
 import { Map } from "@/components/Map";
+import { OptionDrawers } from "@/components/OptionDrawers";
 import { PlacePicker } from "@/components/PlacePicker";
+import { QuestionSidebar } from "@/components/QuestionSidebar";
+import { TutorialDialog } from "@/components/TutorialDialog";
 import {
     SidebarProvider as SidebarProviderL,
     SidebarTrigger as SidebarTriggerL,
@@ -10,16 +12,14 @@ import {
     SidebarProvider as SidebarProviderR,
     SidebarTrigger as SidebarTriggerR,
 } from "@/components/ui/sidebar-r";
-import { QuestionSidebar } from "@/components/QuestionSidebar";
 import { ZoneSidebar } from "@/components/ZoneSidebar";
-import { OptionDrawers } from "@/components/OptionDrawers";
-import { TutorialDialog } from "@/components/TutorialDialog";
+import Layout from "@/layouts/Layout.astro";
 ---
 
 <Layout className="bg-jetlag">
     <SidebarProviderL client:load>
         <SidebarProviderR client:load defaultOpen={false}>
-            <QuestionSidebar client:only />
+            <QuestionSidebar client:only="react" />
             <main class="flex flex-col grow min-h-0 group">
                 <div
                     class="flex justify-center flex-1 min-h-0"
@@ -41,7 +41,7 @@ import { TutorialDialog } from "@/components/TutorialDialog";
                             class="flex shrink max-w-fit z-1030 absolute left-4 right-0 m-auto group-[.fullscreen]:hidden"
                         >
                             <PlacePicker
-                                client:only
+                                client:only="react"
                                 className="m-4 overflow-hidden"
                             />
                         </div>
@@ -53,13 +53,13 @@ import { TutorialDialog } from "@/components/TutorialDialog";
                         </div>
                         <Map
                             className="w-full h-[100svh] md:h-full group-[.fullscreen]:w-full group-[.fullscreen]:h-full"
-                            client:only
+                            client:only="react"
                         />
                     </div>
                 </div>
             </main>
-            <ZoneSidebar client:only />
-            <TutorialDialog client:only />
+            <ZoneSidebar client:only="react" />
+            <TutorialDialog client:only="react" />
         </SidebarProviderR>
     </SidebarProviderL>
 </Layout>

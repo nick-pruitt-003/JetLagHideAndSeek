@@ -24,5 +24,28 @@ export const geoSpatialVoronoi = (
         coord[1] = coord[1] * -ratio; // y-coordinates are flipped
     });
 
-    return turf.toWgs84(projected);
+    const result = turf.toWgs84(projected);
+
+    // geoStitch can reorder features when stitching antimeridian-spanning
+    // polygons. Restore the original input order using the `.site` property
+    // that d3-geo-voronoi attaches to each polygon (pointing to the input
+    // feature that "owns" that cell). Properties are not touched by
+    // geoProject/coordEach so site.geometry.coordinates are still WGS84.
+    result.features.sort((a: any, b: any) => {
+        const coordsA: [number, number] | undefined =
+            a.properties?.site?.geometry?.coordinates;
+        const coordsB: [number, number] | undefined =
+            b.properties?.site?.geometry?.coordinates;
+        const indexOf = (coords: [number, number] | undefined) =>
+            coords == null
+                ? -1
+                : points.features.findIndex(
+                      (p) =>
+                          p.geometry.coordinates[0] === coords[0] &&
+                          p.geometry.coordinates[1] === coords[1],
+                  );
+        return indexOf(coordsA) - indexOf(coordsB);
+    });
+
+    return result;
 };

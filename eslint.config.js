@@ -1,4 +1,5 @@
 import pluginJs from "@eslint/js";
+import pluginAstro from "eslint-plugin-astro";
 import pluginImportAlias from "eslint-plugin-import-alias";
 import pluginReact from "eslint-plugin-react";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
@@ -14,6 +15,16 @@ export default [
     pluginJs.configs.recommended,
     ...tseslint.configs.recommended,
     pluginReact.configs.flat.recommended,
+    ...pluginAstro.configs["flat/recommended"],
+    // In Astro templates: `class` is correct HTML (not a React prop), and
+    // `Fragment` / `Slot` are Astro built-ins that don't need React imports.
+    {
+        files: ["**/*.astro"],
+        rules: {
+            "react/no-unknown-property": "off",
+            "react/jsx-no-undef": "off",
+        },
+    },
     {
         plugins: {
             "import-alias": pluginImportAlias,

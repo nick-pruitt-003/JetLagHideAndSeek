@@ -417,7 +417,13 @@ export const Map = ({ className }: { className?: string }) => {
                 refreshTimerRef.current = null;
             }
         };
-    }, [$questions, map, $hiderMode, $mapGeoLocation, $additionalMapGeoLocations]);
+    }, [
+        $questions,
+        map,
+        $hiderMode,
+        $mapGeoLocation,
+        $additionalMapGeoLocations,
+    ]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
