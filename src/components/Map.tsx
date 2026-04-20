@@ -164,7 +164,22 @@ export const Map = ({ className }: { className?: string }) => {
                             mapGeoJSON.set(x);
                             mapGeoData = x;
                         })
-                        .catch((error) => console.log(error)),
+                        .catch((error) => {
+                            // Previously this was silently console.log'd,
+                            // which made "map outline missing" almost
+                            // impossible to diagnose in prod (no polygon
+                            // rendered, no error surfaced). Surface it.
+                            console.error(
+                                "determineMapBoundaries failed:",
+                                error,
+                            );
+                            toast.error(
+                                `Couldn't build game territory: ${
+                                    error?.message ?? "unknown error"
+                                }`,
+                                { toastId: "map-boundary-error" },
+                            );
+                        }),
                     {
                         error: "Error refreshing map data",
                     },
@@ -251,13 +266,15 @@ export const Map = ({ className }: { className?: string }) => {
     const displayMap = useMemo(
         () => (
             <MapContainer
-                // Canvas is dramatically faster than SVG for the
-                // country-scale boundary polygon (Japan alone has
-                // 6000+ islands -> hundreds of thousands of vertices).
-                // The default SVG path still renders markers and
-                // smaller polygons fine; Leaflet falls through to SVG
-                // for anything Canvas can't handle.
-                preferCanvas={true}
+                // NOTE: we explicitly do NOT set `preferCanvas={true}`
+                // here. Canvas renders simple polygons faster, but
+                // Leaflet's canvas path has known issues drawing
+                // polygons-with-holes, which is exactly the shape the
+                // game-territory mask uses (world outer ring with a
+                // region-shaped hole cut out of it). Forcing canvas
+                // made the mask invisible on Railway even though the
+                // geometry was correct. SVG is plenty fast now that
+                // Nominatim returns pre-simplified boundaries.
                 center={$mapGeoLocation.geometry.coordinates}
                 zoom={5}
                 className={cn("w-full h-full", className)}
