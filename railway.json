@@ -2,10 +2,10 @@
     "$schema": "https://railway.com/railway.schema.json",
     "build": {
         "builder": "NIXPACKS",
-        "buildCommand": "pnpm install --frozen-lockfile --prefer-offline && pnpm build"
+        "buildCommand": "pnpm install --frozen-lockfile --prefer-offline 2>&1 && NODE_OPTIONS='--max-old-space-size=4096' pnpm build 2>&1"
     },
     "deploy": {
-        "startCommand": "pnpm start",
+        "startCommand": "NODE_OPTIONS='--max-old-space-size=1024' pnpm start",
         "healthcheckPath": "/",
         "healthcheckTimeout": 30,
         "restartPolicyType": "ON_FAILURE",
