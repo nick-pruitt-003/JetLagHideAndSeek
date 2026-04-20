@@ -1118,11 +1118,14 @@ export const TutorialDialog = () => {
                 <AlertDialogPrimitive.AlertDialogContent
                     ref={dialogRef}
                     className={cn(
-                        "fixed z-10000 grid w-full gap-4 border bg-background p-4 md:p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
-                        "max-h-[50vh]! overflow-y-auto tutorial-dialog",
-                        // Only apply default center positioning for non-targeted steps
-                        !currentTutorialStep.targetSelector &&
-                            "left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%] max-h-[90vh]!",
+                        "fixed z-10000 flex flex-col w-full border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+                        // Cap height; inner body scrolls, header/footer stay pinned.
+                        // Targeted steps (pointing at a UI element) stay compact so
+                        // the highlighted element remains visible alongside.
+                        "tutorial-dialog",
+                        currentTutorialStep.targetSelector
+                            ? "max-h-[70vh]"
+                            : "max-h-[85vh] left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%]",
                     )}
                     style={{
                         maxWidth: "min(680px, calc(100vw - 40px))",
@@ -1132,14 +1135,14 @@ export const TutorialDialog = () => {
                     }}
                     data-tutorial-active={$showTutorial}
                 >
-                    <AlertDialogHeader className="space-y-4">
+                    <AlertDialogHeader className="shrink-0 space-y-4 p-4 md:p-6 pb-4 border-b border-border/60">
                         <div className="flex items-center justify-between">
-                            <AlertDialogTitle className="text-2xl font-bold text-left">
+                            <AlertDialogTitle className="text-xl md:text-2xl font-bold text-left">
                                 {currentTutorialStep.title}
                             </AlertDialogTitle>
                         </div>
 
-                        <div className="flex space-x-2">
+                        <div className="flex space-x-1.5">
                             {tutorialSteps.map((_, index) => (
                                 <div
                                     key={index}
@@ -1153,17 +1156,19 @@ export const TutorialDialog = () => {
                         </div>
                     </AlertDialogHeader>
 
-                    {(currentTutorialStep.isDescription ?? true) ? (
-                        <AlertDialogDescription className="text-base leading-relaxed whitespace-pre-line">
-                            {currentTutorialStep.content}
-                        </AlertDialogDescription>
-                    ) : (
-                        <div className="text-base leading-relaxed whitespace-pre-line text-muted-foreground">
-                            {currentTutorialStep.content}
-                        </div>
-                    )}
+                    <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
+                        {(currentTutorialStep.isDescription ?? true) ? (
+                            <AlertDialogDescription className="text-base leading-relaxed whitespace-pre-line">
+                                {currentTutorialStep.content}
+                            </AlertDialogDescription>
+                        ) : (
+                            <div className="text-base leading-relaxed whitespace-pre-line text-muted-foreground">
+                                {currentTutorialStep.content}
+                            </div>
+                        )}
+                    </div>
 
-                    <div className="flex flex-col gap-y-2 justify-between items-center pt-4">
+                    <div className="shrink-0 flex flex-col gap-y-2 justify-between items-center p-4 md:p-6 pt-4 border-t border-border/60">
                         <div className="flex items-center space-x-2">
                             <Button
                                 variant="outline"
