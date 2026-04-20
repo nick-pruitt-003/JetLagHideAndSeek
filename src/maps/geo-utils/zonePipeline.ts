@@ -20,7 +20,9 @@ import type {
     BBox,
     Feature,
     FeatureCollection,
+    MultiPolygon,
     Point,
+    Polygon,
 } from "geojson";
 import type { toast as toastFn } from "react-toastify";
 
@@ -36,7 +38,6 @@ import {
     type StationPlace,
     trainLineNodeFinder,
 } from "@/maps/api";
-import { overpassZoneCacheKey } from "@/maps/api/overpass";
 import { extractStationName } from "@/maps/geo-utils/special";
 import { geoSpatialVoronoi } from "@/maps/geo-utils/voronoi";
 import { findMatchingPlaces } from "@/maps/questions/matching";
@@ -221,7 +222,7 @@ export type ToastFn = typeof toastFn;
  */
 export function matchingFacilityCacheKey(
     data: MatchingQuestion,
-    zoneKey: string = overpassZoneCacheKey(),
+    zoneKey: string,
 ): string {
     if (data.type === "airport") {
         return JSON.stringify({
@@ -282,7 +283,7 @@ function normalizeMatchingPointsToFc(
  */
 export async function prefetchMatchingFacilityPoints(
     questions: Question[],
-    zoneKey: string = overpassZoneCacheKey(),
+    zoneKey: string,
 ): Promise<Map<string, FeatureCollection<Point>>> {
     const unique = new Map<string, MatchingQuestion>();
     for (const q of questions) {
@@ -314,7 +315,7 @@ export interface ApplyQuestionFiltersOptions {
      *  {@link matchingFacilityCacheKey} with this zone suffix. */
     matchingFacilityCache?: Map<string, FeatureCollection<Point>>;
     /** Territory key aligned with {@link prefetchMatchingFacilityPoints}. */
-    matchingZoneKey?: string;
+    matchingZoneKey: string;
     hidingRadius: number;
     useCustomStations: boolean;
     includeDefaultStations: boolean;
@@ -337,7 +338,7 @@ export async function applyQuestionFilters({
     questions,
     measuringPoiCache,
     matchingFacilityCache = new Map(),
-    matchingZoneKey = overpassZoneCacheKey(),
+    matchingZoneKey,
     hidingRadius,
     useCustomStations,
     includeDefaultStations,
@@ -364,12 +365,26 @@ export async function applyQuestionFilters({
                 question.data.lng,
                 question.data.lat,
             ]);
-            const seekerNearest = turf.nearestPoint(seekerPoint, points as any);
-            const seekerIdx = seekerNearest.properties.featureIndex;
-            if (seekerIdx === undefined) continue;
-
             const voronoiFc = geoSpatialVoronoi(points as FeatureCollection<Point>);
-            const seekerCell = voronoiFc.features[seekerIdx];
+            const [sx, sy] = seekerPoint.geometry.coordinates;
+            const coordEq = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+            let seekerCell = voronoiFc.features.find((cell) => {
+                const c = (
+                    cell.properties as { site?: Feature<Point> } | null | undefined
+                )?.site?.geometry?.coordinates as [number, number] | undefined;
+                if (!c) return false;
+                return coordEq(c[0], sx) && coordEq(c[1], sy);
+            });
+            if (!seekerCell?.geometry) {
+                seekerCell = voronoiFc.features.find(
+                    (cell) =>
+                        Boolean(cell.geometry) &&
+                        turf.booleanPointInPolygon(
+                            seekerPoint,
+                            cell as Feature<Polygon | MultiPolygon>,
+                        ),
+                );
+            }
             if (!seekerCell?.geometry) continue;
 
             const wantSame = question.data.same === true;

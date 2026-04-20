@@ -12,7 +12,7 @@
  * presets section and come in the follow-up p4-presets task.
  */
 import { Globe, Loader2, Plus, Trash2, Upload } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 
 import { Button } from "@/components/ui/button";
@@ -105,6 +105,13 @@ function phaseLabel(phase: ImportProgress["phase"]): string {
     }
 }
 
+function isAbortError(e: unknown): boolean {
+    return (
+        (e instanceof Error && e.name === "AbortError") ||
+        (e instanceof DOMException && e.name === "AbortError")
+    );
+}
+
 function formatStorageBytes(n: number): string {
     if (n < 1024) return `${n} B`;
     const units = ["KB", "MB", "GB"] as const;
@@ -135,6 +142,14 @@ function TransitSystemsDialog({
     const [downloadInFlight, setDownloadInFlight] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const abortRef = useRef<AbortController | null>(null);
+
+    const guardedOpenChange = useCallback(
+        (next: boolean) => {
+            if (!next && downloadInFlight) return;
+            onOpenChange(next);
+        },
+        [downloadInFlight, onOpenChange],
+    );
 
     // Fetch list every time the dialog opens — IDB is the source of truth
     // and other paths (presets, auto-refresh) may have mutated it.
@@ -256,19 +271,29 @@ function TransitSystemsDialog({
                 abortRef.current = new AbortController();
                 setDownloadInFlight(true);
                 try {
-                    const result = await fetchGtfsZip(
-                        source.url,
-                        (loaded, total) => {
-                            onProgress({
-                                phase: "fetching",
-                                fraction: total
-                                    ? Math.min(0.1, (loaded / total) * 0.1)
-                                    : 0.05,
-                                message: `${(loaded / 1024 / 1024).toFixed(1)} MB`,
-                            });
-                        },
-                        abortRef.current.signal,
-                    );
+                    let result: Awaited<ReturnType<typeof fetchGtfsZip>>;
+                    try {
+                        result = await fetchGtfsZip(
+                            source.url,
+                            (loaded, total) => {
+                                onProgress({
+                                    phase: "fetching",
+                                    fraction: total
+                                        ? Math.min(0.1, (loaded / total) * 0.1)
+                                        : 0.05,
+                                    message: `${(loaded / 1024 / 1024).toFixed(1)} MB`,
+                                });
+                            },
+                            abortRef.current.signal,
+                        );
+                    } catch (e) {
+                        if (isAbortError(e)) {
+                            finishTask(taskId);
+                            setProgress(null);
+                            return;
+                        }
+                        throw e;
+                    }
                     if (!looksLikeZip(result.bytes)) {
                         throw new Error(
                             "Server returned non-zip content. The URL may require a different fetch method — try downloading manually and uploading the zip.",
@@ -363,7 +388,7 @@ function TransitSystemsDialog({
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={guardedOpenChange}>
             <DialogContent className="max-w-xl max-h-[85vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Transit systems</DialogTitle>
@@ -607,7 +632,7 @@ function TransitSystemsDialog({
                     <div className="flex flex-wrap gap-2 justify-end">
                         <Button
                             variant="outline"
-                            onClick={() => onOpenChange(false)}
+                            onClick={() => guardedOpenChange(false)}
                             disabled={downloadInFlight}
                         >
                             {downloadInFlight

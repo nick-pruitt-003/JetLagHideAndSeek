@@ -273,6 +273,8 @@ describe("stationsSignature", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyQuestionFilters", () => {
+    const matchingZoneKey = "test-matching-zone";
+
     const build = (
         spec: Array<{ id: string; lng: number; lat: number; name?: string }>,
     ): StationCircle[] =>
@@ -290,6 +292,7 @@ describe("applyQuestionFilters", () => {
             circles,
             questions: [],
             measuringPoiCache: new Map(),
+            matchingZoneKey,
             hidingRadius: 0.25,
             useCustomStations: false,
             includeDefaultStations: true,
@@ -320,6 +323,7 @@ describe("applyQuestionFilters", () => {
             circles,
             questions: [question],
             measuringPoiCache: new Map(),
+            matchingZoneKey,
             hidingRadius: 0.25,
             useCustomStations: false,
             includeDefaultStations: true,
@@ -351,6 +355,7 @@ describe("applyQuestionFilters", () => {
             circles,
             questions: [question],
             measuringPoiCache: new Map(),
+            matchingZoneKey,
             hidingRadius: 0.25,
             useCustomStations: false,
             includeDefaultStations: true,
@@ -388,6 +393,7 @@ describe("applyQuestionFilters", () => {
             circles,
             questions: [question],
             measuringPoiCache: new Map(),
+            matchingZoneKey,
             hidingRadius: 0.25,
             useCustomStations: false,
             includeDefaultStations: true,
@@ -430,6 +436,7 @@ describe("applyQuestionFilters", () => {
             circles,
             questions: [question],
             measuringPoiCache: cache,
+            matchingZoneKey,
             hidingRadius: 0.25,
             useCustomStations: false,
             includeDefaultStations: true,
@@ -524,6 +531,7 @@ describe("applyQuestionFilters", () => {
             circles,
             questions: [question],
             measuringPoiCache: new Map(),
+            matchingZoneKey,
             hidingRadius: 0.25,
             useCustomStations: false,
             includeDefaultStations: true,
@@ -562,6 +570,7 @@ describe("applyQuestionFilters", () => {
             circles,
             questions: [question],
             measuringPoiCache: new Map(),
+            matchingZoneKey,
             hidingRadius: 0.25,
             useCustomStations: true,
             includeDefaultStations: false,
@@ -598,6 +607,7 @@ describe("applyQuestionFilters", () => {
             circles,
             questions: [question],
             measuringPoiCache: new Map(),
+            matchingZoneKey,
             hidingRadius: 0.25,
             useCustomStations: false,
             includeDefaultStations: true,
