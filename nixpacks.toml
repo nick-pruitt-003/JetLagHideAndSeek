@@ -1,6 +1,10 @@
-# Pin Node for Railway/Nixpacks. `.nvmrc` is the primary source, this is a
-# fallback in case Nixpacks' default detection picks an older minor.
-# `22` resolves to the latest Node 22.x available in nixpkgs, which is
-# guaranteed to satisfy engines (>=22.22.2) and Astro (>=22.12.0).
+# Pin Node for Railway/Nixpacks.
+#
+# Nixpacks' nodejs_22 attribute currently resolves to 22.11.x in its pinned
+# nixpkgs snapshot, which fails Astro 6's >=22.12.0 requirement. Node 24 is
+# the current LTS and resolves to a recent release in Nixpacks.
+#
+# Both `.nvmrc` and NIXPACKS_NODE_VERSION are set so Nixpacks picks 24
+# regardless of which source it checks first.
 [variables]
-NIXPACKS_NODE_VERSION = "22"
+NIXPACKS_NODE_VERSION = "24"
