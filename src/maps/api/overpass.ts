@@ -14,6 +14,7 @@ import { safeUnion } from "@/maps/geo-utils";
 import { cacheFetch, determineCache } from "./cache";
 import {
     LOCATION_FIRST_TAG,
+    NOMINATIM_API,
     OVERPASS_API,
     OVERPASS_API_FALLBACK,
 } from "./constants";
@@ -68,20 +69,119 @@ const getOverpassData = async (
     return data;
 };
 
+const OSM_TYPE_LONG: Record<"W" | "R" | "N", string> = {
+    W: "way",
+    R: "relation",
+    N: "node",
+};
+
+/**
+ * Turn Nominatim `/lookup?polygon_geojson=1&format=json` response into
+ * the FeatureCollection shape the rest of the app expects.
+ *
+ * Exported for unit testing. Returns `null` when the payload contains
+ * no usable polygon so callers can fall back to Overpass.
+ */
+export const parseNominatimBoundaryPayload = (
+    raw: unknown,
+): { type: "FeatureCollection"; features: any[] } | null => {
+    if (!Array.isArray(raw) || raw.length === 0) return null;
+
+    const features = raw
+        .map((entry) => {
+            if (!entry || typeof entry !== "object") return null;
+            const r = entry as Record<string, unknown>;
+            const geom = r.geojson as
+                | { type: string; coordinates: unknown }
+                | undefined;
+            if (!geom || typeof geom !== "object") return null;
+            if (geom.type !== "Polygon" && geom.type !== "MultiPolygon") {
+                return null;
+            }
+            return {
+                type: "Feature" as const,
+                properties: {
+                    osm_id: r.osm_id,
+                    osm_type: r.osm_type,
+                    source: "nominatim",
+                },
+                geometry: geom,
+            };
+        })
+        .filter((f): f is NonNullable<typeof f> => f !== null);
+
+    if (features.length === 0) return null;
+    return { type: "FeatureCollection", features };
+};
+
+/**
+ * Fetch a region boundary polygon from Nominatim's `/lookup` endpoint.
+ *
+ * Nominatim pre-simplifies boundary polygons: Japan is ~190KB here
+ * versus 4-10MB from Overpass `out geom`, and it responds in under a
+ * second even when Overpass is hammered (we repeatedly see 504s for
+ * country-level relations on cold Railway loads).
+ *
+ * Returns `null` when Nominatim refuses, responds malformed, or has no
+ * polygon for the id; callers should treat `null` as "fall back to
+ * Overpass".
+ */
+const fetchNominatimBoundary = async (
+    osmId: string,
+    osmTypeLetter: "W" | "R" | "N",
+    loadingText?: string,
+): Promise<any | null> => {
+    // Nominatim expects a prefix-letter-plus-id list: R382313, W123, N456.
+    const osmIds = `${osmTypeLetter}${osmId}`;
+    const url =
+        `${NOMINATIM_API}/lookup` +
+        `?osm_ids=${encodeURIComponent(osmIds)}` +
+        `&polygon_geojson=1` +
+        `&format=json`;
+
+    let response: Response;
+    try {
+        response = await cacheFetch(
+            url,
+            loadingText,
+            CacheType.PERMANENT_CACHE,
+        );
+    } catch {
+        return null;
+    }
+    if (!response.ok) return null;
+
+    let raw: unknown;
+    try {
+        raw = await response.json();
+    } catch {
+        return null;
+    }
+    return parseNominatimBoundaryPayload(raw);
+};
+
 const determineGeoJSON = async (
     osmId: string,
     osmTypeLetter: "W" | "R" | "N",
 ): Promise<any> => {
-    const osmTypeMap: { [key: string]: string } = {
-        W: "way",
-        R: "relation",
-        N: "node",
-    };
-    const osmType = osmTypeMap[osmTypeLetter];
+    // Nominatim first: its pre-simplified polygons are one to two orders
+    // of magnitude smaller than Overpass `out geom` and survive periods
+    // when Overpass is timing out. We only fall back to Overpass when
+    // Nominatim returns nothing usable.
+    const nominatimResult = await fetchNominatimBoundary(
+        osmId,
+        osmTypeLetter,
+        "Loading map data...",
+    );
+    if (nominatimResult) {
+        return nominatimResult;
+    }
+
+    const osmType = OSM_TYPE_LONG[osmTypeLetter];
     const query = `[out:json];${osmType}(${osmId});out geom;`;
     const data = await getOverpassData(
         query,
-        "Loading map data...",
+        "Loading map data (fallback)...",
         CacheType.PERMANENT_CACHE,
     );
     const geo = osmtogeojson(data);

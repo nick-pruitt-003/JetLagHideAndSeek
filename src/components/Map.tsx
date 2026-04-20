@@ -251,6 +251,13 @@ export const Map = ({ className }: { className?: string }) => {
     const displayMap = useMemo(
         () => (
             <MapContainer
+                // Canvas is dramatically faster than SVG for the
+                // country-scale boundary polygon (Japan alone has
+                // 6000+ islands -> hundreds of thousands of vertices).
+                // The default SVG path still renders markers and
+                // smaller polygons fine; Leaflet falls through to SVG
+                // for anything Canvas can't handle.
+                preferCanvas={true}
                 center={$mapGeoLocation.geometry.coordinates}
                 zoom={5}
                 className={cn("w-full h-full", className)}

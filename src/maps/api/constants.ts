@@ -4,6 +4,13 @@ export const OVERPASS_API = "https://overpass-api.de/api/interpreter";
 export const OVERPASS_API_FALLBACK =
     "https://overpass.private.coffee/api/interpreter";
 export const GEOCODER_API = "https://photon.komoot.io/api/";
+// Nominatim returns pre-simplified boundary polygons in ~50-200KB for
+// entire countries, versus 2-10MB from Overpass `out geom`. It's what
+// powers the OSM website's "view this relation" rendering and handles
+// `polygon_geojson=1` for any OSM relation/way/node id. Preferred for
+// the game-territory outline because Overpass regularly 504s on cold
+// loads for country-level relations.
+export const NOMINATIM_API = "https://nominatim.openstreetmap.org";
 export const PASTEBIN_API_POST_URL =
     "https://cors-anywhere.com/https://pastebin.com/api/api_post.php";
 export const PASTEBIN_API_RAW_URL = "https://pastebin.com/raw/";
