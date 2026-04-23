@@ -215,6 +215,18 @@ export function cullCirclesAgainstZone(
 
 export type ToastFn = typeof toastFn;
 
+function normalizedDisabledFacilityRefsForCache(
+    data: MatchingQuestion,
+): string[] {
+    const refs = (
+        data as MatchingQuestion & { disabledFacilityOsmRefs?: string[] }
+    ).disabledFacilityOsmRefs;
+    return [...(refs ?? [])]
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+        .sort();
+}
+
 /**
  * Stable cache key for Voronoi-style matching. Zone-scoped types share one
  * Overpass result per territory + flags (seeker lat/lng does not affect
@@ -229,13 +241,25 @@ export function matchingFacilityCacheKey(
             type: data.type,
             zone: zoneKey,
             activeOnly: data.activeOnly === true,
+            disabledAirports: [...(data.disabledAirportIatas ?? [])]
+                .map((s) => s.trim().toUpperCase())
+                .filter(Boolean)
+                .sort(),
         });
     }
     if (data.type === "major-city") {
-        return JSON.stringify({ type: data.type, zone: zoneKey });
+        return JSON.stringify({
+            type: data.type,
+            zone: zoneKey,
+            disabledFacilities: normalizedDisabledFacilityRefsForCache(data),
+        });
     }
     if (typeof data.type === "string" && data.type.endsWith("-full")) {
-        return JSON.stringify({ type: data.type, zone: zoneKey });
+        return JSON.stringify({
+            type: data.type,
+            zone: zoneKey,
+            disabledFacilities: normalizedDisabledFacilityRefsForCache(data),
+        });
     }
     if (data.type === "custom-points") {
         return JSON.stringify({

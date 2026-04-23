@@ -13,17 +13,23 @@ import {
     hiderMode,
     mapGeoJSON,
     mapGeoLocation,
+    playableTerritoryUnion,
     polyGeoJSON,
 } from "@/lib/context";
 import {
     findAdminBoundary,
     findPlacesInZone,
-    LOCATION_FIRST_TAG,
     nearestToQuestion,
     overpassAirportIataFilter,
     prettifyLocation,
     trainLineNodeFinder,
 } from "@/maps/api";
+import {
+    fetchFullFacilityElements,
+    filterFacilityPointsByDisabledOsmRefs,
+    osmElementsToFacilityPoints,
+    validateFullFacilityFetch,
+} from "@/maps/questions/facility-full";
 import osmtogeojson from "@/maps/api/osm-to-geojson";
 import { holedMask, modifyMapData, safeUnion } from "@/maps/geo-utils";
 import { geoSpatialVoronoi } from "@/maps/geo-utils";
@@ -33,41 +39,85 @@ import type {
     MatchingQuestion,
 } from "@/maps/schema";
 
+export function normalizeMatchingAirportIata(s: string): string {
+    return s.trim().toUpperCase();
+}
+
+async function fetchAirportPointsUnfiltered(
+    question: MatchingQuestion,
+): Promise<Feature<Point>[]> {
+    if (question.type !== "airport") return [];
+    const elements = _.uniqBy(
+        (
+            await findPlacesInZone(
+                overpassAirportIataFilter({
+                    activeOnly: question.activeOnly === true,
+                }),
+                "Finding airports...",
+                "nwr",
+                "center",
+                [],
+                240,
+            )
+        ).elements,
+        (feature: any) => feature.tags?.iata,
+    );
+    return elements.map((x: any) => {
+        const lng = x.center ? x.center.lon : x.lon;
+        const lat = x.center ? x.center.lat : x.lat;
+        const iata = normalizeMatchingAirportIata(String(x.tags?.iata ?? ""));
+        const name =
+            typeof x.tags?.name === "string" && x.tags.name.trim()
+                ? x.tags.name.trim()
+                : iata || "Airport";
+        return turf.point([lng, lat], { iata, name });
+    });
+}
+
+function filterAirportsByDisabled(
+    points: Feature<Point>[],
+    question: MatchingQuestion,
+): Feature<Point>[] {
+    if (question.type !== "airport") return points;
+    const disabled = new Set(
+        (question.disabledAirportIatas ?? []).map(normalizeMatchingAirportIata),
+    );
+    return points.filter((p) => {
+        const iata = normalizeMatchingAirportIata(
+            String((p.properties as { iata?: string } | null)?.iata ?? ""),
+        );
+        return iata.length > 0 && !disabled.has(iata);
+    });
+}
+
+/** All IATA airports in the current territory (before per-airport exclusions). */
+export async function listAirportMatchingCandidates(
+    question: MatchingQuestion,
+): Promise<Feature<Point>[]> {
+    return fetchAirportPointsUnfiltered(question);
+}
+
 export const findMatchingPlaces = async (question: MatchingQuestion) => {
     switch (question.type) {
         case "airport": {
-            return _.uniqBy(
-                (
-                    await findPlacesInZone(
-                        overpassAirportIataFilter({
-                            activeOnly: (question as any).activeOnly === true,
-                        }),
-                        "Finding airports...",
-                        "nwr",
-                        "center",
-                        [],
-                        240,
-                    )
-                ).elements,
-                (feature: any) => feature.tags.iata,
-            ).map((x) =>
-                turf.point([
-                    x.center ? x.center.lon : x.lon,
-                    x.center ? x.center.lat : x.lat,
-                ]),
+            return filterAirportsByDisabled(
+                await fetchAirportPointsUnfiltered(question),
+                question,
             );
         }
         case "major-city": {
-            return (
-                await findPlacesInZone(
-                    '[place=city]["population"~"^[1-9]+[0-9]{6}$"]', // The regex is faster than (if:number(t["population"])>1000000)
-                    "Finding cities...",
-                )
-            ).elements.map((x: any) =>
-                turf.point([
-                    x.center ? x.center.lon : x.lon,
-                    x.center ? x.center.lat : x.lat,
-                ]),
+            const cityData = await findPlacesInZone(
+                '[place=city]["population"~"^[1-9]+[0-9]{6}$"]', // The regex is faster than (if:number(t["population"])>1000000)
+                "Finding cities...",
+            );
+            const pts = osmElementsToFacilityPoints(cityData.elements ?? []);
+            return filterFacilityPointsByDisabledOsmRefs(
+                pts,
+                (
+                    question as MatchingQuestion & {
+                        disabledFacilityOsmRefs?: string[];
+                    }
+                ).disabledFacilityOsmRefs,
             );
         }
         case "custom-points": {
@@ -86,40 +136,21 @@ export const findMatchingPlaces = async (question: MatchingQuestion) => {
         case "park-full": {
             const location = question.type.split("-full")[0] as APILocations;
 
-            const data = await findPlacesInZone(
-                `[${LOCATION_FIRST_TAG[location]}=${location}]`,
+            const { elements, remark } = await fetchFullFacilityElements(
+                location,
                 `Finding ${prettifyLocation(location, true).toLowerCase()}...`,
-                "nwr",
-                "center",
-                [],
-                60,
             );
-
-            if (data.remark && data.remark.startsWith("runtime error")) {
-                toast.error(
-                    `Error finding ${prettifyLocation(
-                        location,
-                        true,
-                    ).toLowerCase()}. Please enable hiding zone mode and switch to the Large Game variation of this question.`,
-                );
+            if (!validateFullFacilityFetch(elements, remark, location)) {
                 return [];
             }
-
-            if (data.elements.length >= 1000) {
-                toast.error(
-                    `Too many ${prettifyLocation(
-                        location,
-                        true,
-                    ).toLowerCase()} found (${data.elements.length}). Please enable hiding zone mode and switch to the Large Game variation of this question.`,
-                );
-                return [];
-            }
-
-            return data.elements.map((x: any) =>
-                turf.point([
-                    x.center ? x.center.lon : x.lon,
-                    x.center ? x.center.lat : x.lat,
-                ]),
+            const pts = osmElementsToFacilityPoints(elements);
+            return filterFacilityPointsByDisabledOsmRefs(
+                pts,
+                (
+                    question as MatchingQuestion & {
+                        disabledFacilityOsmRefs?: string[];
+                    }
+                ).disabledFacilityOsmRefs,
             );
         }
     }
@@ -235,8 +266,14 @@ export const determineMatchingBoundary = _.memoize(
             case "park-full":
             case "custom-points": {
                 const data = await findMatchingPlaces(question);
+                const fc: FeatureCollection<Point> = Array.isArray(data)
+                    ? turf.featureCollection(data)
+                    : (data as FeatureCollection<Point>);
+                if (!fc.features.length) {
+                    break;
+                }
 
-                const voronoi = geoSpatialVoronoi(data);
+                const voronoi = geoSpatialVoronoi(fc);
                 const point = turf.point([question.lng, question.lat]);
 
                 for (const feature of voronoi.features) {
@@ -251,8 +288,44 @@ export const determineMatchingBoundary = _.memoize(
 
         return boundary;
     },
-    (question: MatchingQuestion & { geo?: unknown; cat?: unknown }) =>
-        JSON.stringify({
+    (question: MatchingQuestion & { geo?: unknown; cat?: unknown }) => {
+        const airportExtras =
+            question.type === "airport"
+                ? {
+                      activeOnly: question.activeOnly === true,
+                      disabledAirportIatas: [
+                          ...(question.disabledAirportIatas ?? []),
+                      ]
+                          .map(normalizeMatchingAirportIata)
+                          .filter(Boolean)
+                          .sort(),
+                  }
+                : {};
+        const qRefs = (
+            question as MatchingQuestion & {
+                disabledFacilityOsmRefs?: string[];
+            }
+        ).disabledFacilityOsmRefs;
+        const facilityOsmExtras =
+            question.type === "major-city" ||
+            (typeof question.type === "string" &&
+                question.type.endsWith("-full"))
+                ? {
+                      disabledFacilityOsmRefs: [...(qRefs ?? [])]
+                          .map((s) => s.trim().toLowerCase())
+                          .filter(Boolean)
+                          .sort(),
+                  }
+                : {};
+        const ptu = playableTerritoryUnion.get();
+        const playableDigest =
+            ptu?.geometry != null
+                ? turf
+                      .bbox(ptu as Feature<Polygon | MultiPolygon>)
+                      .map((x: number) => x.toFixed(4))
+                      .join(",")
+                : undefined;
+        return JSON.stringify({
             type: question.type,
             lat: question.lat,
             lng: question.lng,
@@ -261,7 +334,11 @@ export const determineMatchingBoundary = _.memoize(
             entirety: polyGeoJSON.get()
                 ? polyGeoJSON.get()
                 : mapGeoLocation.get(),
-        }),
+            playableDigest,
+            ...airportExtras,
+            ...facilityOsmExtras,
+        });
+    },
 );
 
 export const adjustPerMatching = async (

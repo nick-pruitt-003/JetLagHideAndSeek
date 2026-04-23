@@ -416,6 +416,8 @@ const tutorialSteps: TutorialStep[] = [
                                 same: true,
                                 type: "airport",
                                 activeOnly: false,
+                                disabledAirportIatas: [],
+                                disabledFacilityOsmRefs: [],
                             }}
                         />
                     </SidebarMenu>
@@ -501,6 +503,7 @@ const tutorialSteps: TutorialStep[] = [
                                 color: "green",
                                 hiderCloser: true,
                                 type: "coastline",
+                                disabledFacilityOsmRefs: [],
                             }}
                         />
                     </SidebarMenu>

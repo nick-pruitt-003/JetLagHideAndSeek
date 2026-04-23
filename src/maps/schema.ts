@@ -204,6 +204,13 @@ const baseMatchingQuestionSchema = ordinaryBaseQuestionSchema.extend({
 
 const ordinaryMatchingQuestionSchema = baseMatchingQuestionSchema.extend({
     activeOnly: z.boolean().default(false),
+    /** IATA codes excluded from Voronoi matching (normalized uppercase in app). */
+    disabledAirportIatas: z.array(z.string()).default([]),
+    /**
+     * OSM refs excluded from Voronoi matching for major-city and *-full
+     * facility types (`node/123`, `way/456`, …).
+     */
+    disabledFacilityOsmRefs: z.array(z.string()).default([]),
     type: z
         .union([
             z
@@ -322,6 +329,8 @@ const baseMeasuringQuestionSchema = ordinaryBaseQuestionSchema.extend({
 });
 
 const ordinaryMeasuringQuestionSchema = baseMeasuringQuestionSchema.extend({
+    /** Same semantics as matching: excluded `node/…` / `way/…` for *-full / major-city. */
+    disabledFacilityOsmRefs: z.array(z.string()).default([]),
     type: z
         .union([
             z.literal("coastline").describe("Coastline Question"),

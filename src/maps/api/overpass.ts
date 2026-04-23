@@ -1,5 +1,10 @@
 import * as turf from "@turf/turf";
-import type { FeatureCollection, MultiPolygon } from "geojson";
+import type {
+    Feature,
+    FeatureCollection,
+    MultiPolygon,
+    Polygon,
+} from "geojson";
 
 /** GET URLs longer than this often fail (browser/proxy limits); use POST instead. */
 const MAX_OVERPASS_GET_URL_LENGTH = 7500;
@@ -19,6 +24,7 @@ import { toast } from "react-toastify";
 import {
     additionalMapGeoLocations,
     mapGeoLocation,
+    playableTerritoryUnion,
     polyGeoJSON,
 } from "@/lib/context";
 import { cacheFetch, determineCache } from "@/maps/api/cache";
@@ -37,6 +43,30 @@ import type {
 } from "@/maps/api/types";
 import { CacheType } from "@/maps/api/types";
 import { safeUnion } from "@/maps/geo-utils/operators";
+
+/** Drop OSM elements whose center is outside the post–question-apply playable union. */
+export function filterOsmElementsToPlayableTerritory(
+    elements: any[],
+    territory: Feature<Polygon | MultiPolygon> | null | undefined,
+): any[] {
+    if (!territory?.geometry || !elements.length) return elements;
+    return elements.filter((el: any) => {
+        const lon = el.center ? el.center.lon : el.lon;
+        const lat = el.center ? el.center.lat : el.lat;
+        if (typeof lon !== "number" || typeof lat !== "number") return false;
+        return turf.booleanPointInPolygon(
+            turf.point([lon, lat]),
+            territory as Feature<Polygon | MultiPolygon>,
+        );
+    });
+}
+
+function playableTerritoryKeySuffix(): string {
+    const u = playableTerritoryUnion.get();
+    if (!u?.geometry) return "";
+    const b = turf.bbox(u as any);
+    return `|pt:${b.map((x: number) => x.toFixed(4)).join(",")}`;
+}
 
 function dedupeOsmElements(elements: any[]): any[] {
     const seen = new Set<string>();
@@ -87,8 +117,9 @@ function polyClauseStringForOverpass(fc: FeatureCollection): string {
  */
 export function overpassZoneCacheKey(): string {
     const $polyGeoJSON = polyGeoJSON.get();
+    const suffix = playableTerritoryKeySuffix();
     if ($polyGeoJSON) {
-        return `poly:${polyClauseStringForOverpass($polyGeoJSON)}`;
+        return `poly:${polyClauseStringForOverpass($polyGeoJSON)}${suffix}`;
     }
     const primaryLocation = mapGeoLocation.get();
     const additionalLocations = additionalMapGeoLocations
@@ -103,7 +134,7 @@ export function overpassZoneCacheKey(): string {
         )
         .sort()
         .join("|");
-    return `rel:${ids}`;
+    return `rel:${ids}${suffix}`;
 }
 
 const getOverpassData = async (
@@ -641,6 +672,10 @@ out ${outType};
             );
         });
     }
+    data.elements = filterOsmElementsToPlayableTerritory(
+        data.elements,
+        playableTerritoryUnion.get(),
+    );
     return data as { elements: any[]; remark?: string };
 };
 

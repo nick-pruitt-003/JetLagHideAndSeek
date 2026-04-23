@@ -510,6 +510,56 @@ describe("applyQuestionFilters", () => {
         ]);
     });
 
+    it("matchingFacilityCacheKey for airport includes sorted disabled IATA list", () => {
+        const base = {
+            type: "airport" as const,
+            lat: 0,
+            lng: 0,
+            same: true,
+            activeOnly: false,
+            drag: false,
+            color: "black" as const,
+            collapsed: false,
+            disabledAirportIatas: [] as string[],
+        };
+        const zoneKey = "z";
+        const empty = matchingFacilityCacheKey(base as any, zoneKey);
+        const withTeb = matchingFacilityCacheKey(
+            { ...base, disabledAirportIatas: ["TEB"] } as any,
+            zoneKey,
+        );
+        expect(empty).not.toBe(withTeb);
+        const ab = matchingFacilityCacheKey(
+            { ...base, disabledAirportIatas: ["FRG", "TEB"] } as any,
+            zoneKey,
+        );
+        const ba = matchingFacilityCacheKey(
+            { ...base, disabledAirportIatas: ["TEB", "FRG"] } as any,
+            zoneKey,
+        );
+        expect(ab).toBe(ba);
+    });
+
+    it("matchingFacilityCacheKey for major-city includes sorted disabled OSM refs", () => {
+        const base = {
+            type: "major-city" as const,
+            lat: 0,
+            lng: 0,
+            same: true,
+            drag: false,
+            color: "black" as const,
+            collapsed: false,
+            disabledFacilityOsmRefs: [] as string[],
+        };
+        const zoneKey = "z";
+        const a = matchingFacilityCacheKey(base as any, zoneKey);
+        const b = matchingFacilityCacheKey(
+            { ...base, disabledFacilityOsmRefs: ["node/1", "way/2"] } as any,
+            zoneKey,
+        );
+        expect(a).not.toBe(b);
+    });
+
     it("returns the same circles when measuring cache misses for an mcdonalds question", async () => {
         const circles = build([
             { id: "a", lng: -73.98, lat: 40.75, name: "Alpha" },

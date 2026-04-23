@@ -1,5 +1,10 @@
 import { persistentAtom } from "@nanostores/persistent";
-import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
+import type {
+    Feature,
+    FeatureCollection,
+    MultiPolygon,
+    Polygon,
+} from "geojson";
 import type { Map } from "leaflet";
 import { atom, computed, onSet } from "nanostores";
 
@@ -186,6 +191,16 @@ export const displayHidingZonesStyle = persistentAtom<
     "zones" | "stations" | "no-overlap" | "no-display"
 >("displayHidingZonesStyle", "zones");
 export const questionFinishedMapData = atom<any>(null);
+
+/**
+ * Union of the playable map territory after {@link applyQuestionsToMapGeoData}
+ * (same geometry the map uses before the world “holed” mask). Used to drop
+ * Overpass POIs whose centers fall outside the visible game area (e.g. EWR
+ * when the territory union is NYC-only).
+ */
+export const playableTerritoryUnion = atom<Feature<
+    Polygon | MultiPolygon
+> | null>(null);
 
 export const trainStations = atom<StationCircle[]>([]);
 onSet(trainStations, ({ newValue }) => {

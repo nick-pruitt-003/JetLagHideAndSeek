@@ -2,6 +2,7 @@ import { useStore } from "@nanostores/react";
 import { Label } from "@radix-ui/react-label";
 import * as React from "react";
 
+import { FacilityOsmPlayToggles } from "@/components/FacilityOsmPlayToggles";
 import { QuestionCard } from "@/components/cards/base";
 import CustomInitDialog from "@/components/CustomInitDialog";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
@@ -62,6 +63,25 @@ export const MeasuringQuestionComponent = ({
     let questionSpecific = <></>;
 
     switch (data.type) {
+        case "city":
+        case "aquarium-full":
+        case "zoo-full":
+        case "theme_park-full":
+        case "peak-full":
+        case "museum-full":
+        case "hospital-full":
+        case "cinema-full":
+        case "library-full":
+        case "golf_course-full":
+        case "consulate-full":
+        case "park-full":
+            questionSpecific = (
+                <FacilityOsmPlayToggles
+                    data={data}
+                    questionKey={questionKey}
+                />
+            );
+            break;
         case "mcdonalds":
         case "seven11":
             questionSpecific = (

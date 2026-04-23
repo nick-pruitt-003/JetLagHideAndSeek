@@ -1,0 +1,134 @@
+import * as turf from "@turf/turf";
+import type { Feature, Point } from "geojson";
+import { toast } from "react-toastify";
+
+import {
+    findPlacesInZone,
+    LOCATION_FIRST_TAG,
+    prettifyLocation,
+} from "@/maps/api";
+import type { APILocations } from "@/maps/schema";
+
+export function osmElementToRef(el: {
+    type?: string;
+    id?: number;
+}): string {
+    const t = String(el.type ?? "").toLowerCase();
+    if (
+        (t !== "node" && t !== "way" && t !== "relation") ||
+        typeof el.id !== "number"
+    ) {
+        return "";
+    }
+    return `${t}/${el.id}`;
+}
+
+export function normalizeFacilityOsmRef(ref: string): string {
+    return ref.trim().toLowerCase();
+}
+
+export function labelFromOsmFacilityElement(x: {
+    tags?: Record<string, string | undefined>;
+}): string {
+    const tags = x.tags ?? {};
+    const raw =
+        (typeof tags.name === "string" && tags.name) ||
+        (typeof tags["name:en"] === "string" && tags["name:en"]) ||
+        osmElementToRef(x as { type?: string; id?: number });
+    return String(raw || "?").trim();
+}
+
+export function osmElementsToFacilityPoints(elements: any[]): Feature<Point>[] {
+    const out: Feature<Point>[] = [];
+    for (const x of elements) {
+        const ref = osmElementToRef(x);
+        if (!ref) continue;
+        const lng = x.center ? x.center.lon : x.lon;
+        const lat = x.center ? x.center.lat : x.lat;
+        if (typeof lng !== "number" || typeof lat !== "number") continue;
+        const name = labelFromOsmFacilityElement(x);
+        out.push(turf.point([lng, lat], { osmRef: ref, name }));
+    }
+    return out;
+}
+
+export function filterFacilityPointsByDisabledOsmRefs(
+    points: Feature<Point>[],
+    disabledRefs: readonly string[] | undefined,
+): Feature<Point>[] {
+    const disabled = new Set(
+        (disabledRefs ?? []).map(normalizeFacilityOsmRef).filter(Boolean),
+    );
+    if (disabled.size === 0) return points;
+    return points.filter((p) => {
+        const ref = normalizeFacilityOsmRef(
+            String((p.properties as { osmRef?: string })?.osmRef ?? ""),
+        );
+        return ref.length > 0 && !disabled.has(ref);
+    });
+}
+
+export async function fetchFullFacilityElements(
+    location: APILocations,
+    loadingText: string,
+): Promise<{ elements: any[]; remark?: string }> {
+    const data = await findPlacesInZone(
+        `[${LOCATION_FIRST_TAG[location]}=${location}]`,
+        loadingText,
+        "nwr",
+        "center",
+        [],
+        60,
+    );
+    return { elements: data.elements ?? [], remark: data.remark };
+}
+
+export function validateFullFacilityFetch(
+    elements: any[],
+    remark: string | undefined,
+    location: APILocations,
+): elements is any[] {
+    const label = prettifyLocation(location, true).toLowerCase();
+    if (remark?.startsWith("runtime error")) {
+        toast.error(
+            `Error finding ${label}. Please enable hiding zone mode and switch to the Large Game variation of this question.`,
+        );
+        return false;
+    }
+    if (elements.length >= 1000) {
+        toast.error(
+            `Too many ${label} found (${elements.length}). Please enable hiding zone mode and switch to the Large Game variation of this question.`,
+        );
+        return false;
+    }
+    return true;
+}
+
+export function supportsOrdinaryFacilityOsmPicks(type: string): boolean {
+    return (
+        type === "major-city" || type === "city" || type.endsWith("-full")
+    );
+}
+
+/** Unfiltered OSM facility points for UI lists (major-city / city and *-full). */
+export async function listOrdinaryFacilityVoronoiCandidates(q: {
+    type: string;
+}): Promise<Feature<Point>[]> {
+    if (q.type === "major-city" || q.type === "city") {
+        const data = await findPlacesInZone(
+            '[place=city]["population"~"^[1-9]+[0-9]{6}$"]',
+            "Finding cities...",
+        );
+        return osmElementsToFacilityPoints(data.elements ?? []);
+    }
+    if (q.type.endsWith("-full")) {
+        const location = q.type.split("-full")[0] as APILocations;
+        const { elements, remark } = await fetchFullFacilityElements(
+            location,
+            `Finding ${prettifyLocation(location, true).toLowerCase()}...`,
+        );
+        if (!validateFullFacilityFetch(elements, remark, location)) return [];
+        return osmElementsToFacilityPoints(elements);
+    }
+    return [];
+}

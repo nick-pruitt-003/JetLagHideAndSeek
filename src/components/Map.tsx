@@ -4,6 +4,7 @@ import "leaflet-contextmenu";
 
 import { useStore } from "@nanostores/react";
 import * as turf from "@turf/turf";
+import type { Feature, MultiPolygon, Polygon } from "geojson";
 import * as L from "leaflet";
 import { useEffect, useMemo, useRef } from "react";
 import { MapContainer, ScaleControl, TileLayer } from "react-leaflet";
@@ -28,6 +29,7 @@ import {
     mapRefreshNonce,
     permanentOverlay,
     planningModeEnabled,
+    playableTerritoryUnion,
     polyGeoJSON,
     questionFinishedMapData,
     questions,
@@ -36,7 +38,7 @@ import {
     triggerLocalRefresh,
 } from "@/lib/context";
 import { cn } from "@/lib/utils";
-import { applyQuestionsToMapGeoData, holedMask } from "@/maps";
+import { applyQuestionsToMapGeoData, holedMask, safeUnion } from "@/maps";
 import { hiderifyQuestion } from "@/maps";
 import { clearCache, determineMapBoundaries } from "@/maps/api";
 
@@ -189,6 +191,12 @@ export const Map = ({ className }: { className?: string }) => {
             }
         }
 
+        if (!mapGeoData) {
+            playableTerritoryUnion.set(null);
+            isLoading.set(false);
+            return;
+        }
+
         if ($hiderMode !== false) {
             for (const question of $questions) {
                 await hiderifyQuestion(question);
@@ -221,9 +229,20 @@ export const Map = ({ className }: { className?: string }) => {
                 },
             );
 
+            const territoryBeforeHoled = mapGeoData;
+            try {
+                playableTerritoryUnion.set(
+                    safeUnion(territoryBeforeHoled!) as Feature<
+                        Polygon | MultiPolygon
+                    >,
+                );
+            } catch {
+                playableTerritoryUnion.set(null);
+            }
+
             mapGeoData = {
                 type: "FeatureCollection",
-                features: [holedMask(mapGeoData!)!],
+                features: [holedMask(territoryBeforeHoled!)!],
             };
 
             map.eachLayer((layer: any) => {
@@ -255,6 +274,7 @@ export const Map = ({ className }: { className?: string }) => {
             }
         } catch (error) {
             console.log(error);
+            playableTerritoryUnion.set(null);
 
             isLoading.set(false);
             // Previously this only fired if no other toast was visible —

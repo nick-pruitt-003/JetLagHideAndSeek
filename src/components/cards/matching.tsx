@@ -1,8 +1,11 @@
 import { useStore } from "@nanostores/react";
+import type { Feature, Point } from "geojson";
+import { Loader2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "react-toastify";
 
 import { QuestionCard } from "@/components/cards/base";
+import { FacilityOsmPlayToggles } from "@/components/FacilityOsmPlayToggles";
 import CustomInitDialog from "@/components/CustomInitDialog";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import PresetsDialog from "@/components/PresetsDialog";
@@ -15,11 +18,14 @@ import {
 } from "@/components/ui/sidebar-l";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
+    additionalMapGeoLocations,
     customInitPreference,
     displayHidingZones,
     drawingQuestionKey,
     hiderMode,
     isLoading,
+    mapGeoLocation,
+    polyGeoJSON,
     questionModified,
     questions,
     triggerLocalRefresh,
@@ -28,6 +34,8 @@ import { cn } from "@/lib/utils";
 import {
     determineMatchingBoundary,
     findMatchingPlaces,
+    listAirportMatchingCandidates,
+    normalizeMatchingAirportIata,
 } from "@/maps/questions/matching";
 import {
     determineUnionizedStrings,
@@ -35,6 +43,167 @@ import {
     matchingQuestionSchema,
     NO_GROUP,
 } from "@/maps/schema";
+
+function AirportPlayToggles({
+    data,
+    questionKey,
+}: {
+    data: MatchingQuestion & { type: "airport" };
+    questionKey: number;
+}) {
+    const $displayHidingZones = useStore(displayHidingZones);
+    const $isLoading = useStore(isLoading);
+    const $polyGeo = useStore(polyGeoJSON);
+    const $mapLoc = useStore(mapGeoLocation);
+    const $additional = useStore(additionalMapGeoLocations);
+    const [candidates, setCandidates] = React.useState<Feature<Point>[]>([]);
+    const [loading, setLoading] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!$displayHidingZones) {
+            setCandidates([]);
+            return;
+        }
+        let cancelled = false;
+        setLoading(true);
+        listAirportMatchingCandidates(data)
+            .then((pts) => {
+                if (!cancelled) setCandidates(pts);
+            })
+            .catch((err) => {
+                console.error("AirportPlayToggles: load candidates failed", err);
+                if (!cancelled) setCandidates([]);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        $displayHidingZones,
+        questionKey,
+        data.activeOnly,
+        data.type,
+        $polyGeo,
+        $mapLoc,
+        $additional,
+    ]);
+
+    const disabledSet = new Set(
+        (data.disabledAirportIatas ?? []).map(normalizeMatchingAirportIata),
+    );
+
+    return (
+        <>
+            <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
+                <div className="flex flex-row items-center justify-between w-full">
+                    <Label className="font-semibold">
+                        Active airports only?
+                    </Label>
+                    <Checkbox
+                        checked={data.activeOnly}
+                        onCheckedChange={(v) =>
+                            questionModified((data.activeOnly = !!v))
+                        }
+                        disabled={!data.drag || $isLoading}
+                    />
+                </div>
+            </SidebarMenuItem>
+            <SidebarMenuItem
+                className={`${MENU_ITEM_CLASSNAME} flex-col items-stretch gap-2`}
+            >
+                {!$displayHidingZones ? (
+                    <p className="text-xs text-muted-foreground px-1">
+                        Turn on hiding zones to load airports for this territory.
+                    </p>
+                ) : loading ? (
+                    <div className="flex justify-center py-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                ) : candidates.length === 0 ? (
+                    <p className="text-xs text-muted-foreground px-1">
+                        No IATA airports found in this territory.
+                    </p>
+                ) : (
+                    <>
+                        <Label className="text-xs font-semibold">
+                            Airports in play
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            Uncheck to exclude an airport from matching (e.g.
+                            TEB, FRG, HVN).
+                        </p>
+                        <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-md border border-border p-2">
+                            {[...candidates]
+                                .sort((a, b) =>
+                                    String(
+                                        (a.properties as { name?: string })
+                                            ?.name ?? "",
+                                    ).localeCompare(
+                                        String(
+                                            (b.properties as { name?: string })
+                                                ?.name ?? "",
+                                        ),
+                                    ),
+                                )
+                                .map((pt) => {
+                                    const iata = normalizeMatchingAirportIata(
+                                        String(
+                                            (pt.properties as { iata?: string })
+                                                ?.iata ?? "",
+                                        ),
+                                    );
+                                    const name =
+                                        (pt.properties as { name?: string })
+                                            ?.name ?? iata;
+                                    const inPlay = !disabledSet.has(iata);
+                                    return (
+                                        <div
+                                            key={iata}
+                                            className="flex items-start gap-2 text-xs"
+                                        >
+                                            <Checkbox
+                                                className="mt-0.5"
+                                                checked={inPlay}
+                                                onCheckedChange={(v) => {
+                                                    const next = new Set(
+                                                        (
+                                                            data.disabledAirportIatas ??
+                                                            []
+                                                        ).map(
+                                                            normalizeMatchingAirportIata,
+                                                        ),
+                                                    );
+                                                    if (v === true) next.delete(iata);
+                                                    else next.add(iata);
+                                                    data.disabledAirportIatas =
+                                                        [...next].sort();
+                                                    questionModified();
+                                                }}
+                                                disabled={!data.drag || $isLoading}
+                                            />
+                                            <span className="min-w-0 leading-snug">
+                                                <span className="font-mono tabular-nums">
+                                                    {iata}
+                                                </span>
+                                                {name !== iata ? (
+                                                    <span className="text-muted-foreground">
+                                                        {" "}
+                                                        {name}
+                                                    </span>
+                                                ) : null}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                        </div>
+                    </>
+                )}
+            </SidebarMenuItem>
+        </>
+    );
+}
 
 export const MatchingQuestionComponent = ({
     data,
@@ -117,22 +286,29 @@ export const MatchingQuestionComponent = ({
             break;
         case "airport":
             questionSpecific = (
-                <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
-                    <div className="flex flex-row items-center justify-between w-full">
-                        <Label className="font-semibold">
-                            Active airports only?
-                        </Label>
-                        <Checkbox
-                            checked={(data as any).activeOnly ?? false}
-                            onCheckedChange={(v) =>
-                                questionModified(
-                                    ((data as any).activeOnly = !!v),
-                                )
-                            }
-                            disabled={!data.drag || $isLoading}
-                        />
-                    </div>
-                </SidebarMenuItem>
+                <AirportPlayToggles
+                    data={data as MatchingQuestion & { type: "airport" }}
+                    questionKey={questionKey}
+                />
+            );
+            break;
+        case "major-city":
+        case "aquarium-full":
+        case "zoo-full":
+        case "theme_park-full":
+        case "peak-full":
+        case "museum-full":
+        case "hospital-full":
+        case "cinema-full":
+        case "library-full":
+        case "golf_course-full":
+        case "consulate-full":
+        case "park-full":
+            questionSpecific = (
+                <FacilityOsmPlayToggles
+                    data={data}
+                    questionKey={questionKey}
+                />
             );
             break;
         case "same-train-line":

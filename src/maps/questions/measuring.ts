@@ -1,12 +1,11 @@
 import * as turf from "@turf/turf";
-import type { Feature, MultiPolygon } from "geojson";
+import type { Feature, MultiPolygon, Polygon } from "geojson";
 import _ from "lodash";
-import { toast } from "react-toastify";
-
 import {
     hiderMode,
     mapGeoJSON,
     mapGeoLocation,
+    playableTerritoryUnion,
     polyGeoJSON,
     trainStations,
 } from "@/lib/context";
@@ -14,12 +13,17 @@ import {
     fetchCoastline,
     findPlacesInZone,
     findPlacesSpecificInZone,
-    LOCATION_FIRST_TAG,
     nearestToQuestion,
     overpassAirportIataFilter,
     prettifyLocation,
     QuestionSpecificLocation,
 } from "@/maps/api";
+import {
+    fetchFullFacilityElements,
+    filterFacilityPointsByDisabledOsmRefs,
+    osmElementsToFacilityPoints,
+    validateFullFacilityFetch,
+} from "@/maps/questions/facility-full";
 import osmtogeojson from "@/maps/api/osm-to-geojson";
 import {
     arcBufferToPoint,
@@ -164,24 +168,27 @@ export const determineMeasuringBoundary = async (
                     ),
                 ).features[0],
             ];
-        case "city":
+        case "city": {
+            const cityData = await findPlacesInZone(
+                '[place=city]["population"~"^[1-9]+[0-9]{6}$"]', // The regex is faster than (if:number(t["population"])>1000000)
+                "Finding cities...",
+            );
+            const pts = osmElementsToFacilityPoints(cityData.elements ?? []);
+            const filtered = filterFacilityPointsByDisabledOsmRefs(
+                pts,
+                (
+                    question as MeasuringQuestion & {
+                        disabledFacilityOsmRefs?: string[];
+                    }
+                ).disabledFacilityOsmRefs,
+            );
+            if (filtered.length === 0) {
+                return [turf.multiPolygon([])];
+            }
             return [
-                turf.combine(
-                    turf.featureCollection(
-                        (
-                            await findPlacesInZone(
-                                '[place=city]["population"~"^[1-9]+[0-9]{6}$"]', // The regex is faster than (if:number(t["population"])>1000000)
-                                "Finding cities...",
-                            )
-                        ).elements.map((x: any) =>
-                            turf.point([
-                                x.center ? x.center.lon : x.lon,
-                                x.center ? x.center.lat : x.lat,
-                            ]),
-                        ),
-                    ),
-                ).features[0],
+                turf.combine(turf.featureCollection(filtered)).features[0],
             ];
+        }
         case "aquarium-full":
         case "zoo-full":
         case "theme_park-full":
@@ -195,46 +202,27 @@ export const determineMeasuringBoundary = async (
         case "park-full": {
             const location = question.type.split("-full")[0] as APILocations;
 
-            const data = await findPlacesInZone(
-                `[${LOCATION_FIRST_TAG[location]}=${location}]`,
+            const { elements, remark } = await fetchFullFacilityElements(
+                location,
                 `Finding ${prettifyLocation(location, true).toLowerCase()}...`,
-                "nwr",
-                "center",
-                [],
-                60,
             );
-
-            if (data.remark && data.remark.startsWith("runtime error")) {
-                toast.error(
-                    `Error finding ${prettifyLocation(
-                        location,
-                        true,
-                    ).toLowerCase()}. Please enable hiding zone mode and switch to the Large Game variation of this question.`,
-                );
+            if (!validateFullFacilityFetch(elements, remark, location)) {
                 return [turf.multiPolygon([])];
             }
-
-            if (data.elements.length >= 1000) {
-                toast.error(
-                    `Too many ${prettifyLocation(
-                        location,
-                        true,
-                    ).toLowerCase()} found (${data.elements.length}). Please enable hiding zone mode and switch to the Large Game variation of this question.`,
-                );
+            const pts = osmElementsToFacilityPoints(elements);
+            const filtered = filterFacilityPointsByDisabledOsmRefs(
+                pts,
+                (
+                    question as MeasuringQuestion & {
+                        disabledFacilityOsmRefs?: string[];
+                    }
+                ).disabledFacilityOsmRefs,
+            );
+            if (filtered.length === 0) {
                 return [turf.multiPolygon([])];
             }
-
             return [
-                turf.combine(
-                    turf.featureCollection(
-                        data.elements.map((x: any) =>
-                            turf.point([
-                                x.center ? x.center.lon : x.lon,
-                                x.center ? x.center.lat : x.lat,
-                            ]),
-                        ),
-                    ),
-                ).features[0],
+                turf.combine(turf.featureCollection(filtered)).features[0],
             ];
         }
         case "custom-measure":
@@ -271,16 +259,43 @@ const bufferedDeterminer = _.memoize(
             question.lng,
         );
     },
-    (question) =>
-        JSON.stringify({
+    (question) => {
+        const ptu = playableTerritoryUnion.get();
+        const playableDigest =
+            ptu?.geometry != null
+                ? turf
+                      .bbox(ptu as Feature<Polygon | MultiPolygon>)
+                      .map((x: number) => x.toFixed(4))
+                      .join(",")
+                : undefined;
+        const mRefs = (
+            question as MeasuringQuestion & {
+                disabledFacilityOsmRefs?: string[];
+            }
+        ).disabledFacilityOsmRefs;
+        const facilityOsmExtras =
+            question.type === "city" ||
+            (typeof question.type === "string" &&
+                question.type.endsWith("-full"))
+                ? {
+                      disabledFacilityOsmRefs: [...(mRefs ?? [])]
+                          .map((s) => s.trim().toLowerCase())
+                          .filter(Boolean)
+                          .sort(),
+                  }
+                : {};
+        return JSON.stringify({
             type: question.type,
             lat: question.lat,
             lng: question.lng,
             entirety: polyGeoJSON.get()
                 ? polyGeoJSON.get()
                 : mapGeoLocation.get(),
+            playableDigest,
             geo: (question as any).geo,
-        }),
+            ...facilityOsmExtras,
+        });
+    },
 );
 
 export const adjustPerMeasuring = async (
