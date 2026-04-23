@@ -21,6 +21,7 @@ import {
     findPlacesInZone,
     nearestToQuestion,
     overpassAirportIataFilter,
+    OVERPASS_MAJOR_CITY_FILTER,
     prettifyLocation,
     trainLineNodeFinder,
 } from "@/maps/api";
@@ -37,6 +38,7 @@ import type {
     APILocations,
     HomeGameMatchingQuestions,
     MatchingQuestion,
+    MatchingQuestionWithFacilityOsmRefs,
 } from "@/maps/schema";
 
 export function normalizeMatchingAirportIata(s: string): string {
@@ -107,17 +109,14 @@ export const findMatchingPlaces = async (question: MatchingQuestion) => {
         }
         case "major-city": {
             const cityData = await findPlacesInZone(
-                '[place=city]["population"~"^[1-9]+[0-9]{6}$"]', // The regex is faster than (if:number(t["population"])>1000000)
+                OVERPASS_MAJOR_CITY_FILTER,
                 "Finding cities...",
             );
             const pts = osmElementsToFacilityPoints(cityData.elements ?? []);
             return filterFacilityPointsByDisabledOsmRefs(
                 pts,
-                (
-                    question as MatchingQuestion & {
-                        disabledFacilityOsmRefs?: string[];
-                    }
-                ).disabledFacilityOsmRefs,
+                (question as MatchingQuestionWithFacilityOsmRefs)
+                    .disabledFacilityOsmRefs,
             );
         }
         case "custom-points": {
@@ -146,11 +145,8 @@ export const findMatchingPlaces = async (question: MatchingQuestion) => {
             const pts = osmElementsToFacilityPoints(elements);
             return filterFacilityPointsByDisabledOsmRefs(
                 pts,
-                (
-                    question as MatchingQuestion & {
-                        disabledFacilityOsmRefs?: string[];
-                    }
-                ).disabledFacilityOsmRefs,
+                (question as MatchingQuestionWithFacilityOsmRefs)
+                    .disabledFacilityOsmRefs,
             );
         }
     }
@@ -301,11 +297,8 @@ export const determineMatchingBoundary = _.memoize(
                           .sort(),
                   }
                 : {};
-        const qRefs = (
-            question as MatchingQuestion & {
-                disabledFacilityOsmRefs?: string[];
-            }
-        ).disabledFacilityOsmRefs;
+        const qRefs = (question as MatchingQuestionWithFacilityOsmRefs)
+            .disabledFacilityOsmRefs;
         const facilityOsmExtras =
             question.type === "major-city" ||
             (typeof question.type === "string" &&

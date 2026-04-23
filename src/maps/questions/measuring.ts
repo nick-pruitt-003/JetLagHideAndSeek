@@ -15,6 +15,7 @@ import {
     findPlacesSpecificInZone,
     nearestToQuestion,
     overpassAirportIataFilter,
+    OVERPASS_MAJOR_CITY_FILTER,
     prettifyLocation,
     QuestionSpecificLocation,
 } from "@/maps/api";
@@ -36,6 +37,7 @@ import type {
     APILocations,
     HomeGameMeasuringQuestions,
     MeasuringQuestion,
+    MeasuringQuestionWithFacilityOsmRefs,
 } from "@/maps/schema";
 
 const highSpeedBase = _.memoize(
@@ -170,17 +172,14 @@ export const determineMeasuringBoundary = async (
             ];
         case "city": {
             const cityData = await findPlacesInZone(
-                '[place=city]["population"~"^[1-9]+[0-9]{6}$"]', // The regex is faster than (if:number(t["population"])>1000000)
+                OVERPASS_MAJOR_CITY_FILTER,
                 "Finding cities...",
             );
             const pts = osmElementsToFacilityPoints(cityData.elements ?? []);
             const filtered = filterFacilityPointsByDisabledOsmRefs(
                 pts,
-                (
-                    question as MeasuringQuestion & {
-                        disabledFacilityOsmRefs?: string[];
-                    }
-                ).disabledFacilityOsmRefs,
+                (question as MeasuringQuestionWithFacilityOsmRefs)
+                    .disabledFacilityOsmRefs,
             );
             if (filtered.length === 0) {
                 return [turf.multiPolygon([])];
@@ -212,11 +211,8 @@ export const determineMeasuringBoundary = async (
             const pts = osmElementsToFacilityPoints(elements);
             const filtered = filterFacilityPointsByDisabledOsmRefs(
                 pts,
-                (
-                    question as MeasuringQuestion & {
-                        disabledFacilityOsmRefs?: string[];
-                    }
-                ).disabledFacilityOsmRefs,
+                (question as MeasuringQuestionWithFacilityOsmRefs)
+                    .disabledFacilityOsmRefs,
             );
             if (filtered.length === 0) {
                 return [turf.multiPolygon([])];
@@ -268,11 +264,8 @@ const bufferedDeterminer = _.memoize(
                       .map((x: number) => x.toFixed(4))
                       .join(",")
                 : undefined;
-        const mRefs = (
-            question as MeasuringQuestion & {
-                disabledFacilityOsmRefs?: string[];
-            }
-        ).disabledFacilityOsmRefs;
+        const mRefs = (question as MeasuringQuestionWithFacilityOsmRefs)
+            .disabledFacilityOsmRefs;
         const facilityOsmExtras =
             question.type === "city" ||
             (typeof question.type === "string" &&

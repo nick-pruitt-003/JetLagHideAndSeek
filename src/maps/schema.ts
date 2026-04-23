@@ -450,6 +450,10 @@ export type ThermometerQuestion = z.infer<typeof thermometerQuestionSchema>;
 export type TentacleQuestion = z.infer<typeof tentacleQuestionSchema>;
 export type APILocations = z.infer<typeof apiLocationSchema>;
 export type MatchingQuestion = z.infer<typeof matchingQuestionSchema>;
+/** Union-safe access to optional facility OSM exclusions on ordinary matching types. */
+export type MatchingQuestionWithFacilityOsmRefs = MatchingQuestion & {
+    disabledFacilityOsmRefs?: string[];
+};
 export type HomeGameMatchingQuestions = z.infer<
     typeof homeGameMatchingQuestionsSchema
 >;
@@ -461,6 +465,9 @@ export type CustomMeasuringQuestion = z.infer<
     typeof customMeasuringQuestionSchema
 >;
 export type MeasuringQuestion = z.infer<typeof measuringQuestionSchema>;
+export type MeasuringQuestionWithFacilityOsmRefs = MeasuringQuestion & {
+    disabledFacilityOsmRefs?: string[];
+};
 export type HomeGameMeasuringQuestions = z.infer<
     typeof homeGameMeasuringQuestionsSchema
 >;

@@ -12,13 +12,13 @@
         "test": "vitest",
         "knip": "knip"
     },
-    "packageManager": "pnpm@10.33.0",
+    "packageManager": "pnpm@10.33.1",
     "dependencies": {
-        "@arcgis/core": "^5.0.17",
+        "@arcgis/core": "^5.0.18",
         "@astrojs/check": "^0.9.8",
-        "@astrojs/node": "^10.0.5",
+        "@astrojs/node": "^10.0.6",
         "@astrojs/partytown": "^2.1.7",
-        "@astrojs/react": "5.0.3",
+        "@astrojs/react": "^5.0.4",
         "@nanostores/persistent": "^1.3.3",
         "@nanostores/react": "^1.1.0",
         "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -34,10 +34,10 @@
         "@radix-ui/react-tooltip": "^1.2.8",
         "@react-leaflet/core": "3.0.0",
         "@serwist/window": "9.5.7",
-        "@tailwindcss/postcss": "^4.2.2",
+        "@tailwindcss/postcss": "^4.2.4",
         "@terraformer/arcgis": "^2.1.2",
         "@turf/turf": "^7.3.5",
-        "astro": "^6.1.8",
+        "astro": "^6.1.9",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "1.1.1",
@@ -64,7 +64,7 @@
         "react-leaflet-draw": "^0.21.0",
         "react-toastify": "^11.1.0",
         "tailwind-merge": "^3.5.0",
-        "tailwindcss": "^4.2.2",
+        "tailwindcss": "^4.2.4",
         "tailwindcss-animate": "^1.0.7",
         "vaul": "^1.1.2",
         "zod": "^4.3.6"
@@ -91,12 +91,12 @@
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-simple-import-sort": "^13.0.0",
         "globals": "^17.5.0",
-        "knip": "^6.5.0",
+        "knip": "^6.6.1",
         "prettier": "3.8.3",
         "serwist": "^9.5.7",
         "typescript": "^6.0.3",
         "typescript-eslint": "^8.59.0",
-        "vitest": "^4.1.4"
+        "vitest": "^4.1.5"
     },
     "engines": {
         "node": ">=22.22.2"

@@ -41,7 +41,11 @@ import {
 import { extractStationName } from "@/maps/geo-utils/special";
 import { geoSpatialVoronoi } from "@/maps/geo-utils/voronoi";
 import { findMatchingPlaces } from "@/maps/questions/matching";
-import type { MatchingQuestion, Question } from "@/maps/schema";
+import type {
+    MatchingQuestion,
+    MatchingQuestionWithFacilityOsmRefs,
+    Question,
+} from "@/maps/schema";
 
 // ---------------------------------------------------------------------------
 // Phase A: build the raw circle set (no question filtering)
@@ -218,9 +222,8 @@ export type ToastFn = typeof toastFn;
 function normalizedDisabledFacilityRefsForCache(
     data: MatchingQuestion,
 ): string[] {
-    const refs = (
-        data as MatchingQuestion & { disabledFacilityOsmRefs?: string[] }
-    ).disabledFacilityOsmRefs;
+    const refs = (data as MatchingQuestionWithFacilityOsmRefs)
+        .disabledFacilityOsmRefs;
     return [...(refs ?? [])]
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean)

@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import {
     findPlacesInZone,
     LOCATION_FIRST_TAG,
+    OVERPASS_MAJOR_CITY_FILTER,
     prettifyLocation,
 } from "@/maps/api";
 import type { APILocations } from "@/maps/schema";
@@ -116,7 +117,7 @@ export async function listOrdinaryFacilityVoronoiCandidates(q: {
 }): Promise<Feature<Point>[]> {
     if (q.type === "major-city" || q.type === "city") {
         const data = await findPlacesInZone(
-            '[place=city]["population"~"^[1-9]+[0-9]{6}$"]',
+            OVERPASS_MAJOR_CITY_FILTER,
             "Finding cities...",
         );
         return osmElementsToFacilityPoints(data.elements ?? []);

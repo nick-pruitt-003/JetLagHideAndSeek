@@ -1,7 +1,5 @@
 import { useStore } from "@nanostores/react";
-import type { Feature, Point } from "geojson";
 import { Loader2 } from "lucide-react";
-import * as React from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -17,6 +15,7 @@ import {
     polyGeoJSON,
     questionModified,
 } from "@/lib/context";
+import { useOverpassCandidateList } from "@/hooks/use-overpass-candidate-list";
 import { prettifyLocation } from "@/maps/api";
 import {
     listOrdinaryFacilityVoronoiCandidates,
@@ -52,41 +51,22 @@ export function FacilityOsmPlayToggles({
     const $polyGeo = useStore(polyGeoJSON);
     const $mapLoc = useStore(mapGeoLocation);
     const $additional = useStore(additionalMapGeoLocations);
-    const [candidates, setCandidates] = React.useState<Feature<Point>[]>([]);
-    const [loading, setLoading] = React.useState(false);
 
     const supported = supportsOrdinaryFacilityOsmPicks(data.type);
 
-    React.useEffect(() => {
-        if (!supported || !$displayHidingZones) {
-            setCandidates([]);
-            return;
-        }
-        let cancelled = false;
-        setLoading(true);
-        listOrdinaryFacilityVoronoiCandidates(data)
-            .then((pts) => {
-                if (!cancelled) setCandidates(pts);
-            })
-            .catch((err) => {
-                console.error("FacilityOsmPlayToggles: load candidates failed", err);
-                if (!cancelled) setCandidates([]);
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [
-        supported,
-        $displayHidingZones,
-        questionKey,
-        data.type,
-        $polyGeo,
-        $mapLoc,
-        $additional,
-    ]);
+    const { items: candidates, loading } = useOverpassCandidateList(
+        supported && $displayHidingZones,
+        () => listOrdinaryFacilityVoronoiCandidates(data),
+        [
+            supported,
+            $displayHidingZones,
+            questionKey,
+            data.type,
+            $polyGeo,
+            $mapLoc,
+            $additional,
+        ],
+    );
 
     const disabledSet = new Set(
         (data.disabledFacilityOsmRefs ?? []).map(normalizeFacilityOsmRef),
@@ -144,9 +124,9 @@ export function FacilityOsmPlayToggles({
                                         ?.name ?? osmRef;
                                 const inPlay = !disabledSet.has(osmRef);
                                 return (
-                                    <div
+                                    <label
                                         key={osmRef}
-                                        className="flex items-start gap-2 text-xs"
+                                        className="flex cursor-pointer items-start gap-2 text-xs"
                                     >
                                         <Checkbox
                                             className="mt-0.5"
@@ -174,7 +154,7 @@ export function FacilityOsmPlayToggles({
                                                 {osmRef}
                                             </span>
                                         </span>
-                                    </div>
+                                    </label>
                                 );
                             })}
                     </div>

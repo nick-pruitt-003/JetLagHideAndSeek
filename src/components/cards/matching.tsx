@@ -1,5 +1,4 @@
 import { useStore } from "@nanostores/react";
-import type { Feature, Point } from "geojson";
 import { Loader2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "react-toastify";
@@ -30,6 +29,7 @@ import {
     questions,
     triggerLocalRefresh,
 } from "@/lib/context";
+import { useOverpassCandidateList } from "@/hooks/use-overpass-candidate-list";
 import { cn } from "@/lib/utils";
 import {
     determineMatchingBoundary,
@@ -56,39 +56,19 @@ function AirportPlayToggles({
     const $polyGeo = useStore(polyGeoJSON);
     const $mapLoc = useStore(mapGeoLocation);
     const $additional = useStore(additionalMapGeoLocations);
-    const [candidates, setCandidates] = React.useState<Feature<Point>[]>([]);
-    const [loading, setLoading] = React.useState(false);
-
-    React.useEffect(() => {
-        if (!$displayHidingZones) {
-            setCandidates([]);
-            return;
-        }
-        let cancelled = false;
-        setLoading(true);
-        listAirportMatchingCandidates(data)
-            .then((pts) => {
-                if (!cancelled) setCandidates(pts);
-            })
-            .catch((err) => {
-                console.error("AirportPlayToggles: load candidates failed", err);
-                if (!cancelled) setCandidates([]);
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [
+    const { items: candidates, loading } = useOverpassCandidateList(
         $displayHidingZones,
-        questionKey,
-        data.activeOnly,
-        data.type,
-        $polyGeo,
-        $mapLoc,
-        $additional,
-    ]);
+        () => listAirportMatchingCandidates(data),
+        [
+            $displayHidingZones,
+            questionKey,
+            data.activeOnly,
+            data.type,
+            $polyGeo,
+            $mapLoc,
+            $additional,
+        ],
+    );
 
     const disabledSet = new Set(
         (data.disabledAirportIatas ?? []).map(normalizeMatchingAirportIata),
@@ -159,9 +139,9 @@ function AirportPlayToggles({
                                             ?.name ?? iata;
                                     const inPlay = !disabledSet.has(iata);
                                     return (
-                                        <div
+                                        <label
                                             key={iata}
-                                            className="flex items-start gap-2 text-xs"
+                                            className="flex cursor-pointer items-start gap-2 text-xs"
                                         >
                                             <Checkbox
                                                 className="mt-0.5"
@@ -194,7 +174,7 @@ function AirportPlayToggles({
                                                     </span>
                                                 ) : null}
                                             </span>
-                                        </div>
+                                        </label>
                                     );
                                 })}
                         </div>

@@ -85,6 +85,13 @@ export function overpassAirportIataFilter(options?: {
  * `disused:railway=*` and `operational_status=suspended`, which plain
  * `disused!=yes` misses.
  */
+/**
+ * Overpass filter for Jet Lag "major city" (1M+ population). Regex is faster
+ * than filtering on `population` in a subexpression after fetch.
+ */
+export const OVERPASS_MAJOR_CITY_FILTER =
+    '[place=city]["population"~"^[1-9]+[0-9]{6}$"]';
+
 export const OVERPASS_ACTIVE_RAIL_STATION_EXCLUSIONS =
     '["disused"!="yes"]["abandoned"!="yes"]' +
     '["railway:status"!="abandoned"]["railway:status"!="disused"]["railway:status"!="closed"]' +
