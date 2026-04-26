@@ -513,6 +513,81 @@ describe("applyQuestionFilters", () => {
         ]);
     });
 
+    it("classifies airport matching by station center, not circle overlap", async () => {
+        const hvn = turf.point([-72.999, 41.265]);
+        const jfk = turf.point([-73.778, 40.641]);
+        const airports = turf.featureCollection([hvn, jfk]);
+        const airportQuestionData = {
+            type: "airport" as const,
+            lat: 41.25,
+            lng: -72.95,
+            same: false,
+            activeOnly: false,
+            drag: false,
+            color: "black",
+            collapsed: false,
+        };
+        const zoneKey = "fixture-overpass-zone";
+        const key = matchingFacilityCacheKey(
+            airportQuestionData as any,
+            zoneKey,
+        );
+        const cache = new Map([[key, airports]]);
+
+        // Large radius intentionally makes circles overlap across Voronoi border.
+        // We still want strict nearest-airport classification by station center.
+        const circles = build([
+            { id: "near-hvn", lng: -72.99, lat: 41.27, name: "Near HVN" },
+            { id: "near-jfk", lng: -73.9, lat: 40.7, name: "Near JFK" },
+        ]).map((c) => {
+            const center = c.properties.geometry.coordinates;
+            return {
+                ...turf.circle([center[0], center[1]], 25, { units: "miles" }),
+                properties: c.properties,
+            } as StationCircle;
+        });
+        const question = {
+            id: "matching",
+            key: 1,
+            data: airportQuestionData,
+        } as unknown as Question;
+
+        const outDifferent = await applyQuestionFilters({
+            circles,
+            questions: [question],
+            measuringPoiCache: new Map(),
+            matchingFacilityCache: cache,
+            matchingZoneKey: zoneKey,
+            hidingRadius: 25,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+        });
+        expect(outDifferent.map((c) => c.properties.properties.id).sort()).toEqual(
+            ["near-jfk"],
+        );
+
+        const outSame = await applyQuestionFilters({
+            circles,
+            questions: [
+                {
+                    ...question,
+                    data: { ...airportQuestionData, same: true },
+                } as Question,
+            ],
+            measuringPoiCache: new Map(),
+            matchingFacilityCache: cache,
+            matchingZoneKey: zoneKey,
+            hidingRadius: 25,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+        });
+        expect(outSame.map((c) => c.properties.properties.id).sort()).toEqual([
+            "near-hvn",
+        ]);
+    });
+
     it("matchingFacilityCacheKey for airport includes sorted disabled IATA list", () => {
         const base = {
             type: "airport" as const,

@@ -428,10 +428,15 @@ export async function applyQuestionFilters({
 
             const wantSame = question.data.same === true;
             current = current.filter((circle) => {
-                if (wantSame) {
-                    return turf.booleanIntersects(circle, seekerCell as any);
-                }
-                return !turf.booleanContains(seekerCell as any, circle);
+                const stationPoint = turf.point([
+                    circle.properties.geometry.coordinates[0],
+                    circle.properties.geometry.coordinates[1],
+                ]);
+                const isSameCell = turf.booleanPointInPolygon(
+                    stationPoint,
+                    seekerCell as Feature<Polygon | MultiPolygon>,
+                );
+                return wantSame ? isSameCell : !isSameCell;
             });
         }
 
