@@ -148,6 +148,9 @@ importers:
       open-location-code:
         specifier: ^1.0.3
         version: 1.0.3
+      osm2geojson-ultra:
+        specifier: ^4.0.1
+        version: 4.0.1
       osmtogeojson:
         specifier: 3.0.0-beta.5
         version: 3.0.0-beta.5
@@ -4707,6 +4710,10 @@ packages:
   osm-polygon-features@0.9.2:
     resolution: {integrity: sha512-5zNEFCq+G6X2TDkqbKYLF1+GtWVCCLA8zX+FVhSogsiTRsGquyaGRy5cYNW4BE3ci0MKOLvNTkFNsjsCNtgz0A==}
 
+  osm2geojson-ultra@4.0.1:
+    resolution: {integrity: sha512-2pqPSxtc99TKrqe4+ocltD9j3+15sCI+1BkQUrkzVgdOFHpQ9ojlgs/x2zYwco7LT4nm+w1HEheHM8I58/aRcg==}
+    hasBin: true
+
   osmtogeojson@3.0.0-beta.5:
     resolution: {integrity: sha512-izvaUWnunrYvMB4LB0ZN15O1+g90c628yHS4SeSR3daVSBF9vdTHL7iVHfg0wEr1uEYjQ+lMJHCiYFusL5yKVg==}
     engines: {node: '>=0.5'}
@@ -5329,6 +5336,9 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  through2@3.0.2:
+    resolution: {integrity: sha512-enaDQ4MUyP2W6ZyT6EsMzqBPZaM/avg8iuo+l2d3QCs0J+6RaqkHV/2/lOwDTueBHeJ/2LG9lrLW3d5rWPucuQ==}
+
   through@2.2.7:
     resolution: {integrity: sha512-JIR0m0ybkmTcR8URann+HbwKmodP+OE8UCbsifQDYMLD5J3em1Cdn3MYPpbEd5elGDwmP98T+WbqP/tvzA5Mjg==}
 
@@ -5407,6 +5417,9 @@ packages:
 
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+
+  txml@5.2.1:
+    resolution: {integrity: sha512-MGKvU6UjehglVhfQAtW/sxeqAky64fJGHAkaxXROh13quYOgKE71C1VPKhKGR8M+AhMWEdz/aaPL/rxpJ9fmKw==}
 
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
@@ -11618,6 +11631,12 @@ snapshots:
 
   osm-polygon-features@0.9.2: {}
 
+  osm2geojson-ultra@4.0.1:
+    dependencies:
+      txml: 5.2.1
+    optionalDependencies:
+      '@types/geojson': 7946.0.16
+
   osmtogeojson@3.0.0-beta.5:
     dependencies:
       '@mapbox/geojson-rewind': 0.5.2
@@ -12433,6 +12452,11 @@ snapshots:
       source-map-support: 0.5.21
     optional: true
 
+  through2@3.0.2:
+    dependencies:
+      inherits: 2.0.4
+      readable-stream: 3.6.2
+
   through@2.2.7: {}
 
   timezone-groups@0.10.4: {}
@@ -12488,6 +12512,10 @@ snapshots:
       typescript: 6.0.3
 
   tslib@2.8.1: {}
+
+  txml@5.2.1:
+    dependencies:
+      through2: 3.0.2
 
   type-check@0.4.0:
     dependencies:
