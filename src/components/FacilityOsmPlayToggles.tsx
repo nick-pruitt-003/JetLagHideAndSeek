@@ -54,14 +54,26 @@ export function FacilityOsmPlayToggles({
     const $additional = useStore(additionalMapGeoLocations);
 
     const supported = supportsOrdinaryFacilityOsmPicks(data.type);
+    const refreshToken = React.useMemo(
+        () => ({
+            questionKey,
+            supported,
+            type: data.type,
+            poly: $polyGeo,
+            map: $mapLoc,
+            additional: $additional,
+        }),
+        [questionKey, supported, data.type, $polyGeo, $mapLoc, $additional],
+    );
     const loadCandidates = React.useCallback(
         () => listOrdinaryFacilityVoronoiCandidates(data),
-        [data, supported, questionKey, $polyGeo, $mapLoc, $additional],
+        [data],
     );
 
     const { items: candidates, loading } = useOverpassCandidateList(
         supported && $displayHidingZones,
         loadCandidates,
+        refreshToken,
     );
 
     const disabledSet = new Set(

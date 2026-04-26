@@ -563,9 +563,9 @@ describe("applyQuestionFilters", () => {
             includeDefaultStations: true,
             planningModeEnabled: false,
         });
-        expect(outDifferent.map((c) => c.properties.properties.id).sort()).toEqual(
-            ["near-jfk"],
-        );
+        expect(
+            outDifferent.map((c) => c.properties.properties.id).sort(),
+        ).toEqual(["near-jfk"]);
 
         const outSame = await applyQuestionFilters({
             circles,

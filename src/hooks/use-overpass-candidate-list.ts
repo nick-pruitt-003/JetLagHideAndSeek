@@ -7,6 +7,7 @@ import * as React from "react";
 export function useOverpassCandidateList<T>(
     enabled: boolean,
     load: () => Promise<T[]>,
+    refreshToken?: unknown,
 ): { items: T[]; loading: boolean } {
     type State = { items: T[]; loading: boolean };
     type Action =
@@ -15,6 +16,9 @@ export function useOverpassCandidateList<T>(
         | { type: "failed" };
     const [state, dispatch] = React.useReducer(
         (prev: State, action: Action): State => {
+            if (!action || typeof action !== "object" || !("type" in action)) {
+                return prev;
+            }
             switch (action.type) {
                 case "loading":
                     return { ...prev, loading: true };
@@ -42,7 +46,7 @@ export function useOverpassCandidateList<T>(
         return () => {
             cancelled = true;
         };
-    }, [enabled, load]);
+    }, [enabled, load, refreshToken]);
 
     return enabled ? state : { items: [], loading: false };
 }

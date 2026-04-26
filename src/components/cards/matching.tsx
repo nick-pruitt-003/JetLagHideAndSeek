@@ -56,10 +56,16 @@ function AirportPlayToggles({
     const $polyGeo = useStore(polyGeoJSON);
     const $mapLoc = useStore(mapGeoLocation);
     const $additional = useStore(additionalMapGeoLocations);
-    const loadCandidates = React.useCallback(
-        () => listAirportMatchingCandidates(data),
+    const refreshToken = React.useMemo(
+        () => ({
+            questionKey,
+            activeOnly: data.activeOnly,
+            type: data.type,
+            poly: $polyGeo,
+            map: $mapLoc,
+            additional: $additional,
+        }),
         [
-            data,
             questionKey,
             data.activeOnly,
             data.type,
@@ -68,9 +74,14 @@ function AirportPlayToggles({
             $additional,
         ],
     );
+    const loadCandidates = React.useCallback(
+        () => listAirportMatchingCandidates(data),
+        [data],
+    );
     const { items: candidates, loading } = useOverpassCandidateList(
         $displayHidingZones,
         loadCandidates,
+        refreshToken,
     );
 
     const disabledSet = new Set(
