@@ -461,7 +461,10 @@ describe("applyQuestionFilters", () => {
             collapsed: false,
         };
         const zoneKey = "fixture-overpass-zone";
-        const key = matchingFacilityCacheKey(airportQuestionData as any, zoneKey);
+        const key = matchingFacilityCacheKey(
+            airportQuestionData as any,
+            zoneKey,
+        );
         const cache = new Map([[key, airports]]);
 
         const circles = build([

@@ -7,33 +7,42 @@ import * as React from "react";
 export function useOverpassCandidateList<T>(
     enabled: boolean,
     load: () => Promise<T[]>,
-    deps: React.DependencyList,
 ): { items: T[]; loading: boolean } {
-    const [items, setItems] = React.useState<T[]>([]);
-    const [loading, setLoading] = React.useState(false);
+    type State = { items: T[]; loading: boolean };
+    type Action =
+        | { type: "loading" }
+        | { type: "loaded"; items: T[] }
+        | { type: "failed" };
+    const [state, dispatch] = React.useReducer(
+        (prev: State, action: Action): State => {
+            switch (action.type) {
+                case "loading":
+                    return { ...prev, loading: true };
+                case "loaded":
+                    return { items: action.items, loading: false };
+                case "failed":
+                    return { items: [], loading: false };
+            }
+        },
+        { items: [], loading: false },
+    );
 
     React.useEffect(() => {
-        if (!enabled) {
-            setItems([]);
-            return;
-        }
+        if (!enabled) return;
         let cancelled = false;
-        setLoading(true);
+        dispatch({ type: "loading" });
         load()
             .then((data) => {
-                if (!cancelled) setItems(data);
+                if (!cancelled) dispatch({ type: "loaded", items: data });
             })
             .catch((err) => {
                 console.error("useOverpassCandidateList: load failed", err);
-                if (!cancelled) setItems([]);
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
+                if (!cancelled) dispatch({ type: "failed" });
             });
         return () => {
             cancelled = true;
         };
-    }, [enabled, ...deps]);
+    }, [enabled, load]);
 
-    return { items, loading };
+    return enabled ? state : { items: [], loading: false };
 }

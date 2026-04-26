@@ -57,10 +57,10 @@ import {
     questionFinishedMapData,
     questions,
     reachabilityClassifications,
-    triggerLocalRefresh,
     reachabilityOverrides as reachabilityOverridesAtom,
     reachabilityResult as reachabilityResultAtom,
     trainStations,
+    triggerLocalRefresh,
     useCustomStations as useCustomStationsAtom,
 } from "@/lib/context";
 import { getAllStops } from "@/lib/transit/gtfs-store";
@@ -681,15 +681,14 @@ export const ZoneSidebar = () => {
 
             const currentQuestions = questions.get();
             const matchingZoneKey = overpassZoneCacheKey();
-            const [measuringPoiCache, matchingFacilityCache] = await Promise.all(
-                [
+            const [measuringPoiCache, matchingFacilityCache] =
+                await Promise.all([
                     prefetchMeasuringPoiPoints(currentQuestions),
                     prefetchMatchingFacilityPoints(
                         currentQuestions,
                         matchingZoneKey,
                     ),
-                ],
-            );
+                ]);
             if (gen !== filterGenRef.current) {
                 if (import.meta.env.DEV) console.timeEnd(markLabel);
                 return;

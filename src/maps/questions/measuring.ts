@@ -1,6 +1,7 @@
 import * as turf from "@turf/turf";
 import type { Feature, MultiPolygon, Polygon } from "geojson";
 import _ from "lodash";
+
 import {
     hiderMode,
     mapGeoJSON,
@@ -14,17 +15,11 @@ import {
     findPlacesInZone,
     findPlacesSpecificInZone,
     nearestToQuestion,
-    overpassAirportIataFilter,
     OVERPASS_MAJOR_CITY_FILTER,
+    overpassAirportIataFilter,
     prettifyLocation,
     QuestionSpecificLocation,
 } from "@/maps/api";
-import {
-    fetchFullFacilityElements,
-    filterFacilityPointsByDisabledOsmRefs,
-    osmElementsToFacilityPoints,
-    validateFullFacilityFetch,
-} from "@/maps/questions/facility-full";
 import osmtogeojson from "@/maps/api/osm-to-geojson";
 import {
     arcBufferToPoint,
@@ -33,6 +28,12 @@ import {
     holedMask,
     modifyMapData,
 } from "@/maps/geo-utils";
+import {
+    fetchFullFacilityElements,
+    filterFacilityPointsByDisabledOsmRefs,
+    osmElementsToFacilityPoints,
+    validateFullFacilityFetch,
+} from "@/maps/questions/facility-full";
 import type {
     APILocations,
     HomeGameMeasuringQuestions,
@@ -184,9 +185,7 @@ export const determineMeasuringBoundary = async (
             if (filtered.length === 0) {
                 return [turf.multiPolygon([])];
             }
-            return [
-                turf.combine(turf.featureCollection(filtered)).features[0],
-            ];
+            return [turf.combine(turf.featureCollection(filtered)).features[0]];
         }
         case "aquarium-full":
         case "zoo-full":
@@ -217,9 +216,7 @@ export const determineMeasuringBoundary = async (
             if (filtered.length === 0) {
                 return [turf.multiPolygon([])];
             }
-            return [
-                turf.combine(turf.featureCollection(filtered)).features[0],
-            ];
+            return [turf.combine(turf.featureCollection(filtered)).features[0]];
         }
         case "custom-measure":
             return turf.combine(

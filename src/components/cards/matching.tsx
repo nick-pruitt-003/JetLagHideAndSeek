@@ -4,8 +4,8 @@ import * as React from "react";
 import { toast } from "react-toastify";
 
 import { QuestionCard } from "@/components/cards/base";
-import { FacilityOsmPlayToggles } from "@/components/FacilityOsmPlayToggles";
 import CustomInitDialog from "@/components/CustomInitDialog";
+import { FacilityOsmPlayToggles } from "@/components/FacilityOsmPlayToggles";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import PresetsDialog from "@/components/PresetsDialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,6 +16,7 @@ import {
     SidebarMenuItem,
 } from "@/components/ui/sidebar-l";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useOverpassCandidateList } from "@/hooks/use-overpass-candidate-list";
 import {
     additionalMapGeoLocations,
     customInitPreference,
@@ -29,7 +30,6 @@ import {
     questions,
     triggerLocalRefresh,
 } from "@/lib/context";
-import { useOverpassCandidateList } from "@/hooks/use-overpass-candidate-list";
 import { cn } from "@/lib/utils";
 import {
     determineMatchingBoundary,
@@ -56,11 +56,10 @@ function AirportPlayToggles({
     const $polyGeo = useStore(polyGeoJSON);
     const $mapLoc = useStore(mapGeoLocation);
     const $additional = useStore(additionalMapGeoLocations);
-    const { items: candidates, loading } = useOverpassCandidateList(
-        $displayHidingZones,
+    const loadCandidates = React.useCallback(
         () => listAirportMatchingCandidates(data),
         [
-            $displayHidingZones,
+            data,
             questionKey,
             data.activeOnly,
             data.type,
@@ -68,6 +67,10 @@ function AirportPlayToggles({
             $mapLoc,
             $additional,
         ],
+    );
+    const { items: candidates, loading } = useOverpassCandidateList(
+        $displayHidingZones,
+        loadCandidates,
     );
 
     const disabledSet = new Set(
@@ -95,7 +98,8 @@ function AirportPlayToggles({
             >
                 {!$displayHidingZones ? (
                     <p className="text-xs text-muted-foreground px-1">
-                        Turn on hiding zones to load airports for this territory.
+                        Turn on hiding zones to load airports for this
+                        territory.
                     </p>
                 ) : loading ? (
                     <div className="flex justify-center py-2">
@@ -155,13 +159,16 @@ function AirportPlayToggles({
                                                             normalizeMatchingAirportIata,
                                                         ),
                                                     );
-                                                    if (v === true) next.delete(iata);
+                                                    if (v === true)
+                                                        next.delete(iata);
                                                     else next.add(iata);
                                                     data.disabledAirportIatas =
                                                         [...next].sort();
                                                     questionModified();
                                                 }}
-                                                disabled={!data.drag || $isLoading}
+                                                disabled={
+                                                    !data.drag || $isLoading
+                                                }
                                             />
                                             <span className="min-w-0 leading-snug">
                                                 <span className="font-mono tabular-nums">
@@ -285,10 +292,7 @@ export const MatchingQuestionComponent = ({
         case "consulate-full":
         case "park-full":
             questionSpecific = (
-                <FacilityOsmPlayToggles
-                    data={data}
-                    questionKey={questionKey}
-                />
+                <FacilityOsmPlayToggles data={data} questionKey={questionKey} />
             );
             break;
         case "same-train-line":

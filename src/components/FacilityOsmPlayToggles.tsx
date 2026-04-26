@@ -1,5 +1,6 @@
 import { useStore } from "@nanostores/react";
 import { Loader2 } from "lucide-react";
+import * as React from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -7,6 +8,7 @@ import {
     MENU_ITEM_CLASSNAME,
     SidebarMenuItem,
 } from "@/components/ui/sidebar-l";
+import { useOverpassCandidateList } from "@/hooks/use-overpass-candidate-list";
 import {
     additionalMapGeoLocations,
     displayHidingZones,
@@ -15,7 +17,6 @@ import {
     polyGeoJSON,
     questionModified,
 } from "@/lib/context";
-import { useOverpassCandidateList } from "@/hooks/use-overpass-candidate-list";
 import { prettifyLocation } from "@/maps/api";
 import {
     listOrdinaryFacilityVoronoiCandidates,
@@ -53,19 +54,14 @@ export function FacilityOsmPlayToggles({
     const $additional = useStore(additionalMapGeoLocations);
 
     const supported = supportsOrdinaryFacilityOsmPicks(data.type);
+    const loadCandidates = React.useCallback(
+        () => listOrdinaryFacilityVoronoiCandidates(data),
+        [data, supported, questionKey, $polyGeo, $mapLoc, $additional],
+    );
 
     const { items: candidates, loading } = useOverpassCandidateList(
         supported && $displayHidingZones,
-        () => listOrdinaryFacilityVoronoiCandidates(data),
-        [
-            supported,
-            $displayHidingZones,
-            questionKey,
-            data.type,
-            $polyGeo,
-            $mapLoc,
-            $additional,
-        ],
+        loadCandidates,
     );
 
     const disabledSet = new Set(
@@ -136,12 +132,16 @@ export function FacilityOsmPlayToggles({
                                                     (
                                                         data.disabledFacilityOsmRefs ??
                                                         []
-                                                    ).map(normalizeFacilityOsmRef),
+                                                    ).map(
+                                                        normalizeFacilityOsmRef,
+                                                    ),
                                                 );
-                                                if (v === true) next.delete(osmRef);
+                                                if (v === true)
+                                                    next.delete(osmRef);
                                                 else next.add(osmRef);
-                                                data.disabledFacilityOsmRefs =
-                                                    [...next].sort();
+                                                data.disabledFacilityOsmRefs = [
+                                                    ...next,
+                                                ].sort();
                                                 questionModified();
                                             }}
                                             disabled={!data.drag || $isLoading}

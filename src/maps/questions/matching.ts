@@ -20,20 +20,20 @@ import {
     findAdminBoundary,
     findPlacesInZone,
     nearestToQuestion,
-    overpassAirportIataFilter,
     OVERPASS_MAJOR_CITY_FILTER,
+    overpassAirportIataFilter,
     prettifyLocation,
     trainLineNodeFinder,
 } from "@/maps/api";
+import osmtogeojson from "@/maps/api/osm-to-geojson";
+import { holedMask, modifyMapData, safeUnion } from "@/maps/geo-utils";
+import { geoSpatialVoronoi } from "@/maps/geo-utils";
 import {
     fetchFullFacilityElements,
     filterFacilityPointsByDisabledOsmRefs,
     osmElementsToFacilityPoints,
     validateFullFacilityFetch,
 } from "@/maps/questions/facility-full";
-import osmtogeojson from "@/maps/api/osm-to-geojson";
-import { holedMask, modifyMapData, safeUnion } from "@/maps/geo-utils";
-import { geoSpatialVoronoi } from "@/maps/geo-utils";
 import type {
     APILocations,
     HomeGameMatchingQuestions,

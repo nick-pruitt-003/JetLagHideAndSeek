@@ -10,10 +10,7 @@ import {
 } from "@/maps/api";
 import type { APILocations } from "@/maps/schema";
 
-export function osmElementToRef(el: {
-    type?: string;
-    id?: number;
-}): string {
+function osmElementToRef(el: { type?: string; id?: number }): string {
     const t = String(el.type ?? "").toLowerCase();
     if (
         (t !== "node" && t !== "way" && t !== "relation") ||
@@ -28,7 +25,7 @@ export function normalizeFacilityOsmRef(ref: string): string {
     return ref.trim().toLowerCase();
 }
 
-export function labelFromOsmFacilityElement(x: {
+function labelFromOsmFacilityElement(x: {
     tags?: Record<string, string | undefined>;
 }): string {
     const tags = x.tags ?? {};
@@ -106,9 +103,7 @@ export function validateFullFacilityFetch(
 }
 
 export function supportsOrdinaryFacilityOsmPicks(type: string): boolean {
-    return (
-        type === "major-city" || type === "city" || type.endsWith("-full")
-    );
+    return type === "major-city" || type === "city" || type.endsWith("-full");
 }
 
 /** Unfiltered OSM facility points for UI lists (major-city / city and *-full). */

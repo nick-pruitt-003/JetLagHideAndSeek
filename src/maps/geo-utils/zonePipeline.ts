@@ -296,7 +296,8 @@ function normalizeMatchingPointsToFc(
 ): FeatureCollection<Point> {
     if (!raw) return turf.featureCollection([]);
     if (Array.isArray(raw)) return turf.featureCollection(raw);
-    if (raw.type === "FeatureCollection") return raw as FeatureCollection<Point>;
+    if (raw.type === "FeatureCollection")
+        return raw as FeatureCollection<Point>;
     if (raw.type === "Feature") {
         return turf.featureCollection([raw as Feature<Point>]);
     }
@@ -316,7 +317,10 @@ export async function prefetchMatchingFacilityPoints(
     for (const q of questions) {
         if (q.id !== "matching") continue;
         if (!isVoronoiMatchingType(q.data)) continue;
-        const key = matchingFacilityCacheKey(q.data as MatchingQuestion, zoneKey);
+        const key = matchingFacilityCacheKey(
+            q.data as MatchingQuestion,
+            zoneKey,
+        );
         if (!unique.has(key)) unique.set(key, q.data as MatchingQuestion);
     }
     if (unique.size === 0) return new Map();
@@ -378,7 +382,10 @@ export async function applyQuestionFilters({
     for (const question of questions) {
         if (planningModeEnabled && question.data.drag) continue;
 
-        if (question.id === "matching" && isVoronoiMatchingType(question.data)) {
+        if (
+            question.id === "matching" &&
+            isVoronoiMatchingType(question.data)
+        ) {
             if (current.length === 0) break;
 
             const key = matchingFacilityCacheKey(
@@ -392,12 +399,17 @@ export async function applyQuestionFilters({
                 question.data.lng,
                 question.data.lat,
             ]);
-            const voronoiFc = geoSpatialVoronoi(points as FeatureCollection<Point>);
+            const voronoiFc = geoSpatialVoronoi(
+                points as FeatureCollection<Point>,
+            );
             const [sx, sy] = seekerPoint.geometry.coordinates;
             const coordEq = (a: number, b: number) => Math.abs(a - b) < 1e-9;
             let seekerCell = voronoiFc.features.find((cell) => {
                 const c = (
-                    cell.properties as { site?: Feature<Point> } | null | undefined
+                    cell.properties as
+                        | { site?: Feature<Point> }
+                        | null
+                        | undefined
                 )?.site?.geometry?.coordinates as [number, number] | undefined;
                 if (!c) return false;
                 return coordEq(c[0], sx) && coordEq(c[1], sy);
