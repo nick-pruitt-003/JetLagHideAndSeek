@@ -110,6 +110,9 @@ export async function applyQuestionsToMapGeoData(
     ) => void,
 ): Promise<any> {
     for (const question of questions) {
+        if (!question?.data) {
+            continue;
+        }
         if (planningModeCallback) {
             const planningPolygon = await determinePlanningPolygon(
                 question,
@@ -125,7 +128,15 @@ export async function applyQuestionsToMapGeoData(
 
         mapGeoData = await adjustMapGeoDataForQuestion(question, mapGeoData);
 
-        if (mapGeoData.type !== "FeatureCollection") {
+        if (!mapGeoData || typeof mapGeoData !== "object") {
+            mapGeoData = {
+                type: "FeatureCollection",
+                features: [],
+            };
+            continue;
+        }
+
+        if ((mapGeoData as { type?: string }).type !== "FeatureCollection") {
             mapGeoData = {
                 type: "FeatureCollection",
                 features: [mapGeoData],
