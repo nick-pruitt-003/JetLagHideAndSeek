@@ -446,11 +446,50 @@ export const fetchCoastline = async () => {
 const escapeOverpassRegex = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const parseOsmRef = (
+    osmRef: string,
+): { type: "node" | "way" | "relation"; id: number } | null => {
+    const [rawType, rawId] = String(osmRef ?? "").split("/");
+    if (
+        rawType !== "node" &&
+        rawType !== "way" &&
+        rawType !== "relation"
+    ) {
+        return null;
+    }
+    const id = Number(rawId);
+    if (!Number.isFinite(id) || id <= 0) return null;
+    return { type: rawType, id };
+};
+
+const lineOriginSetsQuery = (osmRef: string) => {
+    const parsed = parseOsmRef(osmRef);
+    if (!parsed) return null;
+
+    if (parsed.type === "node") {
+        return `
+node(${parsed.id})->.originNodes;
+`;
+    }
+    if (parsed.type === "way") {
+        return `
+way(${parsed.id})->.originWays;
+node(w.originWays)->.originNodes;
+`;
+    }
+    return `
+relation(${parsed.id})->.originRel;
+way(r.originRel)->.originWays;
+node(r.originRel)->.originNodes;
+`;
+};
+
 export const trainLineNodeFinder = async (
     node: string,
     lineRef?: string,
 ): Promise<number[]> => {
-    const nodeId = node.split("/")[1];
+    const originSets = lineOriginSetsQuery(node);
+    if (!originSets) return [];
     // Build the line set from route relations directly connected to this
     // station node. Fallback to route relations on nearby rail ways because
     // some station points are mapped adjacent to (not on) track members.
@@ -462,10 +501,11 @@ export const trainLineNodeFinder = async (
 
     const query = `
 [out:json][timeout:120][maxsize:536870912];
-node(${nodeId})->.origin;
+${originSets}
+way(around.originNodes:120)["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
 (
-  rel(bn.origin)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
-  way(around.origin:120)["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
+  rel(bn.originNodes)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+  rel(bw.originWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
   rel(bw.nearWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
 );
 ->.routes;
@@ -489,14 +529,16 @@ out body;
 export const trainLineRefsForStation = async (
     node: string,
 ): Promise<string[]> => {
-    const nodeId = node.split("/")[1];
+    const originSets = lineOriginSetsQuery(node);
+    if (!originSets) return [];
     const routeTypeFilter = "subway|light_rail|train|tram|monorail|funicular";
     const query = `
 [out:json][timeout:120][maxsize:536870912];
-node(${nodeId})->.origin;
+${originSets}
+way(around.originNodes:120)["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
 (
-  rel(bn.origin)["type"="route"]["route"~"^(${routeTypeFilter})$"];
-  way(around.origin:120)["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
+  rel(bn.originNodes)["type"="route"]["route"~"^(${routeTypeFilter})$"];
+  rel(bw.originWays)["type"="route"]["route"~"^(${routeTypeFilter})$"];
   rel(bw.nearWays)["type"="route"]["route"~"^(${routeTypeFilter})$"];
 );
 out tags;
