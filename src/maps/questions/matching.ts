@@ -177,7 +177,8 @@ export const determineMatchingBoundary = _.memoize(
                 boundary = question.geo;
                 break;
             }
-            case "zone": {
+            case "zone":
+            case "same-admin-zone": {
                 boundary = await findAdminBoundary(
                     question.lat,
                     question.lng,

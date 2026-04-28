@@ -258,6 +258,9 @@ const zoneMatchingQuestionsSchema = baseMatchingQuestionSchema.extend({
     type: z.union([
         z.literal("zone").describe("Zone Question"),
         z
+            .literal("same-admin-zone")
+            .describe("Same Admin Unit (City/County/State/Borough)"),
+        z
             .literal("letter-zone")
             .describe("Zone Starts With Same Letter Question"),
     ]),

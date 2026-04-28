@@ -237,6 +237,7 @@ export const MatchingQuestionComponent = ({
 
     switch (data.type) {
         case "zone":
+        case "same-admin-zone":
         case "letter-zone":
             questionSpecific = (
                 <>
@@ -244,15 +245,15 @@ export const MatchingQuestionComponent = ({
                         <Select
                             trigger="OSM Zone"
                             options={{
-                                2: "OSM Zone 2 (Country)",
-                                3: "OSM Zone 3 (region in Japan)",
-                                4: "OSM Zone 4 (prefecture in Japan)",
-                                5: "OSM Zone 5",
-                                6: "OSM Zone 6",
-                                7: "OSM Zone 7",
-                                8: "OSM Zone 8",
-                                9: "OSM Zone 9",
-                                10: "OSM Zone 10",
+                                2: "Admin L2 (country)",
+                                3: "Admin L3 (region/borough in some areas)",
+                                4: "Admin L4 (state/province/county in some areas)",
+                                5: "Admin L5 (county/city in some areas)",
+                                6: "Admin L6 (county/city district in some areas)",
+                                7: "Admin L7 (district/borough in some areas)",
+                                8: "Admin L8 (city/town in many areas)",
+                                9: "Admin L9 (city subdivision/neighborhood)",
+                                10: "Admin L10 (small local subdivision)",
                             }}
                             value={data.cat.adminLevel.toString()}
                             onValueChange={(value) =>
