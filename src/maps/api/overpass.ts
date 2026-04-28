@@ -16,7 +16,7 @@ const MULTI_AREA_PARALLEL_CHUNK = 4;
 const MAX_POLY_INLINE_LENGTH = 5200;
 
 /** HTTP statuses where a single delayed retry sometimes succeeds (busy public Overpass). */
-const OVERPASS_RETRYABLE_HTTP = new Set([502, 503, 504, 529]);
+const OVERPASS_RETRYABLE_HTTP = new Set([502, 503, 504, 529, 599]);
 const OVERPASS_RETRY_DELAY_MS = 3000;
 import _ from "lodash";
 import { toast } from "react-toastify";
@@ -32,7 +32,7 @@ import {
     LOCATION_FIRST_TAG,
     NOMINATIM_API,
     OVERPASS_API,
-    OVERPASS_API_FALLBACK,
+    OVERPASS_INTERPRETER_URLS,
 } from "@/maps/api/constants";
 import osmtogeojson from "@/maps/api/osm-to-geojson";
 import type {
@@ -147,43 +147,45 @@ const getOverpassData = async (
     const primaryUrl = `${OVERPASS_API}?data=${encodedQuery}`;
     const usePost = primaryUrl.length > MAX_OVERPASS_GET_URL_LENGTH;
 
-    const fetchOverpassPost = async (): Promise<Response> => {
-        let response: Response;
-        try {
-            response = await fetch(OVERPASS_API, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: `data=${encodedQuery}`,
-            });
-        } catch {
-            response = new Response("", {
-                status: 599,
-                statusText: "Network Error",
-            });
-        }
-        if (!response.ok) {
-            try {
-                response = await fetch(OVERPASS_API_FALLBACK, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                    body: `data=${encodedQuery}`,
-                });
-            } catch {
-                response = new Response("", {
-                    status: 599,
-                    statusText: "Network Error",
-                });
+    const mirrorCachePut = async (res: Response) => {
+        const cache = await determineCache(cacheType);
+        await cache.put(primaryUrl, res.clone());
+    };
+
+    const fetchOverpassPostAllMirrors = async (): Promise<Response> => {
+        const body = `data=${encodedQuery}`;
+        let last = new Response("", {
+            status: 599,
+            statusText: "Network Error",
+        });
+        for (let i = 0; i < OVERPASS_INTERPRETER_URLS.length; i++) {
+            const base = OVERPASS_INTERPRETER_URLS[i]!;
+            const pending = (async () => {
+                try {
+                    return await fetch(base, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/x-www-form-urlencoded",
+                        },
+                        body,
+                    });
+                } catch {
+                    return new Response("", {
+                        status: 599,
+                        statusText: "Network Error",
+                    });
+                }
+            })();
+            last =
+                loadingText && i === 0 && !_retry
+                    ? await toast.promise(pending, { pending: loadingText })
+                    : await pending;
+            if (last.ok) {
+                await mirrorCachePut(last);
+                return last;
             }
         }
-        if (response.ok) {
-            const cache = await determineCache(cacheType);
-            await cache.put(primaryUrl, response.clone());
-        }
-        return response;
+        return last;
     };
 
     let response: Response;
@@ -218,21 +220,30 @@ const getOverpassData = async (
         console.groupEnd();
     };
 
-    const fetchOverpassGet = async (): Promise<Response> => {
-        try {
-            return await cacheFetch(
-                primaryUrl,
-                _retry ? undefined : loadingText,
+    /**
+     * `cacheFetch` turns `ERR_CONNECTION_CLOSED` into a 599 Response (no throw),
+     * so we must iterate mirrors explicitly — the old try/catch never ran.
+     */
+    const fetchOverpassGetAllMirrors = async (): Promise<Response> => {
+        let last = new Response("", {
+            status: 599,
+            statusText: "Network Error",
+        });
+        for (let i = 0; i < OVERPASS_INTERPRETER_URLS.length; i++) {
+            const url = `${OVERPASS_INTERPRETER_URLS[i]}?data=${encodedQuery}`;
+            last = await cacheFetch(
+                url,
+                i === 0 && !_retry ? loadingText : undefined,
                 cacheType,
             );
-        } catch {
-            // Network-level failure (e.g. ERR_CONNECTION_CLOSED); try fallback host.
-            return await cacheFetch(
-                `${OVERPASS_API_FALLBACK}?data=${encodedQuery}`,
-                _retry ? undefined : loadingText,
-                cacheType,
-            );
+            if (last.ok) {
+                if (i > 0) {
+                    await mirrorCachePut(last);
+                }
+                return last;
+            }
         }
+        return last;
     };
 
     if (usePost) {
@@ -241,52 +252,18 @@ const getOverpassData = async (
         if (cachedResponse?.ok) {
             response = cachedResponse.clone();
         } else {
-            const pending = fetchOverpassPost();
-            try {
-                response =
-                    loadingText && !_retry
-                        ? await toast.promise(pending, { pending: loadingText })
-                        : await pending;
-            } catch {
-                response = new Response("", {
-                    status: 599,
-                    statusText: "Network Error",
-                });
-            }
+            response = await fetchOverpassPostAllMirrors();
         }
     } else {
-        response = await fetchOverpassGet();
+        response = await fetchOverpassGetAllMirrors();
     }
 
     if (!response.ok && !usePost) {
         // Some Overpass frontends/proxies return 400 for long/complex GET
         // query strings but accept the same payload via POST.
-        const postRetryResponse = await fetchOverpassPost();
+        const postRetryResponse = await fetchOverpassPostAllMirrors();
         if (postRetryResponse.ok) {
             response = postRetryResponse;
-        }
-    }
-
-    if (!response.ok && !usePost) {
-        // Try the fallback, but store the result under the primary URL key so future requests are served from cache without needing to fail-over again.
-        try {
-            const fallbackResponse = await cacheFetch(
-                `${OVERPASS_API_FALLBACK}?data=${encodedQuery}`,
-                _retry ? undefined : loadingText,
-                cacheType,
-            );
-            if (fallbackResponse.ok) {
-                const cache = await determineCache(cacheType);
-                await cache.put(primaryUrl, fallbackResponse.clone());
-            }
-            response = fallbackResponse;
-        } catch {
-            await debugOverpassFailure(response);
-            toast.error(
-                `Could not load data from Overpass: ${response.status} ${response.statusText}`,
-                { toastId: "overpass-error" },
-            );
-            return { elements: [] };
         }
     }
 

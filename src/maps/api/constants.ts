@@ -3,6 +3,17 @@ import type { APILocations } from "@/maps/schema";
 export const OVERPASS_API = "https://overpass-api.de/api/interpreter";
 export const OVERPASS_API_FALLBACK =
     "https://overpass.private.coffee/api/interpreter";
+
+/**
+ * Interpreter endpoints tried in order. Public .de often drops connections
+ * under load; kumi is a common community mirror; private.coffee last (some QL
+ * differs). Cache keys stay {@link OVERPASS_API}?data=… for hits across mirrors.
+ */
+export const OVERPASS_INTERPRETER_URLS: readonly string[] = [
+    OVERPASS_API,
+    "https://overpass.kumi.systems/api/interpreter",
+    OVERPASS_API_FALLBACK,
+];
 export const GEOCODER_API = "https://photon.komoot.io/api/";
 // Nominatim returns pre-simplified boundary polygons in ~50-200KB for
 // entire countries, versus 2-10MB from Overpass `out geom`. It's what
