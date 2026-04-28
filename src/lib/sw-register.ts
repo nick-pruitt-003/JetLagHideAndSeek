@@ -57,13 +57,13 @@ export function registerServiceWorker() {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
 
-    // `import.meta.env.BASE_URL` is injected by Vite with a trailing
-    // slash — e.g. "/JetLagHideAndSeek/" or "/". We want the SW
-    // script URL to be `<base>sw.js` and the registration scope to
-    // be `<base>`.
+    // `BASE_URL` can be provided with or without a trailing slash
+    // depending on environment/build tooling. Normalize so URL joining
+    // is always correct.
     const base = import.meta.env.BASE_URL;
-    const scriptURL = `${base}sw.js`;
-    const scope = base;
+    const normalizedBase = base.endsWith("/") ? base : `${base}/`;
+    const scriptURL = `${normalizedBase}sw.js`;
+    const scope = normalizedBase;
 
     // `type: "module"` matches the esbuild `format: "esm"` we use in
     // the custom Astro integration — our sw.ts uses ES imports at the
