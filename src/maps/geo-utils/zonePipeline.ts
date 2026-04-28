@@ -492,6 +492,11 @@ function haversineMeters(
  * in its inputs — async work: `resolveTrainLineNodes` (train-line),
  * `resolveMatchingAdminRegion` (admin / letter / custom zone), and
  * `determineMatchingBoundary` by default for the latter.
+ *
+ * Question ids handled here: `matching` (several types), `measuring`
+ * (McDonald’s / 7-Eleven only). Other ids (`radius`, `thermometer`,
+ * `tentacles`) affect map overlays / other flows but do not cull hiding-
+ * zone stations — add there before expecting dots to follow them.
  */
 export async function applyQuestionFilters({
     circles,
@@ -526,7 +531,13 @@ export async function applyQuestionFilters({
                 matchingZoneKey,
             );
             const points = matchingFacilityCache.get(key);
-            if (!points || points.features.length === 0) continue;
+            if (!points || points.features.length === 0) {
+                toast?.warning(
+                    "Voronoi matching has no facility points (still loading or empty territory). That filter was skipped.",
+                    { toastId: "voronoi-matching-no-points" },
+                );
+                continue;
+            }
 
             const seekerPoint = turf.point([
                 question.data.lng,
@@ -539,7 +550,13 @@ export async function applyQuestionFilters({
                 voronoiFc,
                 airportFc,
             );
-            if (!seekerCell?.geometry) continue;
+            if (!seekerCell?.geometry) {
+                toast?.warning(
+                    "Could not place the seeker in any Voronoi cell for this matching question; that filter was skipped.",
+                    { toastId: "voronoi-matching-no-cell" },
+                );
+                continue;
+            }
 
             const wantSame = question.data.same === true;
             current = current.filter((circle) => {
@@ -620,6 +637,7 @@ export async function applyQuestionFilters({
                     toast?.warning(
                         "'Same train line' isn't supported with custom-only station lists; skipping this filter.",
                     );
+                    continue;
                 } else {
                     const nid = nearestTrainStation.properties.id as
                         | string
@@ -755,8 +773,11 @@ export async function applyQuestionFilters({
 
             const englishName = extractStationName(nearestTrainStation);
             if (!englishName) {
-                toast?.error("No English name found");
-                return current;
+                toast?.error(
+                    "Nearest station has no name; skipping letter/length station matching for this question.",
+                    { toastId: "station-matching-no-name" },
+                );
+                continue;
             }
 
             if (question.data.type === "same-first-letter-station") {
@@ -797,7 +818,13 @@ export async function applyQuestionFilters({
                     ? QuestionSpecificLocation.McDonalds
                     : QuestionSpecificLocation.Seven11;
             const points = measuringPoiCache.get(String(key));
-            if (!points) continue;
+            if (!points) {
+                toast?.warning(
+                    "Measuring question has no POI data yet (still loading). That filter was skipped.",
+                    { toastId: `measuring-poi-missing-${key}` },
+                );
+                continue;
+            }
 
             const seekerPoint = turf.point([
                 question.data.lng,
