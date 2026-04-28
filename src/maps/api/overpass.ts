@@ -486,6 +486,41 @@ out body;
     return uniqNodes;
 };
 
+export const trainLineRefsForStation = async (
+    node: string,
+): Promise<string[]> => {
+    const nodeId = node.split("/")[1];
+    const routeTypeFilter = "subway|light_rail|train|tram|monorail|funicular";
+    const query = `
+[out:json][timeout:120][maxsize:536870912];
+node(${nodeId})->.origin;
+(
+  rel(bn.origin)["type"="route"]["route"~"^(${routeTypeFilter})$"];
+  way(around.origin:120)["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
+  rel(bw.nearWays)["type"="route"]["route"~"^(${routeTypeFilter})$"];
+);
+out tags;
+`;
+    const data = await getOverpassData(query, "Finding train line options...");
+
+    const refs = new Set<string>();
+    for (const element of data.elements ?? []) {
+        if (element?.type !== "relation") continue;
+        const rawRef = String(element.tags?.ref ?? "").trim();
+        if (!rawRef) continue;
+        const pieces = rawRef
+            .split(/[;,/]/)
+            .map((part) => part.trim())
+            .filter(Boolean);
+        if (pieces.length === 0) continue;
+        for (const ref of pieces) refs.add(ref);
+    }
+
+    return [...refs].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true }),
+    );
+};
+
 export const findPlacesInZone = async (
     filter: string,
     loadingText?: string,

@@ -2,6 +2,7 @@ import { useStore } from "@nanostores/react";
 import { Loader2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "react-toastify";
+import * as turf from "@turf/turf";
 
 import { QuestionCard } from "@/components/cards/base";
 import CustomInitDialog from "@/components/CustomInitDialog";
@@ -29,9 +30,11 @@ import {
     polyGeoJSON,
     questionModified,
     questions,
+    trainStations,
     triggerLocalRefresh,
 } from "@/lib/context";
 import { cn } from "@/lib/utils";
+import { trainLineRefsForStation } from "@/maps/api/overpass";
 import {
     determineMatchingBoundary,
     findMatchingPlaces,
@@ -222,10 +225,16 @@ export const MatchingQuestionComponent = ({
     const $drawingQuestionKey = useStore(drawingQuestionKey);
     const $isLoading = useStore(isLoading);
     const $customInitPref = useStore(customInitPreference);
+    const $trainStations = useStore(trainStations);
     const [customDialogOpen, setCustomDialogOpen] = React.useState(false);
     const [pendingCustomType, setPendingCustomType] = React.useState<
         "custom-zone" | "custom-points" | null
     >(null);
+    const [trainLineOptions, setTrainLineOptions] = React.useState<string[]>(
+        [],
+    );
+    const [trainLineOptionsLoading, setTrainLineOptionsLoading] =
+        React.useState(false);
     const label = `Matching
     ${
         $questions
@@ -235,6 +244,74 @@ export const MatchingQuestionComponent = ({
     }`;
 
     let questionSpecific = <></>;
+
+    const nearestTrainStationForLineQuestion = React.useMemo(() => {
+        if (data.type !== "same-train-line") return null;
+        if ($trainStations.length === 0) return null;
+        try {
+            const location = turf.point([data.lng, data.lat]);
+            return turf.nearestPoint(
+                location,
+                turf.featureCollection(
+                    $trainStations.map((station) => station.properties),
+                ) as any,
+            );
+        } catch {
+            return null;
+        }
+    }, [data.lng, data.lat, data.type, $trainStations]);
+
+    const nearestTrainStationId =
+        typeof nearestTrainStationForLineQuestion?.properties?.id === "string"
+            ? nearestTrainStationForLineQuestion.properties.id
+            : "";
+    const nearestTrainStationName =
+        (nearestTrainStationForLineQuestion?.properties?.["name:en"] as
+            | string
+            | undefined) ??
+        (nearestTrainStationForLineQuestion?.properties?.name as
+            | string
+            | undefined) ??
+        "nearest station";
+
+    React.useEffect(() => {
+        if (data.type !== "same-train-line") {
+            setTrainLineOptions([]);
+            setTrainLineOptionsLoading(false);
+            return;
+        }
+        if (!nearestTrainStationId || !nearestTrainStationId.includes("/")) {
+            setTrainLineOptions([]);
+            setTrainLineOptionsLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setTrainLineOptionsLoading(true);
+        trainLineRefsForStation(nearestTrainStationId)
+            .then((refs) => {
+                if (cancelled) return;
+                setTrainLineOptions(refs);
+                if (refs.length === 1 && !(data.lineRef ?? "").trim()) {
+                    questionModified((data.lineRef = refs[0]));
+                }
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setTrainLineOptions([]);
+            })
+            .finally(() => {
+                if (!cancelled) setTrainLineOptionsLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        data.lineRef,
+        data.type,
+        nearestTrainStationId,
+    ]);
 
     switch (data.type) {
         case "zone":
@@ -311,6 +388,51 @@ export const MatchingQuestionComponent = ({
         case "same-train-line":
             questionSpecific = (
                 <>
+                    <SidebarMenuItem
+                        className={`${MENU_ITEM_CLASSNAME} flex-col items-start gap-1.5`}
+                    >
+                        <Label className="font-semibold">
+                            Line choices from {nearestTrainStationName}
+                        </Label>
+                        {trainLineOptionsLoading ? (
+                            <div className="flex justify-center py-1 w-full">
+                                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : trainLineOptions.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                                {trainLineOptions.map((lineRef) => {
+                                    const selected =
+                                        (data.lineRef ?? "").trim() === lineRef;
+                                    return (
+                                        <button
+                                            key={lineRef}
+                                            type="button"
+                                            className={cn(
+                                                "rounded-md border px-2 py-1 text-xs font-semibold",
+                                                selected
+                                                    ? "border-primary bg-primary/10 text-primary"
+                                                    : "border-border bg-background text-foreground",
+                                            )}
+                                            onClick={() =>
+                                                questionModified(
+                                                    (data.lineRef = lineRef),
+                                                )
+                                            }
+                                            disabled={!data.drag || $isLoading}
+                                        >
+                                            {lineRef}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-muted-foreground leading-tight">
+                                No line refs detected for this location. Move
+                                the marker to another station or enter one
+                                manually.
+                            </p>
+                        )}
+                    </SidebarMenuItem>
                     <SidebarMenuItem
                         className={`${MENU_ITEM_CLASSNAME} flex-col items-start gap-1.5`}
                     >
