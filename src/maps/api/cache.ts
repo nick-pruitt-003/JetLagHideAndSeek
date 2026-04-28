@@ -47,7 +47,15 @@ export const cacheFetch = async (
         }
 
         const fetchAndMaybeCache = async () => {
-            const response = await fetch(url);
+            let response: Response;
+            try {
+                response = await fetch(url);
+            } catch {
+                response = new Response("", {
+                    status: 599,
+                    statusText: "Network Error",
+                });
+            }
             if (response.ok) {
                 await cache.put(url, response.clone());
             } else {

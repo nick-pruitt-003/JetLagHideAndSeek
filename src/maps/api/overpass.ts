@@ -513,6 +513,16 @@ const normalizeLineRef = (value: string) =>
         .replace(/^<+/, "")
         .replace(/>+$/, "");
 
+const overpassLineRefClause = (lineRef: string) => {
+    const escaped = escapeOverpassRegex(normalizeLineRef(lineRef));
+    if (!escaped) return "";
+    // Avoid broad character classes here: some public Overpass backends are
+    // picky and can reject otherwise-valid regexes with 400 parser errors.
+    // Match exact token or semicolon-separated token list.
+    const tokenPattern = `(^${escaped}$|^${escaped};|;${escaped};|;${escaped}$)`;
+    return `["ref"~"${tokenPattern}"]`;
+};
+
 const parseOsmRef = (
     osmRef: string,
 ): { type: "node" | "way" | "relation"; id: number } | null => {
@@ -527,7 +537,7 @@ const parseOsmRef = (
 
 const lineOriginSetsQuery = (
     osmRef: string,
-): { query: string } | null => {
+): { query: string; hasOriginWays: boolean } | null => {
     const parsed = parseOsmRef(osmRef);
     if (!parsed) return null;
 
@@ -536,6 +546,7 @@ const lineOriginSetsQuery = (
             query: `
 node(${parsed.id})->.originNodes;
 `,
+            hasOriginWays: false,
         };
     }
     if (parsed.type === "way") {
@@ -544,6 +555,7 @@ node(${parsed.id})->.originNodes;
 way(${parsed.id})->.originWays;
 node(w.originWays)->.originNodes;
 `,
+            hasOriginWays: true,
         };
     }
     return {
@@ -552,11 +564,13 @@ relation(${parsed.id})->.originRel;
 way(r.originRel)->.originWays;
 node(r.originRel)->.originNodes;
 `,
+        hasOriginWays: true,
     };
 };
 
 const lineRoutesQuery = (
     originSets: string,
+    hasOriginWays: boolean,
     routeTypeFilter: string,
     lineRefClause = "",
 ) => `
@@ -565,7 +579,7 @@ ${originSets}
 way(bn.originNodes)->.nodeWays;
 (
   rel(bn.originNodes)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
-  rel(bw.originWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+  ${hasOriginWays ? `rel(bw.originWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};` : ""}
   rel(bw.nodeWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
 );
 ->.routes;
@@ -598,13 +612,11 @@ export const trainLineNodeFinder = async (
     // station node. Fallback to route relations on nearby rail ways because
     // some station points are mapped adjacent to (not on) track members.
     const routeTypeFilter = "subway|light_rail|train|tram|monorail|funicular";
-    const normalizedLineRef = normalizeLineRef(lineRef ?? "");
-    const lineRefClause = normalizedLineRef
-        ? `["ref"~"(^|[; ,/])${escapeOverpassRegex(normalizedLineRef)}([; ,/]|$)"]`
-        : "";
+    const lineRefClause = overpassLineRefClause(lineRef ?? "");
 
     const query = `${lineRoutesQuery(
         origin.query,
+        origin.hasOriginWays,
         routeTypeFilter,
         lineRefClause,
     )}
@@ -658,6 +670,7 @@ export const trainLineRefsForStation = async (
     const routeTypeFilter = "subway|light_rail|train|tram|monorail|funicular";
     const query = `${lineRoutesQuery(
         origin.query,
+        origin.hasOriginWays,
         routeTypeFilter,
     )}
 out tags;
