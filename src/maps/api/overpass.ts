@@ -640,43 +640,46 @@ export const trainLineNodeFinder = async (
     )}
 out body;
 `;
-    let data = await getOverpassData(query, "Finding train lines...");
-    const nodes: number[] = [];
-
-    data.elements.forEach((element: any) => {
-        if (element && element.type === "node") {
-            nodes.push(element.id);
-        } else if (element && element.type === "way") {
-            nodes.push(...element.nodes);
-        }
-    });
-    let uniqNodes = _.uniq(nodes);
-
-    if (uniqNodes.length === 0 && aroundLatLng) {
-        const fallbackQuery = `${lineRoutesQueryByCoord(
-            aroundLatLng.latitude,
-            aroundLatLng.longitude,
-            routeTypeFilter,
-            lineRefClause,
-        )}
+    const primaryPromise = getOverpassData(query, "Finding train lines...");
+    const fallbackPromise =
+        aroundLatLng == null
+            ? null
+            : getOverpassData(
+                  `${lineRoutesQueryByCoord(
+                      aroundLatLng.latitude,
+                      aroundLatLng.longitude,
+                      routeTypeFilter,
+                      lineRefClause,
+                  )}
 out body;
-`;
-        data = await getOverpassData(
-            fallbackQuery,
-            "Finding nearby train lines...",
-        );
-        const fallbackNodes: number[] = [];
-        data.elements.forEach((element: any) => {
-            if (element && element.type === "node") {
-                fallbackNodes.push(element.id);
-            } else if (element && element.type === "way") {
-                fallbackNodes.push(...element.nodes);
-            }
-        });
-        uniqNodes = _.uniq(fallbackNodes);
-    }
+`,
+                  "Finding nearby train lines...",
+              );
 
-    return uniqNodes;
+    const [primaryData, fallbackData] = await Promise.all([
+        primaryPromise,
+        fallbackPromise ?? Promise.resolve({ elements: [] as any[] }),
+    ]);
+
+    const collectNodeIds = (elements: any[] | undefined) => {
+        const out: number[] = [];
+        for (const element of elements ?? []) {
+            if (element?.type === "node") {
+                out.push(element.id);
+            } else if (element?.type === "way" && Array.isArray(element.nodes)) {
+                out.push(...element.nodes);
+            }
+        }
+        return out;
+    };
+
+    // Union graph- and geography-based hits. The nearest railway=station OSM
+    // node is often tied to one mode (e.g. LIRR); subway routes may only appear
+    // via nearby railway=subway ways unless we always merge the around: query.
+    return _.uniq([
+        ...collectNodeIds(primaryData.elements),
+        ...collectNodeIds(fallbackData.elements),
+    ]);
 };
 
 export const trainLineRefsForStation = async (
@@ -693,7 +696,26 @@ export const trainLineRefsForStation = async (
     )}
 out tags;
 `;
-    let data = await getOverpassData(query, "Finding train line options...");
+
+    const primaryPromise = getOverpassData(query, "Finding train line options...");
+    const fallbackPromise =
+        aroundLatLng == null
+            ? null
+            : getOverpassData(
+                  `${lineRoutesQueryByCoord(
+                      aroundLatLng.latitude,
+                      aroundLatLng.longitude,
+                      routeTypeFilter,
+                  )}
+out tags;
+`,
+                  "Finding nearby train line options...",
+              );
+
+    const [primaryData, fallbackData] = await Promise.all([
+        primaryPromise,
+        fallbackPromise ?? Promise.resolve({ elements: [] as any[] }),
+    ]);
 
     const refs = new Set<string>();
     const collectRefs = (elements: any[] = []) => {
@@ -710,22 +732,8 @@ out tags;
         }
     };
 
-    collectRefs(data.elements ?? []);
-
-    if (refs.size === 0 && aroundLatLng) {
-        const fallbackQuery = `${lineRoutesQueryByCoord(
-            aroundLatLng.latitude,
-            aroundLatLng.longitude,
-            routeTypeFilter,
-        )}
-out tags;
-`;
-        data = await getOverpassData(
-            fallbackQuery,
-            "Finding nearby train line options...",
-        );
-        collectRefs(data.elements ?? []);
-    }
+    collectRefs(primaryData.elements ?? []);
+    collectRefs(fallbackData.elements ?? []);
 
     return [...refs].sort((a, b) =>
         a.localeCompare(b, undefined, { numeric: true }),
