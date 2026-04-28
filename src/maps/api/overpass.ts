@@ -588,6 +588,9 @@ node(r.origin_rel)->.origin_nodes;
 /** Train-line queries are small; omit maxsize — public instances often 400 when maxsize exceeds their cap. */
 const LINE_ROUTE_QUERY_SETTINGS = "[out:json][timeout:120]";
 
+/** Station markers are often street-side; subway ways can sit farther away than 400 m. */
+const TRAIN_LINE_NEAR_METERS = 1000;
+
 const lineRoutesQuery = (
     originSets: string,
     hasOriginWays: boolean,
@@ -612,7 +615,7 @@ const lineRoutesQueryByCoord = (
     lineRefClause = "",
 ) => `
 ${LINE_ROUTE_QUERY_SETTINGS};
-way(around:400,${latitude},${longitude})["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.near_ways;
+way(around:${TRAIN_LINE_NEAR_METERS},${latitude},${longitude})["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.near_ways;
 (
   rel(bw.near_ways)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
 )->.line_route_rels;
@@ -746,17 +749,25 @@ out tags;
     ]);
 
     const refs = new Set<string>();
+    const ROUTE_REF_TAG_KEYS = [
+        "ref",
+        "ref:MTA",
+        "ref:US:NYCT",
+        "nyc_subway:route",
+    ] as const;
     const collectRefs = (elements: any[] = []) => {
         for (const element of elements) {
             if (element?.type !== "relation") continue;
-            const rawRef = String(element.tags?.ref ?? "").trim();
-            if (!rawRef) continue;
-            const pieces = rawRef
-                .split(/[;,/]/)
-                .map((part) => normalizeLineRef(part))
-                .filter(Boolean);
-            if (pieces.length === 0) continue;
-            for (const ref of pieces) refs.add(ref);
+            const tags = element.tags ?? {};
+            for (const key of ROUTE_REF_TAG_KEYS) {
+                const rawRef = String(tags[key] ?? "").trim();
+                if (!rawRef) continue;
+                const pieces = rawRef
+                    .split(/[;,/]/)
+                    .map((part) => normalizeLineRef(part))
+                    .filter(Boolean);
+                for (const ref of pieces) refs.add(ref);
+            }
         }
     };
 

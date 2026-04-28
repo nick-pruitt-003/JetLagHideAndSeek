@@ -119,3 +119,37 @@ export async function getGtfsStationNamesForLineRef(
     lineMembershipCache.set(normalizedRef, pending);
     return pending;
 }
+
+const isSubwayFeed = (s: { id: string; name: string }) => {
+    const id = s.id.toLowerCase();
+    const name = s.name.toLowerCase();
+    return id.includes("subway") || name.includes("subway");
+};
+
+/**
+ * When Overpass returns no route refs (timeouts, sparse tagging), still offer
+ * chips from imported GTFS subway routes (e.g. NYCT) so players can pick "7".
+ */
+export async function getSubwayLineRefOptionsFromGtfs(): Promise<string[]> {
+    const systems = await listSystems();
+    const systemIds = systems.filter(isSubwayFeed).map((s) => s.id);
+    if (systemIds.length === 0) return [];
+
+    const routes = await getAllRoutes(systemIds);
+    const refs = new Set<string>();
+    const addChip = (raw?: string) => {
+        const t = normalizeLineRef(String(raw ?? ""));
+        if (!t || t.length > 8) return;
+        refs.add(t);
+    };
+
+    for (const route of routes) {
+        if (route.routeType !== 1) continue;
+        addChip(route.shortName);
+        addChip(route.gtfsRouteId);
+    }
+
+    return [...refs].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true }),
+    );
+}

@@ -33,6 +33,7 @@ import {
     trainStations,
     triggerLocalRefresh,
 } from "@/lib/context";
+import { getSubwayLineRefOptionsFromGtfs } from "@/lib/transit/line-membership";
 import { cn } from "@/lib/utils";
 import { trainLineRefsForStation } from "@/maps/api/overpass";
 import {
@@ -273,9 +274,6 @@ export const MatchingQuestionComponent = ({
             | string
             | undefined) ??
         "nearest station";
-    const lineRefForEffect =
-        data.type === "same-train-line" ? (data.lineRef ?? "") : "";
-
     React.useEffect(() => {
         if (data.type !== "same-train-line") {
             setTrainLineOptions([]);
@@ -294,18 +292,36 @@ export const MatchingQuestionComponent = ({
             latitude: data.lat,
             longitude: data.lng,
         })
-            .then((refs) => {
+            .then(async (osmRefs) => {
+                if (cancelled) return;
+                const fromOsm = osmRefs.length > 0;
+                const refs = fromOsm
+                    ? osmRefs
+                    : await getSubwayLineRefOptionsFromGtfs();
                 if (cancelled) return;
                 setTrainLineOptions(refs);
                 const currentRef = (data.lineRef ?? "").trim();
                 if (refs.length === 0) {
-                    if (currentRef) {
-                        questionModified((data.lineRef = ""));
+                    return;
+                }
+                if (!currentRef) {
+                    if (fromOsm || refs.length === 1) {
+                        questionModified((data.lineRef = refs[0]!));
                     }
                     return;
                 }
-                if (!currentRef || !refs.includes(currentRef)) {
-                    questionModified((data.lineRef = refs[0]));
+                const fuzzy = refs.find(
+                    (r) => r.toUpperCase() === currentRef.toUpperCase(),
+                );
+                if (fuzzy && fuzzy !== currentRef) {
+                    questionModified((data.lineRef = fuzzy));
+                    return;
+                }
+                if (fuzzy) {
+                    return;
+                }
+                if (fromOsm) {
+                    questionModified((data.lineRef = refs[0]!));
                 }
             })
             .catch(() => {
@@ -319,7 +335,7 @@ export const MatchingQuestionComponent = ({
         return () => {
             cancelled = true;
         };
-    }, [lineRefForEffect, data.type, nearestTrainStationId]);
+    }, [data.type, nearestTrainStationId, data.lat, data.lng]);
 
     switch (data.type) {
         case "zone":
