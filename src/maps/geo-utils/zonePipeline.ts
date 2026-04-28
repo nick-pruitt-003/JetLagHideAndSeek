@@ -537,107 +537,109 @@ export async function applyQuestionFilters({
                     const osmNameKeys = new Set(
                         stops.map((s) => s.nameKey).filter(Boolean),
                     );
+                    // Cheap to fetch (already cached by line ref) and only
+                    // used when neither OSM source can answer for a circle.
+                    const gtfsNames = await getGtfsStationNamesForLineRef(
+                        trainLineRef,
+                    );
 
-                    /** True iff this circle's underlying station sits within
-                     *  the proximity radius of any stop on the route. Used to
-                     *  disambiguate homonyms — e.g. "111 St" on the J in
-                     *  Richmond Hill is ~8 km from "111 St" on the 7 in
-                     *  Corona, far outside the radius. */
-                    const circleIsOnRouteByGeometry = (
-                        circle: StationCircle,
-                    ): boolean => {
-                        const coord = circle.properties.geometry.coordinates;
-                        if (!coord || coord.length < 2) return false;
-                        const [lon, lat] = coord;
-                        for (const stop of stops) {
-                            if (
-                                haversineMeters(lat, lon, stop.lat, stop.lon) <=
-                                TRAIN_LINE_STOP_PROXIMITY_METERS
-                            ) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    };
-
-                    const filterByNameSet = (
-                        nameSet: Set<string>,
-                    ): StationCircle[] =>
-                        current.filter((circle) => {
-                            const stationName = extractStationName(
-                                circle.properties,
-                            );
-                            if (!stationName) return false;
-                            const onLine = nameSet.has(
-                                stationNameMatchKey(stationName),
-                            );
-                            return wantSameTrainLine ? onLine : !onLine;
-                        });
-
-                    // 1. Match by OSM node id. Works when zone circles are
-                    //    tagged with the same `node/<id>` the route relation
-                    //    references — typical for `railway=station` zones.
-                    let next: StationCircle[] | null = null;
-                    if (nodeIdSet.size > 0) {
-                        next = current.filter((circle) => {
-                            const idProp = circle.properties.properties.id;
-                            if (!idProp || !idProp.includes("/")) return false;
-                            const id = parseInt(idProp.split("/")[1], 10);
-                            return wantSameTrainLine
-                                ? nodeIdSet.has(id)
-                                : !nodeIdSet.has(id);
-                        });
-                    }
-
-                    // 2. Fallback: match by spatial proximity to any route
-                    //    stop. Zone circles sometimes use a different OSM id
-                    //    (relation, way, or a sibling station node) than the
-                    //    route relation members. Geometry-based matching is
-                    //    homonym-safe — same-named stations on different
-                    //    lines (e.g. 111 St on J vs 7) are kilometers apart.
-                    if (
-                        (next == null || next.length === 0) &&
-                        stops.length > 0
-                    ) {
-                        next = current.filter((circle) => {
-                            const onLine = circleIsOnRouteByGeometry(circle);
-                            return wantSameTrainLine ? onLine : !onLine;
-                        });
-                    }
-
-                    // 3. Last-resort fallback: GTFS stop names for this line
-                    //    ref. Loses homonym disambiguation but better than a
-                    //    silent no-op when Overpass returns no geometry.
-                    //    Falls back to OSM names from this query first (also
-                    //    name-only, but at least free of a GTFS dependency).
-                    if (next == null || next.length === 0) {
-                        if (osmNameKeys.size > 0) {
-                            next = filterByNameSet(osmNameKeys);
-                        }
-                        if (next == null || next.length === 0) {
-                            const gtfsNames =
-                                await getGtfsStationNamesForLineRef(
-                                    trainLineRef,
-                                );
-                            if (gtfsNames.size > 0) {
-                                next = filterByNameSet(gtfsNames);
-                            }
-                        }
-                    }
-
-                    if (next == null) {
+                    const haveAnySignal =
+                        nodeIdSet.size > 0 ||
+                        stops.length > 0 ||
+                        osmNameKeys.size > 0 ||
+                        gtfsNames.size > 0;
+                    if (!haveAnySignal) {
                         // Nothing usable from OSM nodes, OSM geometry, OSM
                         // names, or GTFS. Don't silently zero out the zone —
                         // keep `current` and warn so the user knows the
-                        // filter was a no-op.
+                        // filter was a no-op (same/different both unsafe).
                         toast?.warning(
                             `No train line data found for ${extractStationName(
                                 nearestTrainStation,
                             )}; skipping 'same train line' filter.`,
                         );
-                    } else {
-                        current = next;
+                        continue;
                     }
+
+                    /** OR across every available signal. The previous
+                     *  layered approach only worked for "Same" (where an
+                     *  empty result meant "fall through to the next
+                     *  signal"); under "Different" tier 1 silently
+                     *  short-circuited because !nodeIdSet.has(id) was true
+                     *  for nearly every circle (zone circles use
+                     *  railway=station ids while route relations reference
+                     *  stop_position ids), so 7-line stops survived. A
+                     *  single union predicate lets one negation handle both
+                     *  directions correctly. */
+                    const isOnLine = (circle: StationCircle): boolean => {
+                        const idProp = circle.properties.properties.id;
+                        if (idProp && idProp.includes("/")) {
+                            const id = parseInt(idProp.split("/")[1], 10);
+                            if (
+                                !Number.isNaN(id) &&
+                                nodeIdSet.has(id)
+                            ) {
+                                return true;
+                            }
+                        }
+
+                        if (stops.length > 0) {
+                            const coord =
+                                circle.properties.geometry.coordinates;
+                            if (coord && coord.length >= 2) {
+                                const [lon, lat] = coord;
+                                for (const stop of stops) {
+                                    if (
+                                        haversineMeters(
+                                            lat,
+                                            lon,
+                                            stop.lat,
+                                            stop.lon,
+                                        ) <=
+                                        TRAIN_LINE_STOP_PROXIMITY_METERS
+                                    ) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Name-only signals are last because they can't
+                        // disambiguate homonyms (e.g. "111 St" on J vs 7).
+                        // We still consult them when geometry is missing
+                        // entirely (e.g. Overpass returned route metadata
+                        // but no stop coords, or only GTFS is available).
+                        const stationName = extractStationName(
+                            circle.properties,
+                        );
+                        if (stationName) {
+                            const key = stationNameMatchKey(stationName);
+                            if (key) {
+                                if (
+                                    stops.length === 0 &&
+                                    osmNameKeys.size > 0 &&
+                                    osmNameKeys.has(key)
+                                ) {
+                                    return true;
+                                }
+                                if (
+                                    nodeIdSet.size === 0 &&
+                                    stops.length === 0 &&
+                                    gtfsNames.size > 0 &&
+                                    gtfsNames.has(key)
+                                ) {
+                                    return true;
+                                }
+                            }
+                        }
+
+                        return false;
+                    };
+
+                    current = current.filter((circle) => {
+                        const onLine = isOnLine(circle);
+                        return wantSameTrainLine ? onLine : !onLine;
+                    });
                 }
             }
 
