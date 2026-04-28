@@ -431,25 +431,20 @@ export async function applyQuestionFilters({
 
             const wantSame = question.data.same === true;
             current = current.filter((circle) => {
-                const zone = circle as Feature<Polygon | MultiPolygon>;
                 const seekerRegion = seekerCell as Feature<Polygon | MultiPolygon>;
-
-                // A hiding zone is valid if there exists at least one point
-                // within the zone that can satisfy the matching constraint.
-                // Center-only checks over-prune large zones that cross the
-                // Voronoi boundary between facilities.
-                const intersectsSeekerRegion = !turf.booleanDisjoint(
-                    zone,
+                const stationPoint = turf.point(
+                    turf.getCoord(circle.properties as Feature<Point>),
+                );
+                const inSeekerRegion = turf.booleanPointInPolygon(
+                    stationPoint,
                     seekerRegion,
                 );
 
                 if (wantSame) {
-                    return intersectsSeekerRegion;
+                    return inSeekerRegion;
                 }
 
-                // For "different", only zones entirely contained in the
-                // seeker's Voronoi cell are impossible.
-                return !turf.booleanWithin(zone, seekerRegion);
+                return !inSeekerRegion;
             });
         }
 

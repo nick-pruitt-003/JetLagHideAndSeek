@@ -484,6 +484,24 @@ node(r.originRel)->.originNodes;
 `;
 };
 
+const lineRoutesQuery = (
+    originSets: string,
+    routeTypeFilter: string,
+    lineRefClause = "",
+) => `
+[out:json][timeout:120][maxsize:536870912];
+${originSets}
+way(bn.originNodes)->.nodeWays;
+(
+  rel(bn.originNodes)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+  rel(bw.originWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+  rel(br.originRel)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+  rel(bw.nodeWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+);
+->.routes;
+(.routes;>;);
+`;
+
 export const trainLineNodeFinder = async (
     node: string,
     lineRef?: string,
@@ -499,17 +517,7 @@ export const trainLineNodeFinder = async (
         ? `["ref"~"(^|[; ,/])${escapeOverpassRegex(normalizedLineRef)}([; ,/]|$)"]`
         : "";
 
-    const query = `
-[out:json][timeout:120][maxsize:536870912];
-${originSets}
-way(around.originNodes:120)["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
-(
-  rel(bn.originNodes)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
-  rel(bw.originWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
-  rel(bw.nearWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
-);
-->.routes;
-(.routes;>;);
+    const query = `${lineRoutesQuery(originSets, routeTypeFilter, lineRefClause)}
 out body;
 `;
     const data = await getOverpassData(query, "Finding train lines...");
@@ -532,15 +540,7 @@ export const trainLineRefsForStation = async (
     const originSets = lineOriginSetsQuery(node);
     if (!originSets) return [];
     const routeTypeFilter = "subway|light_rail|train|tram|monorail|funicular";
-    const query = `
-[out:json][timeout:120][maxsize:536870912];
-${originSets}
-way(around.originNodes:120)["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
-(
-  rel(bn.originNodes)["type"="route"]["route"~"^(${routeTypeFilter})$"];
-  rel(bw.originWays)["type"="route"]["route"~"^(${routeTypeFilter})$"];
-  rel(bw.nearWays)["type"="route"]["route"~"^(${routeTypeFilter})$"];
-);
+    const query = `${lineRoutesQuery(originSets, routeTypeFilter)}
 out tags;
 `;
     const data = await getOverpassData(query, "Finding train line options...");
