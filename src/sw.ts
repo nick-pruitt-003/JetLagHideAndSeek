@@ -14,10 +14,9 @@
 //   * Map tiles (Carto, OSM, Thunderforest) — StaleWhileRevalidate so
 //     previously-viewed tiles keep rendering offline, with aggressive
 //     expiration caps so we don't blow out storage.
-//   * Geocoders + boundary APIs (Photon, Nominatim, Overpass) — SWR
-//     too, so revisiting the same city or re-running the same question
-//     works offline while still refreshing in the background when we
-//     do have network.
+//   * Geocoders + boundary APIs (Photon, Nominatim) — SWR for offline
+//     reuse. Overpass is network-only (see runtime route) so production
+//     SW matches localhost behavior and avoids no-response failures.
 //   * Same-origin API routes (/api/**) — NetworkFirst with a short
 //     timeout so the live server's responses always win when online
 //     but cached responses keep the UI alive when offline.
@@ -32,6 +31,7 @@ import {
     CacheFirst,
     ExpirationPlugin,
     NetworkFirst,
+    NetworkOnly,
     type PrecacheEntry,
     Serwist,
     type SerwistGlobalConfig,
@@ -135,24 +135,15 @@ const serwist = new Serwist({
             }),
         },
         {
-            // Overpass — detailed-boundary upgrade + POI fetches. GET
-            // only (POSTs aren't cached — this matcher only fires
-            // against fetches that use GET). We match both the primary
-            // and fallback endpoints we actually call.
+            // Overpass — must bypass caching strategies that touch the Cache
+            // API. StaleWhileRevalidate caused `no-response` / Failed to fetch
+            // in production (SW on Railway) while localhost worked (SW off by
+            // default): long unique GET URLs + SWR left the handler with no
+            // usable response. Network-only matches dev behavior.
             matcher:
-                /^https:\/\/(overpass-api\.de|overpass\.private\.coffee)\/api\/interpreter.*/i,
+                /^https:\/\/(overpass-api\.de|overpass\.kumi\.systems|overpass\.private\.coffee)\/api\/interpreter.*/i,
             method: "GET" as const,
-            handler: new StaleWhileRevalidate({
-                cacheName: "boundaries-overpass",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 80,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: new NetworkOnly(),
         },
         {
             // Leaflet marker sprites, Leaflet-Draw assets, and similar
