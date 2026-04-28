@@ -292,7 +292,14 @@ export const MatchingQuestionComponent = ({
             .then((refs) => {
                 if (cancelled) return;
                 setTrainLineOptions(refs);
-                if (refs.length === 1 && !(data.lineRef ?? "").trim()) {
+                const currentRef = (data.lineRef ?? "").trim();
+                if (refs.length === 0) {
+                    if (currentRef) {
+                        questionModified((data.lineRef = ""));
+                    }
+                    return;
+                }
+                if (!currentRef || !refs.includes(currentRef)) {
                     questionModified((data.lineRef = refs[0]));
                 }
             })

@@ -378,6 +378,9 @@ export async function applyQuestionFilters({
     resolveTrainLineNodes = trainLineNodeFinder,
 }: ApplyQuestionFiltersOptions): Promise<StationCircle[]> {
     let current = circles;
+    // Keep a stable reference set for seeker-side lookups so matching
+    // questions don't drift when earlier filters trim `current`.
+    const seekerReferenceCircles = circles;
 
     for (const question of questions) {
         if (planningModeEnabled && question.data.drag) continue;
@@ -462,7 +465,9 @@ export async function applyQuestionFilters({
 
             const nearestTrainStation = turf.nearestPoint(
                 location,
-                turf.featureCollection(current.map((x) => x.properties)) as any,
+                turf.featureCollection(
+                    seekerReferenceCircles.map((x) => x.properties),
+                ) as any,
             );
 
             if (question.data.type === "same-train-line") {
