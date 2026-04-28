@@ -275,11 +275,16 @@ export const MatchingQuestionComponent = ({
             | undefined) ??
         "nearest station";
 
+    // Pulled out so the useMemo deps below stay statically analyzable
+    // (@eslint-react/exhaustive-deps rejects ternaries in dep arrays).
+    const trainLineRefForMemo =
+        data.type === "same-train-line"
+            ? ((data as { lineRef?: string }).lineRef ?? "")
+            : "";
+
     const trainLineChips = React.useMemo(() => {
         if (data.type !== "same-train-line") return [];
-        const manual = String(
-            (data as { lineRef?: string }).lineRef ?? "",
-        ).trim();
+        const manual = trainLineRefForMemo.trim();
         const seen = new Set<string>();
         const out: string[] = [];
         for (const r of trainLineOptions) {
@@ -298,15 +303,15 @@ export const MatchingQuestionComponent = ({
         return out.sort((a, b) =>
             a.localeCompare(b, undefined, { numeric: true }),
         );
-    }, [
-        data.type,
-        trainLineOptions,
-        data.type === "same-train-line"
-            ? (data as { lineRef?: string }).lineRef
-            : null,
-    ]);
+    }, [data.type, trainLineOptions, trainLineRefForMemo]);
 
     React.useEffect(() => {
+        // The synchronous setState calls in this effect are deliberate:
+        // they reset the chip list when the question type changes or when
+        // there's no station to query. @eslint-react/set-state-in-effect
+        // wants async-gated updates, which would mean an extra render where
+        // stale chips are briefly visible — worse UX than the warning.
+        /* eslint-disable @eslint-react/set-state-in-effect */
         if (data.type !== "same-train-line") {
             setTrainLineOptions([]);
             setTrainLineOptionsLoading(false);
@@ -320,6 +325,7 @@ export const MatchingQuestionComponent = ({
 
         let cancelled = false;
         setTrainLineOptionsLoading(true);
+        /* eslint-enable @eslint-react/set-state-in-effect */
         trainLineRefsForStation(nearestTrainStationId, {
             latitude: data.lat,
             longitude: data.lng,
@@ -372,6 +378,11 @@ export const MatchingQuestionComponent = ({
         return () => {
             cancelled = true;
         };
+        // `data` isn't a dep on purpose: this effect mutates `data.lineRef`
+        // via questionModified, so re-running on every lineRef change would
+        // create a feedback loop. The granular deps below cover every input
+        // that should re-trigger the fetch.
+        // eslint-disable-next-line @eslint-react/exhaustive-deps
     }, [data.type, nearestTrainStationId, data.lat, data.lng]);
 
     switch (data.type) {
