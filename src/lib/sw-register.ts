@@ -56,6 +56,18 @@ function clearDismissedWaitingScriptURL() {
 export function registerServiceWorker() {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
+    // In local dev, stale SW caches can keep serving old client bundles and
+    // make debugging impossible. Opt-in only via PUBLIC_ENABLE_SW=1.
+    const isLocalhost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+    if (
+        isLocalhost &&
+        import.meta.env.PUBLIC_ENABLE_SW !== "1" &&
+        import.meta.env.PUBLIC_ENABLE_SW !== "true"
+    ) {
+        return;
+    }
 
     // `BASE_URL` can be provided with or without a trailing slash
     // depending on environment/build tooling. Normalize so URL joining

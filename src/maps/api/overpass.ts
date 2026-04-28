@@ -188,11 +188,18 @@ const getOverpassData = async (
 
     let response: Response;
 
-    const debugOverpassFailure = (status: number, statusText: string) => {
+    const debugOverpassFailure = async (res: Response) => {
+        let bodySnippet = "";
+        try {
+            bodySnippet = (await res.clone().text()).slice(0, 1200);
+        } catch {
+            /* ignore */
+        }
         const payload = {
-            status,
-            statusText,
+            status: res.status,
+            statusText: res.statusText,
             query,
+            bodySnippet,
             timestamp: new Date().toISOString(),
             usePost,
         };
@@ -204,9 +211,10 @@ const getOverpassData = async (
             w.__overpassDebug.push(payload);
         }
         console.groupCollapsed(
-            `[Overpass debug] ${status} ${statusText} (${usePost ? "POST" : "GET"})`,
+            `[Overpass debug] ${res.status} ${res.statusText} (${usePost ? "POST" : "GET"})`,
         );
         console.log(payload);
+        if (bodySnippet) console.log("body:", bodySnippet);
         console.groupEnd();
     };
 
@@ -251,6 +259,15 @@ const getOverpassData = async (
     }
 
     if (!response.ok && !usePost) {
+        // Some Overpass frontends/proxies return 400 for long/complex GET
+        // query strings but accept the same payload via POST.
+        const postRetryResponse = await fetchOverpassPost();
+        if (postRetryResponse.ok) {
+            response = postRetryResponse;
+        }
+    }
+
+    if (!response.ok && !usePost) {
         // Try the fallback, but store the result under the primary URL key so future requests are served from cache without needing to fail-over again.
         try {
             const fallbackResponse = await cacheFetch(
@@ -264,7 +281,7 @@ const getOverpassData = async (
             }
             response = fallbackResponse;
         } catch {
-            debugOverpassFailure(response.status, response.statusText);
+            await debugOverpassFailure(response);
             toast.error(
                 `Could not load data from Overpass: ${response.status} ${response.statusText}`,
                 { toastId: "overpass-error" },
@@ -278,7 +295,7 @@ const getOverpassData = async (
             await new Promise((r) => setTimeout(r, OVERPASS_RETRY_DELAY_MS));
             return getOverpassData(query, loadingText, cacheType, true);
         }
-        debugOverpassFailure(response.status, response.statusText);
+        await debugOverpassFailure(response);
         toast.error(
             `Could not load data from Overpass: ${response.status} ${response.statusText}`,
             { toastId: "overpass-error" },
@@ -544,7 +561,7 @@ const lineOriginSetsQuery = (
     if (parsed.type === "node") {
         return {
             query: `
-node(${parsed.id})->.originNodes;
+node(${parsed.id})->.origin_nodes;
 `,
             hasOriginWays: false,
         };
@@ -552,21 +569,24 @@ node(${parsed.id})->.originNodes;
     if (parsed.type === "way") {
         return {
             query: `
-way(${parsed.id})->.originWays;
-node(w.originWays)->.originNodes;
+way(${parsed.id})->.origin_ways;
+node(w.origin_ways)->.origin_nodes;
 `,
             hasOriginWays: true,
         };
     }
     return {
         query: `
-relation(${parsed.id})->.originRel;
-way(r.originRel)->.originWays;
-node(r.originRel)->.originNodes;
+relation(${parsed.id})->.origin_rel;
+way(r.origin_rel)->.origin_ways;
+node(r.origin_rel)->.origin_nodes;
 `,
         hasOriginWays: true,
     };
 };
+
+/** Train-line queries are small; omit maxsize — public instances often 400 when maxsize exceeds their cap. */
+const LINE_ROUTE_QUERY_SETTINGS = "[out:json][timeout:120]";
 
 const lineRoutesQuery = (
     originSets: string,
@@ -574,13 +594,13 @@ const lineRoutesQuery = (
     routeTypeFilter: string,
     lineRefClause = "",
 ) => `
-[out:json][timeout:120][maxsize:536870912];
+${LINE_ROUTE_QUERY_SETTINGS};
 ${originSets}
-way(bn.originNodes)->.nodeWays;
+way(bn.origin_nodes)->.node_ways;
 (
-  rel(bn.originNodes)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
-  ${hasOriginWays ? `rel(bw.originWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};` : ""}
-  rel(bw.nodeWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+  rel(bn.origin_nodes)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+  ${hasOriginWays ? `rel(bw.origin_ways)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};` : ""}
+  rel(bw.node_ways)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
 );
 ->.routes;
 (.routes;>;);
@@ -592,10 +612,10 @@ const lineRoutesQueryByCoord = (
     routeTypeFilter: string,
     lineRefClause = "",
 ) => `
-[out:json][timeout:120][maxsize:536870912];
-way(around:400,${latitude},${longitude})["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
+${LINE_ROUTE_QUERY_SETTINGS};
+way(around:400,${latitude},${longitude})["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.near_ways;
 (
-  rel(bw.nearWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+  rel(bw.near_ways)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
 );
 ->.routes;
 (.routes;>;);

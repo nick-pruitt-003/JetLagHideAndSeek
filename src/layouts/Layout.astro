@@ -10,6 +10,8 @@ interface Props {
 const { className } = Astro.props;
 
 const manifestHref = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/manifest.webmanifest`;
+const isLocalhost =
+    Astro.url.hostname === "localhost" || Astro.url.hostname === "127.0.0.1";
 ---
 
 <!doctype html>
@@ -65,22 +67,26 @@ const manifestHref = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/manifest.we
           `is:inline` tells Astro "yes, skip processing, on purpose"
           and silences the ts hint about implicit inlining.
         */}
-        <script
-            is:inline
-            type="text/partytown"
-            async
-            src="https://www.googletagmanager.com/gtag/js?id=G-RKJ9G6CNC2"
-        ></script>
-        <script is:inline type="text/partytown">
-            window.dataLayer = window.dataLayer || [];
-            function gtag() {
-                // eslint-disable-next-line prefer-rest-params
-                dataLayer.push(arguments);
-            }
-            gtag("js", new Date());
+        {!isLocalhost && (
+            <>
+                <script
+                    is:inline
+                    type="text/partytown"
+                    async
+                    src="https://www.googletagmanager.com/gtag/js?id=G-RKJ9G6CNC2"
+                ></script>
+                <script is:inline type="text/partytown">
+                    window.dataLayer = window.dataLayer || [];
+                    function gtag() {
+                        // eslint-disable-next-line prefer-rest-params
+                        dataLayer.push(arguments);
+                    }
+                    gtag("js", new Date());
 
-            gtag("config", "G-RKJ9G6CNC2");
-        </script>
+                    gtag("config", "G-RKJ9G6CNC2");
+                </script>
+            </>
+        )}
         <script is:inline>
             if (!window.location.host.includes("localhost")) {
                 (function (c, l, a, r, i, t, y) {
