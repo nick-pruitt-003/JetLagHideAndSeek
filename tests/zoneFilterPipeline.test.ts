@@ -513,6 +513,113 @@ describe("applyQuestionFilters", () => {
         ]);
     });
 
+    it("stacks airport Voronoi with same-admin-zone polygon filter", async () => {
+        const hvn = turf.point([-72.999, 41.265]);
+        const jfk = turf.point([-73.778, 40.641]);
+        const airports = turf.featureCollection([hvn, jfk]);
+        const airportQuestionData = {
+            type: "airport" as const,
+            lat: 41.25,
+            lng: -72.95,
+            same: true,
+            activeOnly: false,
+            drag: false,
+            color: "black",
+            collapsed: false,
+        };
+        const zoneKey = "fixture-overpass-zone";
+        const key = matchingFacilityCacheKey(
+            airportQuestionData as any,
+            zoneKey,
+        );
+        const cache = new Map([[key, airports]]);
+
+        const circles = build([
+            { id: "near-hvn", lng: -72.99, lat: 41.27, name: "Near HVN" },
+            { id: "near-jfk", lng: -73.9, lat: 40.7, name: "Near JFK" },
+        ]);
+
+        // JFK-side box only — HVN station lies outside.
+        const jfkOnlyRegion = turf.polygon([
+            [
+                [-74.2, 40.55],
+                [-73.55, 40.55],
+                [-73.55, 40.72],
+                [-74.2, 40.72],
+                [-74.2, 40.55],
+            ],
+        ]);
+
+        const adminQuestion = {
+            id: "matching",
+            key: 4,
+            data: {
+                type: "same-admin-zone" as const,
+                lat: 40.74685,
+                lng: -73.89174,
+                same: true,
+                drag: false,
+                color: "green",
+                collapsed: false,
+                cat: { adminLevel: 6 as const },
+            },
+        } as unknown as Question;
+
+        const out = await applyQuestionFilters({
+            circles,
+            questions: [
+                {
+                    id: "matching",
+                    key: 1,
+                    data: airportQuestionData,
+                } as unknown as Question,
+                adminQuestion,
+            ],
+            measuringPoiCache: new Map(),
+            matchingFacilityCache: cache,
+            matchingZoneKey: zoneKey,
+            hidingRadius: 0.25,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+            resolveMatchingAdminRegion: async () => jfkOnlyRegion,
+        });
+
+        expect(out.map((c) => c.properties.properties.id).sort()).toEqual([]);
+
+        const outKeepHvn = await applyQuestionFilters({
+            circles,
+            questions: [
+                {
+                    id: "matching",
+                    key: 1,
+                    data: airportQuestionData,
+                } as unknown as Question,
+                adminQuestion,
+            ],
+            measuringPoiCache: new Map(),
+            matchingFacilityCache: cache,
+            matchingZoneKey: zoneKey,
+            hidingRadius: 0.25,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+            resolveMatchingAdminRegion: async () =>
+                turf.polygon([
+                    [
+                        [-73.05, 41.2],
+                        [-72.9, 41.2],
+                        [-72.9, 41.35],
+                        [-73.05, 41.35],
+                        [-73.05, 41.2],
+                    ],
+                ]),
+        });
+        expect(
+            outKeepHvn.map((c) => c.properties.properties.id).sort(),
+        ).toEqual(["near-hvn"]);
+    });
+
     it("classifies airport matching by station center, not circle overlap", async () => {
         const hvn = turf.point([-72.999, 41.265]);
         const jfk = turf.point([-73.778, 40.641]);

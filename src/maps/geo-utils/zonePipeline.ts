@@ -40,9 +40,13 @@ import {
     type StationPlace,
     trainLineNodeFinder,
 } from "@/maps/api";
+import { safeUnion } from "@/maps/geo-utils/operators";
 import { extractStationName } from "@/maps/geo-utils/special";
 import { geoSpatialVoronoi } from "@/maps/geo-utils/voronoi";
-import { findMatchingPlaces } from "@/maps/questions/matching";
+import {
+    determineMatchingBoundary,
+    findMatchingPlaces,
+} from "@/maps/questions/matching";
 import type {
     MatchingQuestion,
     MatchingQuestionWithFacilityOsmRefs,
@@ -366,6 +370,13 @@ export interface ApplyQuestionFiltersOptions {
         nodeIds: number[];
         stops: { lat: number; lon: number; nameKey: string }[];
     }>;
+    /**
+     * OSM admin / letter / custom zone geometry for zone-style matching.
+     * Defaults to {@link determineMatchingBoundary}. Swappable for tests.
+     */
+    resolveMatchingAdminRegion?: (
+        data: MatchingQuestion,
+    ) => Promise<Feature<Polygon | MultiPolygon> | null>;
 }
 
 /**
@@ -377,6 +388,85 @@ export interface ApplyQuestionFiltersOptions {
  * the same line (the closest pairs in dense networks like NYC are ~400 m).
  */
 const TRAIN_LINE_STOP_PROXIMITY_METERS = 250;
+
+function boundaryToPolygonFeature(
+    boundary: unknown,
+): Feature<Polygon | MultiPolygon> | null {
+    if (boundary === false || boundary == null) return null;
+    if (typeof boundary !== "object") return null;
+    const b = boundary as
+        | Feature<Polygon | MultiPolygon>
+        | FeatureCollection<Polygon | MultiPolygon>;
+    if ("geometry" in b && b.geometry) {
+        const t = b.geometry.type;
+        if (t === "Polygon" || t === "MultiPolygon") {
+            return b as Feature<Polygon | MultiPolygon>;
+        }
+        return null;
+    }
+    if (
+        "features" in b &&
+        Array.isArray(b.features) &&
+        b.features.length > 0
+    ) {
+        const u = safeUnion(b);
+        if (
+            u &&
+            typeof u === "object" &&
+            "geometry" in u &&
+            u.geometry &&
+            (u.geometry.type === "Polygon" || u.geometry.type === "MultiPolygon")
+        ) {
+            return u as Feature<Polygon | MultiPolygon>;
+        }
+    }
+    return null;
+}
+
+async function defaultResolveMatchingAdminRegion(
+    data: MatchingQuestion,
+): Promise<Feature<Polygon | MultiPolygon> | null> {
+    const raw = await determineMatchingBoundary(data);
+    return boundaryToPolygonFeature(raw);
+}
+
+/**
+ * Voronoi cell that owns the seeker pin. Prefer point-in-polygon; if the
+ * seeker falls through (projection gaps, boundaries, numeric issues), use
+ * the cell for the {@link turf.nearestPoint} airport — otherwise we skip
+ * airport matching entirely and every station stays visible.
+ */
+function voronoiCellForSeeker(
+    seekerPoint: Feature<Point>,
+    voronoiFc: FeatureCollection<Polygon | MultiPolygon>,
+    airportPoints: FeatureCollection<Point>,
+): Feature<Polygon | MultiPolygon> | undefined {
+    for (const cell of voronoiFc.features) {
+        if (
+            cell.geometry &&
+            turf.booleanPointInPolygon(
+                seekerPoint,
+                cell as Feature<Polygon | MultiPolygon>,
+            )
+        ) {
+            return cell as Feature<Polygon | MultiPolygon>;
+        }
+    }
+
+    if (airportPoints.features.length === 0) return undefined;
+
+    const nearestAirport = turf.nearestPoint(seekerPoint, airportPoints);
+    const [nx, ny] = nearestAirport.geometry.coordinates;
+    const coordNear = (a: number, b: number) => Math.abs(a - b) < 1e-8;
+
+    return voronoiFc.features.find((cell) => {
+        const c = (
+            cell.properties as { site?: Feature<Point> } | null | undefined
+        )?.site?.geometry?.coordinates as [number, number] | undefined;
+        if (!c) return false;
+        return coordNear(c[0], nx) && coordNear(c[1], ny);
+    }) as Feature<Polygon | MultiPolygon> | undefined;
+}
 
 /** Cheap haversine — avoids spinning up turf.point for every circle/stop pair. */
 function haversineMeters(
@@ -399,8 +489,9 @@ function haversineMeters(
 
 /**
  * Apply every active matching/measuring filter to the circle set. Pure
- * in its inputs — the only async work is `resolveTrainLineNodes`,
- * which defaults to `trainLineNodeFinder`.
+ * in its inputs — async work: `resolveTrainLineNodes` (train-line),
+ * `resolveMatchingAdminRegion` (admin / letter / custom zone), and
+ * `determineMatchingBoundary` by default for the latter.
  */
 export async function applyQuestionFilters({
     circles,
@@ -414,6 +505,7 @@ export async function applyQuestionFilters({
     planningModeEnabled,
     toast,
     resolveTrainLineNodes = trainLineNodeFinder,
+    resolveMatchingAdminRegion = defaultResolveMatchingAdminRegion,
 }: ApplyQuestionFiltersOptions): Promise<StationCircle[]> {
     let current = circles;
     // Keep a stable reference set for seeker-side lookups so matching
@@ -440,31 +532,13 @@ export async function applyQuestionFilters({
                 question.data.lng,
                 question.data.lat,
             ]);
-            const voronoiFc = geoSpatialVoronoi(
-                points as FeatureCollection<Point>,
+            const airportFc = points as FeatureCollection<Point>;
+            const voronoiFc = geoSpatialVoronoi(airportFc);
+            const seekerCell = voronoiCellForSeeker(
+                seekerPoint,
+                voronoiFc,
+                airportFc,
             );
-            const [sx, sy] = seekerPoint.geometry.coordinates;
-            const coordEq = (a: number, b: number) => Math.abs(a - b) < 1e-9;
-            let seekerCell = voronoiFc.features.find((cell) => {
-                const c = (
-                    cell.properties as
-                        | { site?: Feature<Point> }
-                        | null
-                        | undefined
-                )?.site?.geometry?.coordinates as [number, number] | undefined;
-                if (!c) return false;
-                return coordEq(c[0], sx) && coordEq(c[1], sy);
-            });
-            if (!seekerCell?.geometry) {
-                seekerCell = voronoiFc.features.find(
-                    (cell) =>
-                        Boolean(cell.geometry) &&
-                        turf.booleanPointInPolygon(
-                            seekerPoint,
-                            cell as Feature<Polygon | MultiPolygon>,
-                        ),
-                );
-            }
             if (!seekerCell?.geometry) continue;
 
             const wantSame = question.data.same === true;
@@ -485,6 +559,42 @@ export async function applyQuestionFilters({
                 }
 
                 return !inSeekerRegion;
+            });
+        }
+
+        if (
+            question.id === "matching" &&
+            (question.data.type === "zone" ||
+                question.data.type === "same-admin-zone" ||
+                question.data.type === "letter-zone" ||
+                question.data.type === "custom-zone")
+        ) {
+            if (current.length === 0) break;
+
+            const data = question.data as MatchingQuestion;
+            let region: Feature<Polygon | MultiPolygon> | null = null;
+            try {
+                region = await resolveMatchingAdminRegion(data);
+            } catch {
+                toast?.warning(
+                    "Could not load a zone matching boundary; skipping that filter.",
+                );
+                continue;
+            }
+            if (!region) {
+                toast?.warning(
+                    "No zone geometry for a matching question; skipping that filter.",
+                );
+                continue;
+            }
+
+            const wantSame = data.same === true;
+            current = current.filter((circle) => {
+                const stationPoint = turf.point(
+                    turf.getCoord(circle.properties as Feature<Point>),
+                );
+                const inside = turf.booleanPointInPolygon(stationPoint, region);
+                return wantSame ? inside : !inside;
             });
         }
 
