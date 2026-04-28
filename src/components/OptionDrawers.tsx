@@ -600,10 +600,8 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                 </Button>
                             </div>
                             <Separator className="bg-slate-300 w-[280px]" />
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Animate map movements?
-                                </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Animate map movements?
                                 <Checkbox
                                     checked={$animateMapMovements}
                                     onCheckedChange={() => {
@@ -612,11 +610,9 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                         );
                                     }}
                                 />
-                            </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Force Pastebin for sharing?
-                                </label>
+                            </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Force Pastebin for sharing?
                                 <Checkbox
                                     checked={$alwaysUsePastebin}
                                     onCheckedChange={() =>
@@ -625,11 +621,9 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                         )
                                     }
                                 />
-                            </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Enable planning mode?
-                                </label>
+                            </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Enable planning mode?
                                 <Checkbox
                                     checked={$planningMode}
                                     onCheckedChange={() => {
@@ -653,44 +647,36 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                         planningModeEnabled.set(!$planningMode);
                                     }}
                                 />
-                            </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Auto save?
-                                </label>
+                            </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Auto save?
                                 <Checkbox
                                     checked={$autoSave}
                                     onCheckedChange={() =>
                                         autoSave.set(!$autoSave)
                                     }
                                 />
-                            </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Auto zoom?
-                                </label>
+                            </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Auto zoom?
                                 <Checkbox
                                     checked={$autoZoom}
                                     onCheckedChange={() =>
                                         autoZoom.set(!$autoZoom)
                                     }
                                 />
-                            </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Follow Me (GPS)?
-                                </label>
+                            </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Follow Me (GPS)?
                                 <Checkbox
                                     checked={$followMe}
                                     onCheckedChange={() =>
                                         followMe.set(!$followMe)
                                     }
                                 />
-                            </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Default to custom questions?
-                                </label>
+                            </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Default to custom questions?
                                 <Checkbox
                                     checked={$defaultCustomQuestions}
                                     onCheckedChange={() =>
@@ -699,11 +685,9 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                         )
                                     }
                                 />
-                            </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Allow Google Plus codes?
-                                </label>
+                            </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Allow Google Plus codes?
                                 <Checkbox
                                     checked={$allowGooglePlusCodes}
                                     onCheckedChange={() =>
@@ -712,11 +696,9 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                         )
                                     }
                                 />
-                            </div>
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Hider mode?
-                                </label>
+                            </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Hider mode?
                                 <Checkbox
                                     checked={!!$hiderMode}
                                     onCheckedChange={() => {
@@ -742,7 +724,7 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                         }
                                     }}
                                 />
-                            </div>
+                            </label>
                             {$hiderMode !== false && (
                                 <SidebarMenu>
                                     <LatitudeLongitude
@@ -780,10 +762,8 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     )}
                                 </SidebarMenu>
                             )}
-                            <div className="flex flex-row items-center gap-2">
-                                <label className="text-2xl font-semibold font-poppins">
-                                    Starting location?
-                                </label>
+                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
+                                Starting location?
                                 <Checkbox
                                     checked={!!$startingLocation}
                                     onCheckedChange={() => {
@@ -809,7 +789,7 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                         }
                                     }}
                                 />
-                            </div>
+                            </label>
                             {$startingLocation !== false && (
                                 <SidebarMenu>
                                     <LatitudeLongitude
