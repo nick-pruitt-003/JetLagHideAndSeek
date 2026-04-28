@@ -198,6 +198,8 @@ export const tentacleQuestionSchema = z.union([
 ]);
 
 const baseMatchingQuestionSchema = ordinaryBaseQuestionSchema.extend({
+    /** Optional exact route ref for train-line matching (e.g. "7", "A"). */
+    lineRef: z.string().default(""),
     same: z.boolean().default(true),
     lengthComparison: z.enum(["shorter", "longer", "same"]).optional(),
 });

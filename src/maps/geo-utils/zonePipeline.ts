@@ -481,7 +481,10 @@ export async function applyQuestionFilters({
                         continue;
                     }
 
-                    const nodes = await resolveTrainLineNodes(nid);
+                    const nodes = await resolveTrainLineNodes(
+                        nid,
+                        question.data.lineRef,
+                    );
                     if (nodes.length === 0) {
                         toast?.warning(
                             `No train line found for ${extractStationName(

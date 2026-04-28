@@ -418,6 +418,7 @@ export const hiderifyMatching = async (question: MatchingQuestion) => {
         if (question.type === "same-train-line") {
             const nodes = await trainLineNodeFinder(
                 nearestSeekerTrainStation.properties.id,
+                question.lineRef,
             );
 
             const hiderId = parseInt(

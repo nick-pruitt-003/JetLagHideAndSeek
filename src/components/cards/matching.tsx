@@ -9,6 +9,7 @@ import { FacilityOsmPlayToggles } from "@/components/FacilityOsmPlayToggles";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import PresetsDialog from "@/components/PresetsDialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import {
@@ -309,12 +310,35 @@ export const MatchingQuestionComponent = ({
             break;
         case "same-train-line":
             questionSpecific = (
-                <span className="px-2 text-center text-orange-500">
-                    Warning: The train line data is based on OpenStreetMap and
-                    may have fewer train stations than expected. If you are
-                    using this tool, ensure that the other players are also
-                    using this tool.
-                </span>
+                <>
+                    <SidebarMenuItem
+                        className={`${MENU_ITEM_CLASSNAME} flex-col items-start gap-1.5`}
+                    >
+                        <Label className="font-semibold">
+                            Exact line ref (optional)
+                        </Label>
+                        <Input
+                            value={data.lineRef ?? ""}
+                            placeholder="e.g. 7, A, N"
+                            onChange={(event) =>
+                                questionModified(
+                                    (data.lineRef = event.target.value),
+                                )
+                            }
+                            disabled={!data.drag || $isLoading}
+                        />
+                        <p className="text-xs text-muted-foreground leading-tight">
+                            Set this to force exact line filtering. Leave blank
+                            to use all lines connected to the selected station.
+                        </p>
+                    </SidebarMenuItem>
+                    <span className="px-2 text-center text-orange-500">
+                        Warning: The train line data is based on OpenStreetMap
+                        and may have fewer train stations than expected. If you
+                        are using this tool, ensure that the other players are
+                        also using this tool.
+                    </span>
+                </>
             );
             break;
         case "aquarium":

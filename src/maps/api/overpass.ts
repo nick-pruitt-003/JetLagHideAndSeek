@@ -443,46 +443,38 @@ export const fetchCoastline = async () => {
     return data;
 };
 
-export const trainLineNodeFinder = async (node: string): Promise<number[]> => {
+const escapeOverpassRegex = (value: string) =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export const trainLineNodeFinder = async (
+    node: string,
+    lineRef?: string,
+): Promise<number[]> => {
     const nodeId = node.split("/")[1];
-    const tagQuery = `
-[out:json];
-node(${nodeId});
-wr(bn);
-out tags;
-`;
-    const tagData = await getOverpassData(tagQuery, "Finding train line...");
+    // Build the line set from route relations directly connected to this
+    // station node. Fallback to route relations on nearby rail ways because
+    // some station points are mapped adjacent to (not on) track members.
+    const routeTypeFilter = "subway|light_rail|train|tram|monorail|funicular";
+    const normalizedLineRef = (lineRef ?? "").trim();
+    const lineRefClause = normalizedLineRef
+        ? `["ref"~"(^|[; ,/])${escapeOverpassRegex(normalizedLineRef)}([; ,/]|$)"]`
+        : "";
+
     const query = `
-[out:json];
+[out:json][timeout:120][maxsize:536870912];
+node(${nodeId})->.origin;
 (
-${tagData.elements
-    .map((element: any) => {
-        if (
-            !element.tags.name &&
-            !element.tags["name:en"] &&
-            !element.tags.network
-        )
-            return "";
-        let query = "";
-        if (element.tags.name) query += `wr["name"="${element.tags.name}"];`;
-        if (element.tags["name:en"])
-            query += `wr["name:en"="${element.tags["name:en"]}"];`;
-        if (element.tags["network"])
-            query += `wr["network"="${element.tags["network"]}"];`;
-        return query;
-    })
-    .join("\n")}
+  rel(bn.origin)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+  way(around.origin:120)["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
+  rel(bw.nearWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
 );
-out geom;
+->.routes;
+(.routes;>;);
+out body;
 `;
     const data = await getOverpassData(query, "Finding train lines...");
-    const geoJSON = osmtogeojson(data);
     const nodes: number[] = [];
-    geoJSON.features.forEach((feature: any) => {
-        if (feature && feature.id && feature.id.startsWith("node")) {
-            nodes.push(parseInt(feature.id.split("/")[1]));
-        }
-    });
+
     data.elements.forEach((element: any) => {
         if (element && element.type === "node") {
             nodes.push(element.id);
