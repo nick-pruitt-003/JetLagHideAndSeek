@@ -915,8 +915,6 @@ export const TutorialDialog = () => {
 
             return {
                 height: visualViewport?.height ?? window.innerHeight,
-                left: visualViewport?.offsetLeft ?? 0,
-                top: visualViewport?.offsetTop ?? 0,
                 width: visualViewport?.width ?? window.innerWidth,
             };
         };
@@ -942,8 +940,8 @@ export const TutorialDialog = () => {
 
             if (!currentTutorialStep.targetSelector) {
                 dialogElement.style.position = "fixed";
-                dialogElement.style.left = `${viewport.left + viewport.width / 2}px`;
-                dialogElement.style.top = `${viewport.top + viewport.height / 2}px`;
+                dialogElement.style.left = `${viewport.width / 2}px`;
+                dialogElement.style.top = `${viewport.height / 2}px`;
                 dialogElement.style.transform = "translate(-50%, -50%)";
                 dialogElement.style.right = "auto";
                 dialogElement.style.bottom = "auto";
@@ -957,8 +955,8 @@ export const TutorialDialog = () => {
             if (!targetElement) {
                 // If target element not found, center the dialog
                 dialogElement.style.position = "fixed";
-                dialogElement.style.left = `${viewport.left + viewport.width / 2}px`;
-                dialogElement.style.top = `${viewport.top + viewport.height / 2}px`;
+                dialogElement.style.left = `${viewport.width / 2}px`;
+                dialogElement.style.top = `${viewport.height / 2}px`;
                 dialogElement.style.transform = "translate(-50%, -50%)";
                 dialogElement.style.right = "auto";
                 dialogElement.style.bottom = "auto";
@@ -989,7 +987,7 @@ export const TutorialDialog = () => {
             // On mobile, use simpler positioning logic
             if (isMobile) {
                 // On mobile, always center horizontally and position vertically based on target
-                finalX = viewport.left + (viewport.width - dialogWidth) / 2;
+                finalX = (viewport.width - dialogWidth) / 2;
 
                 switch (position) {
                     case "top": {
@@ -1028,18 +1026,18 @@ export const TutorialDialog = () => {
 
                 // Ensure dialog stays within viewport bounds
                 finalY = Math.max(
-                    viewport.top + padding,
+                    padding,
                     Math.min(
-                        finalY + viewport.top,
-                        viewport.top + viewport.height - dialogHeight - padding,
+                        finalY,
+                        viewport.height - dialogHeight - padding,
                     ),
                 );
 
                 finalX = Math.max(
-                    viewport.left + padding,
+                    padding,
                     Math.min(
                         finalX,
-                        viewport.left + viewport.width - dialogWidth - padding,
+                        viewport.width - dialogWidth - padding,
                     ),
                 );
             } else {
@@ -1083,8 +1081,8 @@ export const TutorialDialog = () => {
                     }
                     default:
                         // Center
-                        dialogElement.style.left = `${viewport.left + viewport.width / 2}px`;
-                        dialogElement.style.top = `${viewport.top + viewport.height / 2}px`;
+                        dialogElement.style.left = `${viewport.width / 2}px`;
+                        dialogElement.style.top = `${viewport.height / 2}px`;
                         dialogElement.style.transform = "translate(-50%, -50%)";
                         dialogElement.style.right = "auto";
                         dialogElement.style.bottom = "auto";
