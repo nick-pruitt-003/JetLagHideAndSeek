@@ -496,28 +496,32 @@ export async function applyQuestionFilters({
                         continue;
                     }
 
+                    const trainLineRef = question.data.lineRef ?? "";
+                    const wantSameTrainLine = question.data.same;
+
                     const nodes = await resolveTrainLineNodes(
                         nid,
-                        question.data.lineRef,
+                        trainLineRef,
                         {
                             latitude: question.data.lat,
                             longitude: question.data.lng,
                         },
                     );
-                    if (nodes.length === 0) {
-                        const gtfsNames = await getGtfsStationNamesForLineRef(
-                            question.data.lineRef ?? "",
-                        );
+
+                    const filterByGtfsLine = async (): Promise<
+                        StationCircle[] | null
+                    > => {
+                        const gtfsNames =
+                            await getGtfsStationNamesForLineRef(trainLineRef);
                         if (gtfsNames.size === 0) {
                             toast?.warning(
                                 `No train line found for ${extractStationName(
                                     nearestTrainStation,
                                 )}`,
                             );
-                            continue;
+                            return null;
                         }
-
-                        current = current.filter((circle) => {
+                        return current.filter((circle) => {
                             const stationName = extractStationName(
                                 circle.properties,
                             );
@@ -525,18 +529,38 @@ export async function applyQuestionFilters({
                             const onLine = gtfsNames.has(
                                 normalizeStationName(stationName),
                             );
-                            return question.data.same ? onLine : !onLine;
+                            return wantSameTrainLine ? onLine : !onLine;
                         });
+                    };
+
+                    if (nodes.length === 0) {
+                        const gtfsCurrent = await filterByGtfsLine();
+                        if (gtfsCurrent) current = gtfsCurrent;
                         continue;
                     }
-                    current = current.filter((circle) => {
+
+                    let next = current.filter((circle) => {
                         const idProp = circle.properties.properties.id;
                         if (!idProp || !idProp.includes("/")) return false;
-                        const id = parseInt(idProp.split("/")[1]);
-                        return question.data.same
+                        const id = parseInt(idProp.split("/")[1], 10);
+                        return wantSameTrainLine
                             ? nodes.includes(id)
                             : !nodes.includes(id);
                     });
+
+                    // OSM stop nodes often disagree with the railway=station
+                    // points used for hiding zones; if nothing matched, fall back
+                    // to GTFS stop names (NYCT 7, etc.).
+                    if (
+                        wantSameTrainLine &&
+                        next.length === 0 &&
+                        current.length > 0
+                    ) {
+                        const gtfsCurrent = await filterByGtfsLine();
+                        if (gtfsCurrent) next = gtfsCurrent;
+                    }
+
+                    current = next;
                 }
             }
 

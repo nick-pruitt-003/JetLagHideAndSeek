@@ -5,6 +5,7 @@ import {
     getAllTrips,
     listSystems,
 } from "./gtfs-store";
+import type { TransitRoute } from "./types";
 
 const lineMembershipCache = new Map<string, Promise<Set<string>>>();
 
@@ -23,7 +24,10 @@ const normalizeStationName = (value: string) =>
         .replace(/\s+/g, " ")
         .trim();
 
-const lineRefMatchesRoute = (normalizedRef: string, routeRefRaw?: string) => {
+const lineRefMatchesTokenString = (
+    normalizedRef: string,
+    routeRefRaw?: string,
+) => {
     const routeRef = normalizeLineRef(routeRefRaw ?? "");
     if (!routeRef) return false;
     if (routeRef === normalizedRef) return true;
@@ -33,6 +37,14 @@ const lineRefMatchesRoute = (normalizedRef: string, routeRefRaw?: string) => {
         .filter(Boolean);
     return tokens.includes(normalizedRef);
 };
+
+const lineRefMatchesTransitRoute = (
+    normalizedRef: string,
+    route: Pick<TransitRoute, "shortName" | "longName" | "gtfsRouteId">,
+) =>
+    lineRefMatchesTokenString(normalizedRef, route.shortName) ||
+    lineRefMatchesTokenString(normalizedRef, route.longName) ||
+    lineRefMatchesTokenString(normalizedRef, route.gtfsRouteId);
 
 export async function getGtfsStationNamesForLineRef(
     lineRefRaw: string,
@@ -65,7 +77,7 @@ export async function getGtfsStationNamesForLineRef(
                 .filter(
                     (route) =>
                         route.routeType === 1 &&
-                        lineRefMatchesRoute(normalizedRef, route.shortName),
+                        lineRefMatchesTransitRoute(normalizedRef, route),
                 )
                 .map((route) => route.id),
         );

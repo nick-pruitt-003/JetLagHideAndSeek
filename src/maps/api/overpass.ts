@@ -619,6 +619,37 @@ way(around:400,${latitude},${longitude})["railway"~"^(rail|subway|light_rail|tra
 (.line_route_rels;>;);
 `;
 
+/**
+ * OSM route relations expand to thousands of untagged track vertices. Hiding
+ * zones use railway=station (and similar) nodes; intersecting with track
+ * vertices almost always misses real stations for subway mapping.
+ */
+function isStopLikeStationNode(element: {
+    type?: string;
+    tags?: Record<string, string | undefined>;
+}): boolean {
+    if (element?.type !== "node") return false;
+    const t = element.tags ?? {};
+    const rw = t.railway;
+    if (
+        rw === "station" ||
+        rw === "halt" ||
+        rw === "tram_stop" ||
+        rw === "stop"
+    ) {
+        return true;
+    }
+    if (t.subway === "yes" || t.light_rail === "yes" || t.tram === "yes") {
+        return true;
+    }
+    const pt = t.public_transport;
+    if (pt === "station" || pt === "stop_position" || pt === "stop") {
+        return true;
+    }
+    if (t.train === "yes") return true;
+    return false;
+}
+
 export const trainLineNodeFinder = async (
     node: string,
     lineRef?: string,
@@ -661,14 +692,11 @@ out body;
         fallbackPromise ?? Promise.resolve({ elements: [] as any[] }),
     ]);
 
-    const collectNodeIds = (elements: any[] | undefined) => {
+    const collectStopLikeNodeIds = (elements: any[] | undefined) => {
         const out: number[] = [];
         for (const element of elements ?? []) {
-            if (element?.type === "node") {
-                out.push(element.id);
-            } else if (element?.type === "way" && Array.isArray(element.nodes)) {
-                out.push(...element.nodes);
-            }
+            if (!isStopLikeStationNode(element)) continue;
+            out.push(element.id);
         }
         return out;
     };
@@ -677,8 +705,8 @@ out body;
     // node is often tied to one mode (e.g. LIRR); subway routes may only appear
     // via nearby railway=subway ways unless we always merge the around: query.
     return _.uniq([
-        ...collectNodeIds(primaryData.elements),
-        ...collectNodeIds(fallbackData.elements),
+        ...collectStopLikeNodeIds(primaryData.elements),
+        ...collectStopLikeNodeIds(fallbackData.elements),
     ]);
 };
 

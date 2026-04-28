@@ -431,18 +431,32 @@ export const hiderifyMatching = async (question: MatchingQuestion) => {
                 { latitude: question.lat, longitude: question.lng },
             );
 
+            const hiderName =
+                nearestHiderTrainStation.properties["name:en"] ||
+                nearestHiderTrainStation.properties.name;
+
             if (nodes.length > 0) {
                 const hiderId = parseInt(
                     nearestHiderTrainStation.properties.id.split("/")[1],
+                    10,
                 );
-                question.same = nodes.includes(hiderId);
+                if (nodes.includes(hiderId)) {
+                    question.same = true;
+                } else {
+                    const gtfsNames = await getGtfsStationNamesForLineRef(
+                        question.lineRef ?? "",
+                    );
+                    question.same =
+                        gtfsNames.size > 0 &&
+                        !!hiderName &&
+                        gtfsNames.has(
+                            normalizeStationName(String(hiderName)),
+                        );
+                }
             } else {
                 const gtfsNames = await getGtfsStationNamesForLineRef(
                     question.lineRef ?? "",
                 );
-                const hiderName =
-                    nearestHiderTrainStation.properties["name:en"] ||
-                    nearestHiderTrainStation.properties.name;
                 question.same =
                     !!hiderName &&
                     gtfsNames.has(normalizeStationName(String(hiderName)));
