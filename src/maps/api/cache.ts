@@ -72,8 +72,14 @@ export const cacheFetch = async (
         }
     } catch (e) {
         console.log(e); // Probably a caches not supported error
-
-        return fetch(url);
+        try {
+            return await fetch(url);
+        } catch {
+            return new Response("", {
+                status: 599,
+                statusText: "Network Error",
+            });
+        }
     }
 };
 
