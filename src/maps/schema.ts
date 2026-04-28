@@ -198,8 +198,6 @@ export const tentacleQuestionSchema = z.union([
 ]);
 
 const baseMatchingQuestionSchema = ordinaryBaseQuestionSchema.extend({
-    /** Optional exact route ref for train-line matching (e.g. "7", "A"). */
-    lineRef: z.string().default(""),
     same: z.boolean().default(true),
     lengthComparison: z.enum(["shorter", "longer", "same"]).optional(),
 });
@@ -300,6 +298,8 @@ const homeGameMatchingQuestionsSchema = baseMatchingQuestionSchema.extend({
 });
 
 const hidingZoneMatchingQuestionsSchema = baseMatchingQuestionSchema.extend({
+    /** Optional exact route ref for train-line matching (e.g. "7", "A"). */
+    lineRef: z.string().default(""),
     type: z.union([
         z
             .literal("same-first-letter-station")

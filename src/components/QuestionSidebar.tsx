@@ -18,8 +18,8 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar-l";
-import { SidebarContext as RightSidebarContext } from "@/components/ui/sidebar-r";
 import { SidebarContext as LeftSidebarContext } from "@/components/ui/sidebar-l-context";
+import { SidebarContext as RightSidebarContext } from "@/components/ui/sidebar-r";
 import {
     autoSave,
     isLoading,

@@ -82,7 +82,8 @@ export function registerServiceWorker() {
     });
 
     sw.addEventListener("waiting", async () => {
-        const registration = await navigator.serviceWorker.getRegistration(scope);
+        const registration =
+            await navigator.serviceWorker.getRegistration(scope);
         const waitingScriptURL = registration?.waiting?.scriptURL ?? null;
 
         // If the user already dismissed this exact waiting SW, do not

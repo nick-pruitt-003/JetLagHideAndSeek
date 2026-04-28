@@ -356,7 +356,10 @@ export interface ApplyQuestionFiltersOptions {
      *  (e.g. in tests). */
     toast?: ToastFn;
     /** Hook used to resolve OSM train-line nodes. Swappable for tests. */
-    resolveTrainLineNodes?: (osmIdPath: string) => Promise<number[]>;
+    resolveTrainLineNodes?: (
+        osmIdPath: string,
+        lineRef?: string,
+    ) => Promise<number[]>;
 }
 
 /**
@@ -431,7 +434,9 @@ export async function applyQuestionFilters({
 
             const wantSame = question.data.same === true;
             current = current.filter((circle) => {
-                const seekerRegion = seekerCell as Feature<Polygon | MultiPolygon>;
+                const seekerRegion = seekerCell as Feature<
+                    Polygon | MultiPolygon
+                >;
                 const stationPoint = turf.point(
                     turf.getCoord(circle.properties as Feature<Point>),
                 );

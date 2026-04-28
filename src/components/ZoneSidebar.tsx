@@ -1,6 +1,6 @@
 import { useStore } from "@nanostores/react";
 import * as turf from "@turf/turf";
-import type { Feature, FeatureCollection } from "geojson";
+import type { Feature, FeatureCollection, Point } from "geojson";
 import * as L from "leaflet";
 import _ from "lodash";
 import { Loader2, SidebarCloseIcon } from "lucide-react";
@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { ScrollToTop } from "@/components/ui/scroll-to-top";
 import { MENU_ITEM_CLASSNAME } from "@/components/ui/sidebar-l";
+import { SidebarContext as LeftSidebarContext } from "@/components/ui/sidebar-l-context";
 import {
     Sidebar,
     SidebarContent,
@@ -33,7 +34,6 @@ import {
     SidebarMenuItem,
 } from "@/components/ui/sidebar-r";
 import { SidebarContext as RightSidebarContext } from "@/components/ui/sidebar-r";
-import { SidebarContext as LeftSidebarContext } from "@/components/ui/sidebar-l-context";
 import { UnitSelect } from "@/components/UnitSelect";
 import {
     activeStationsOnly as activeStationsOnlyAtom,
@@ -1771,8 +1771,14 @@ async function selectionProcess(
                 continue;
             }
 
-            const seekerPoint = turf.point([question.data.lng, question.data.lat]);
-            const nearestQuestion = turf.nearestPoint(seekerPoint, points as any);
+            const seekerPoint = turf.point([
+                question.data.lng,
+                question.data.lat,
+            ]);
+            const nearestQuestion = turf.nearestPoint(
+                seekerPoint,
+                points as any,
+            );
             const nearestName = nearestQuestion.properties?.name as
                 | string
                 | undefined;
@@ -1781,7 +1787,9 @@ async function selectionProcess(
                 continue;
             }
 
-            const voronoi = geoSpatialVoronoi(points as FeatureCollection<Point>);
+            const voronoi = geoSpatialVoronoi(
+                points as FeatureCollection<Point>,
+            );
             const correctPolygon = voronoi.features.find((feature: any) => {
                 return (
                     feature?.properties?.site?.properties?.name === nearestName

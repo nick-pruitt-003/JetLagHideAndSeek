@@ -1,8 +1,8 @@
 import { useStore } from "@nanostores/react";
+import * as turf from "@turf/turf";
 import { Loader2 } from "lucide-react";
 import * as React from "react";
 import { toast } from "react-toastify";
-import * as turf from "@turf/turf";
 
 import { QuestionCard } from "@/components/cards/base";
 import CustomInitDialog from "@/components/CustomInitDialog";
@@ -273,6 +273,8 @@ export const MatchingQuestionComponent = ({
             | string
             | undefined) ??
         "nearest station";
+    const lineRefForEffect =
+        data.type === "same-train-line" ? (data.lineRef ?? "") : "";
 
     React.useEffect(() => {
         if (data.type !== "same-train-line") {
@@ -314,11 +316,7 @@ export const MatchingQuestionComponent = ({
         return () => {
             cancelled = true;
         };
-    }, [
-        data.lineRef,
-        data.type,
-        nearestTrainStationId,
-    ]);
+    }, [lineRefForEffect, data.type, nearestTrainStationId]);
 
     switch (data.type) {
         case "zone":

@@ -1027,18 +1027,12 @@ export const TutorialDialog = () => {
                 // Ensure dialog stays within viewport bounds
                 finalY = Math.max(
                     padding,
-                    Math.min(
-                        finalY,
-                        viewport.height - dialogHeight - padding,
-                    ),
+                    Math.min(finalY, viewport.height - dialogHeight - padding),
                 );
 
                 finalX = Math.max(
                     padding,
-                    Math.min(
-                        finalX,
-                        viewport.width - dialogWidth - padding,
-                    ),
+                    Math.min(finalX, viewport.width - dialogWidth - padding),
                 );
             } else {
                 // Desktop positioning logic (unchanged)

@@ -450,11 +450,7 @@ const parseOsmRef = (
     osmRef: string,
 ): { type: "node" | "way" | "relation"; id: number } | null => {
     const [rawType, rawId] = String(osmRef ?? "").split("/");
-    if (
-        rawType !== "node" &&
-        rawType !== "way" &&
-        rawType !== "relation"
-    ) {
+    if (rawType !== "node" && rawType !== "way" && rawType !== "relation") {
         return null;
     }
     const id = Number(rawId);
