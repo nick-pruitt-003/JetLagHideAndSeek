@@ -148,21 +148,36 @@ const getOverpassData = async (
     const usePost = primaryUrl.length > MAX_OVERPASS_GET_URL_LENGTH;
 
     const fetchOverpassPost = async (): Promise<Response> => {
-        let response = await fetch(OVERPASS_API, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: `data=${encodedQuery}`,
-        });
-        if (!response.ok) {
-            response = await fetch(OVERPASS_API_FALLBACK, {
+        let response: Response;
+        try {
+            response = await fetch(OVERPASS_API, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/x-www-form-urlencoded",
                 },
                 body: `data=${encodedQuery}`,
             });
+        } catch {
+            response = new Response("", {
+                status: 599,
+                statusText: "Network Error",
+            });
+        }
+        if (!response.ok) {
+            try {
+                response = await fetch(OVERPASS_API_FALLBACK, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    body: `data=${encodedQuery}`,
+                });
+            } catch {
+                response = new Response("", {
+                    status: 599,
+                    statusText: "Network Error",
+                });
+            }
         }
         if (response.ok) {
             const cache = await determineCache(cacheType);
@@ -173,6 +188,45 @@ const getOverpassData = async (
 
     let response: Response;
 
+    const debugOverpassFailure = (status: number, statusText: string) => {
+        const payload = {
+            status,
+            statusText,
+            query,
+            timestamp: new Date().toISOString(),
+            usePost,
+        };
+        if (typeof window !== "undefined") {
+            const w = window as Window & {
+                __overpassDebug?: Array<typeof payload>;
+            };
+            if (!w.__overpassDebug) w.__overpassDebug = [];
+            w.__overpassDebug.push(payload);
+        }
+        console.groupCollapsed(
+            `[Overpass debug] ${status} ${statusText} (${usePost ? "POST" : "GET"})`,
+        );
+        console.log(payload);
+        console.groupEnd();
+    };
+
+    const fetchOverpassGet = async (): Promise<Response> => {
+        try {
+            return await cacheFetch(
+                primaryUrl,
+                _retry ? undefined : loadingText,
+                cacheType,
+            );
+        } catch {
+            // Network-level failure (e.g. ERR_CONNECTION_CLOSED); try fallback host.
+            return await cacheFetch(
+                `${OVERPASS_API_FALLBACK}?data=${encodedQuery}`,
+                _retry ? undefined : loadingText,
+                cacheType,
+            );
+        }
+    };
+
     if (usePost) {
         const cache = await determineCache(cacheType);
         const cachedResponse = await cache.match(primaryUrl);
@@ -180,17 +234,20 @@ const getOverpassData = async (
             response = cachedResponse.clone();
         } else {
             const pending = fetchOverpassPost();
-            response =
-                loadingText && !_retry
-                    ? await toast.promise(pending, { pending: loadingText })
-                    : await pending;
+            try {
+                response =
+                    loadingText && !_retry
+                        ? await toast.promise(pending, { pending: loadingText })
+                        : await pending;
+            } catch {
+                response = new Response("", {
+                    status: 599,
+                    statusText: "Network Error",
+                });
+            }
         }
     } else {
-        response = await cacheFetch(
-            primaryUrl,
-            _retry ? undefined : loadingText,
-            cacheType,
-        );
+        response = await fetchOverpassGet();
     }
 
     if (!response.ok && !usePost) {
@@ -207,6 +264,7 @@ const getOverpassData = async (
             }
             response = fallbackResponse;
         } catch {
+            debugOverpassFailure(response.status, response.statusText);
             toast.error(
                 `Could not load data from Overpass: ${response.status} ${response.statusText}`,
                 { toastId: "overpass-error" },
@@ -220,6 +278,7 @@ const getOverpassData = async (
             await new Promise((r) => setTimeout(r, OVERPASS_RETRY_DELAY_MS));
             return getOverpassData(query, loadingText, cacheType, true);
         }
+        debugOverpassFailure(response.status, response.statusText);
         toast.error(
             `Could not load data from Overpass: ${response.status} ${response.statusText}`,
             { toastId: "overpass-error" },
@@ -446,6 +505,14 @@ export const fetchCoastline = async () => {
 const escapeOverpassRegex = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const normalizeLineRef = (value: string) =>
+    value
+        .trim()
+        // Some feeds expose refs like "<7>" or wrap alphanumerics in
+        // punctuation. Matching should use the semantic token.
+        .replace(/^<+/, "")
+        .replace(/>+$/, "");
+
 const parseOsmRef = (
     osmRef: string,
 ): { type: "node" | "way" | "relation"; id: number } | null => {
@@ -458,26 +525,34 @@ const parseOsmRef = (
     return { type: rawType, id };
 };
 
-const lineOriginSetsQuery = (osmRef: string) => {
+const lineOriginSetsQuery = (
+    osmRef: string,
+): { query: string } | null => {
     const parsed = parseOsmRef(osmRef);
     if (!parsed) return null;
 
     if (parsed.type === "node") {
-        return `
+        return {
+            query: `
 node(${parsed.id})->.originNodes;
-`;
+`,
+        };
     }
     if (parsed.type === "way") {
-        return `
+        return {
+            query: `
 way(${parsed.id})->.originWays;
 node(w.originWays)->.originNodes;
-`;
+`,
+        };
     }
-    return `
+    return {
+        query: `
 relation(${parsed.id})->.originRel;
 way(r.originRel)->.originWays;
 node(r.originRel)->.originNodes;
-`;
+`,
+    };
 };
 
 const lineRoutesQuery = (
@@ -491,8 +566,22 @@ way(bn.originNodes)->.nodeWays;
 (
   rel(bn.originNodes)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
   rel(bw.originWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
-  rel(br.originRel)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
   rel(bw.nodeWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
+);
+->.routes;
+(.routes;>;);
+`;
+
+const lineRoutesQueryByCoord = (
+    latitude: number,
+    longitude: number,
+    routeTypeFilter: string,
+    lineRefClause = "",
+) => `
+[out:json][timeout:120][maxsize:536870912];
+way(around:400,${latitude},${longitude})["railway"~"^(rail|subway|light_rail|tram|monorail|funicular)$"]->.nearWays;
+(
+  rel(bw.nearWays)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
 );
 ->.routes;
 (.routes;>;);
@@ -501,22 +590,27 @@ way(bn.originNodes)->.nodeWays;
 export const trainLineNodeFinder = async (
     node: string,
     lineRef?: string,
+    aroundLatLng?: { latitude: number; longitude: number },
 ): Promise<number[]> => {
-    const originSets = lineOriginSetsQuery(node);
-    if (!originSets) return [];
+    const origin = lineOriginSetsQuery(node);
+    if (!origin) return [];
     // Build the line set from route relations directly connected to this
     // station node. Fallback to route relations on nearby rail ways because
     // some station points are mapped adjacent to (not on) track members.
     const routeTypeFilter = "subway|light_rail|train|tram|monorail|funicular";
-    const normalizedLineRef = (lineRef ?? "").trim();
+    const normalizedLineRef = normalizeLineRef(lineRef ?? "");
     const lineRefClause = normalizedLineRef
         ? `["ref"~"(^|[; ,/])${escapeOverpassRegex(normalizedLineRef)}([; ,/]|$)"]`
         : "";
 
-    const query = `${lineRoutesQuery(originSets, routeTypeFilter, lineRefClause)}
+    const query = `${lineRoutesQuery(
+        origin.query,
+        routeTypeFilter,
+        lineRefClause,
+    )}
 out body;
 `;
-    const data = await getOverpassData(query, "Finding train lines...");
+    let data = await getOverpassData(query, "Finding train lines...");
     const nodes: number[] = [];
 
     data.elements.forEach((element: any) => {
@@ -526,32 +620,80 @@ out body;
             nodes.push(...element.nodes);
         }
     });
-    const uniqNodes = _.uniq(nodes);
+    let uniqNodes = _.uniq(nodes);
+
+    if (uniqNodes.length === 0 && aroundLatLng) {
+        const fallbackQuery = `${lineRoutesQueryByCoord(
+            aroundLatLng.latitude,
+            aroundLatLng.longitude,
+            routeTypeFilter,
+            lineRefClause,
+        )}
+out body;
+`;
+        data = await getOverpassData(
+            fallbackQuery,
+            "Finding nearby train lines...",
+        );
+        const fallbackNodes: number[] = [];
+        data.elements.forEach((element: any) => {
+            if (element && element.type === "node") {
+                fallbackNodes.push(element.id);
+            } else if (element && element.type === "way") {
+                fallbackNodes.push(...element.nodes);
+            }
+        });
+        uniqNodes = _.uniq(fallbackNodes);
+    }
+
     return uniqNodes;
 };
 
 export const trainLineRefsForStation = async (
     node: string,
+    aroundLatLng?: { latitude: number; longitude: number },
 ): Promise<string[]> => {
-    const originSets = lineOriginSetsQuery(node);
-    if (!originSets) return [];
+    const origin = lineOriginSetsQuery(node);
+    if (!origin) return [];
     const routeTypeFilter = "subway|light_rail|train|tram|monorail|funicular";
-    const query = `${lineRoutesQuery(originSets, routeTypeFilter)}
+    const query = `${lineRoutesQuery(
+        origin.query,
+        routeTypeFilter,
+    )}
 out tags;
 `;
-    const data = await getOverpassData(query, "Finding train line options...");
+    let data = await getOverpassData(query, "Finding train line options...");
 
     const refs = new Set<string>();
-    for (const element of data.elements ?? []) {
-        if (element?.type !== "relation") continue;
-        const rawRef = String(element.tags?.ref ?? "").trim();
-        if (!rawRef) continue;
-        const pieces = rawRef
-            .split(/[;,/]/)
-            .map((part) => part.trim())
-            .filter(Boolean);
-        if (pieces.length === 0) continue;
-        for (const ref of pieces) refs.add(ref);
+    const collectRefs = (elements: any[] = []) => {
+        for (const element of elements) {
+            if (element?.type !== "relation") continue;
+            const rawRef = String(element.tags?.ref ?? "").trim();
+            if (!rawRef) continue;
+            const pieces = rawRef
+                .split(/[;,/]/)
+                .map((part) => normalizeLineRef(part))
+                .filter(Boolean);
+            if (pieces.length === 0) continue;
+            for (const ref of pieces) refs.add(ref);
+        }
+    };
+
+    collectRefs(data.elements ?? []);
+
+    if (refs.size === 0 && aroundLatLng) {
+        const fallbackQuery = `${lineRoutesQueryByCoord(
+            aroundLatLng.latitude,
+            aroundLatLng.longitude,
+            routeTypeFilter,
+        )}
+out tags;
+`;
+        data = await getOverpassData(
+            fallbackQuery,
+            "Finding nearby train line options...",
+        );
+        collectRefs(data.elements ?? []);
     }
 
     return [...refs].sort((a, b) =>

@@ -30,6 +30,7 @@ import {
     lookupArrivalWithParentFallback,
     type MatchedStation,
 } from "@/lib/transit/osm-gtfs-match";
+import { getGtfsStationNamesForLineRef } from "@/lib/transit/line-membership";
 import type { TransitStop } from "@/lib/transit/types";
 import {
     findPlacesSpecificInZone,
@@ -359,8 +360,17 @@ export interface ApplyQuestionFiltersOptions {
     resolveTrainLineNodes?: (
         osmIdPath: string,
         lineRef?: string,
+        aroundLatLng?: { latitude: number; longitude: number },
     ) => Promise<number[]>;
 }
+
+const normalizeStationName = (value: string) =>
+    value
+        .toUpperCase()
+        .normalize("NFKD")
+        .replace(/[^\w\s]|_/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
 /**
  * Apply every active matching/measuring filter to the circle set. Pure
@@ -489,13 +499,34 @@ export async function applyQuestionFilters({
                     const nodes = await resolveTrainLineNodes(
                         nid,
                         question.data.lineRef,
+                        {
+                            latitude: question.data.lat,
+                            longitude: question.data.lng,
+                        },
                     );
                     if (nodes.length === 0) {
-                        toast?.warning(
-                            `No train line found for ${extractStationName(
-                                nearestTrainStation,
-                            )}`,
+                        const gtfsNames = await getGtfsStationNamesForLineRef(
+                            question.data.lineRef ?? "",
                         );
+                        if (gtfsNames.size === 0) {
+                            toast?.warning(
+                                `No train line found for ${extractStationName(
+                                    nearestTrainStation,
+                                )}`,
+                            );
+                            continue;
+                        }
+
+                        current = current.filter((circle) => {
+                            const stationName = extractStationName(
+                                circle.properties,
+                            );
+                            if (!stationName) return false;
+                            const onLine = gtfsNames.has(
+                                normalizeStationName(stationName),
+                            );
+                            return question.data.same ? onLine : !onLine;
+                        });
                         continue;
                     }
                     current = current.filter((circle) => {

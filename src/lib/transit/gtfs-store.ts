@@ -409,6 +409,20 @@ export async function getAllTrips(
     return out;
 }
 
+export async function getAllRoutes(
+    systemIds?: string[],
+): Promise<TransitRoute[]> {
+    const db = await openTransitDB();
+    if (!systemIds || systemIds.length === 0) {
+        return db.getAll("routes");
+    }
+    const out: TransitRoute[] = [];
+    for (const sid of systemIds) {
+        out.push(...(await db.getAllFromIndex("routes", "by-system", sid)));
+    }
+    return out;
+}
+
 export async function getAllServices(
     systemIds?: string[],
 ): Promise<TransitService[]> {

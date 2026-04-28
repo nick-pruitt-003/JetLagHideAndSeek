@@ -290,7 +290,10 @@ export const MatchingQuestionComponent = ({
 
         let cancelled = false;
         setTrainLineOptionsLoading(true);
-        trainLineRefsForStation(nearestTrainStationId)
+        trainLineRefsForStation(nearestTrainStationId, {
+            latitude: data.lat,
+            longitude: data.lng,
+        })
             .then((refs) => {
                 if (cancelled) return;
                 setTrainLineOptions(refs);

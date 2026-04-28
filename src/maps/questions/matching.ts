@@ -34,6 +34,7 @@ import {
     osmElementsToFacilityPoints,
     validateFullFacilityFetch,
 } from "@/maps/questions/facility-full";
+import { getGtfsStationNamesForLineRef } from "@/lib/transit/line-membership";
 import type {
     APILocations,
     HomeGameMatchingQuestions,
@@ -44,6 +45,14 @@ import type {
 export function normalizeMatchingAirportIata(s: string): string {
     return s.trim().toUpperCase();
 }
+
+const normalizeStationName = (value: string) =>
+    value
+        .toUpperCase()
+        .normalize("NFKD")
+        .replace(/[^\w\s]|_/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
 async function fetchAirportPointsUnfiltered(
     question: MatchingQuestion,
@@ -419,16 +428,24 @@ export const hiderifyMatching = async (question: MatchingQuestion) => {
             const nodes = await trainLineNodeFinder(
                 nearestSeekerTrainStation.properties.id,
                 question.lineRef,
+                { latitude: question.lat, longitude: question.lng },
             );
 
-            const hiderId = parseInt(
-                nearestHiderTrainStation.properties.id.split("/")[1],
-            );
-
-            if (nodes.includes(hiderId)) {
-                question.same = true;
+            if (nodes.length > 0) {
+                const hiderId = parseInt(
+                    nearestHiderTrainStation.properties.id.split("/")[1],
+                );
+                question.same = nodes.includes(hiderId);
             } else {
-                question.same = false;
+                const gtfsNames = await getGtfsStationNamesForLineRef(
+                    question.lineRef ?? "",
+                );
+                const hiderName =
+                    nearestHiderTrainStation.properties["name:en"] ||
+                    nearestHiderTrainStation.properties.name;
+                question.same =
+                    !!hiderName &&
+                    gtfsNames.has(normalizeStationName(String(hiderName)));
             }
         }
 
