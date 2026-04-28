@@ -602,8 +602,8 @@ way(bn.origin_nodes)->.node_ways;
   ${hasOriginWays ? `rel(bw.origin_ways)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};` : ""}
   rel(bw.node_ways)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
 );
-->.routes;
-(.routes;>;);
+->.line_route_rels;
+(.line_route_rels;>;);
 `;
 
 const lineRoutesQueryByCoord = (
@@ -617,8 +617,8 @@ way(around:400,${latitude},${longitude})["railway"~"^(rail|subway|light_rail|tra
 (
   rel(bw.near_ways)["type"="route"]["route"~"^(${routeTypeFilter})$"]${lineRefClause};
 );
-->.routes;
-(.routes;>;);
+->.line_route_rels;
+(.line_route_rels;>;);
 `;
 
 export const trainLineNodeFinder = async (

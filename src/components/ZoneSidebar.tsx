@@ -670,82 +670,84 @@ export const ZoneSidebar = () => {
         const gen = ++filterGenRef.current;
 
         const run = async () => {
-            const markLabel = "ZoneSidebar/PhaseB";
+            const markLabel = import.meta.env.DEV
+                ? `ZoneSidebar/PhaseB#${gen}`
+                : "";
             if (import.meta.env.DEV) console.time(markLabel);
-
-            const culled = cullCirclesAgainstZone(rawCircles, {
-                playableBbox,
-                unionizedMask: unionized,
-                radiusKm: turf.convertLength(
-                    $hidingRadius,
-                    $hidingRadiusUnits,
-                    "kilometers",
-                ),
-            });
-
-            const currentQuestions = questions.get();
-            const matchingZoneKey = overpassZoneCacheKey();
-            const [measuringPoiCache, matchingFacilityCache] =
-                await Promise.all([
-                    prefetchMeasuringPoiPoints(currentQuestions),
-                    prefetchMatchingFacilityPoints(
-                        currentQuestions,
-                        matchingZoneKey,
+            try {
+                const culled = cullCirclesAgainstZone(rawCircles, {
+                    playableBbox,
+                    unionizedMask: unionized,
+                    radiusKm: turf.convertLength(
+                        $hidingRadius,
+                        $hidingRadiusUnits,
+                        "kilometers",
                     ),
-                ]);
-            if (gen !== filterGenRef.current) {
+                });
+
+                const currentQuestions = questions.get();
+                const matchingZoneKey = overpassZoneCacheKey();
+                const [measuringPoiCache, matchingFacilityCache] =
+                    await Promise.all([
+                        prefetchMeasuringPoiPoints(currentQuestions),
+                        prefetchMatchingFacilityPoints(
+                            currentQuestions,
+                            matchingZoneKey,
+                        ),
+                    ]);
+                if (gen !== filterGenRef.current) {
+                    return;
+                }
+
+                const filtered = await applyQuestionFilters({
+                    circles: culled,
+                    questions: currentQuestions,
+                    measuringPoiCache,
+                    matchingFacilityCache,
+                    matchingZoneKey,
+                    hidingRadius: $hidingRadius,
+                    useCustomStations,
+                    includeDefaultStations,
+                    planningModeEnabled: planningModeEnabled.get(),
+                    toast,
+                });
+                if (gen !== filterGenRef.current) {
+                    return;
+                }
+
+                // Reachability filter (Phase 3). Only runs if the user has
+                // executed a reachability query and the OSM↔GTFS match
+                // bundle has been built. Overrides always win and can be
+                // set even without a query — we still need the arrivals
+                // map for the classification-based keep/drop decision, so
+                // skip entirely when no result is present.
+                let final = filtered;
+                if ($reachabilityResult && reachabilityBundle) {
+                    const overridesMap = new Map<string, "include" | "exclude">(
+                        Object.entries($reachabilityOverrides),
+                    );
+                    const { filtered: reachFiltered, classifications } =
+                        filterCirclesByReachability({
+                            circles: filtered,
+                            matches: reachabilityBundle.matches,
+                            arrivalsByStopId: $reachabilityResult.arrivalSeconds,
+                            stopById: reachabilityBundle.stopById,
+                            budgetMinutes: $reachabilityResult.query.budgetMinutes,
+                            overrides: overridesMap,
+                            unknownDefault: "include",
+                        });
+                    final = reachFiltered;
+                    reachabilityClassifications.set(classifications);
+                } else {
+                    // No active query → clear stale classifications so the
+                    // sidebar doesn't show status badges from an old run.
+                    reachabilityClassifications.set(new Map());
+                }
+
+                setStations(final);
+            } finally {
                 if (import.meta.env.DEV) console.timeEnd(markLabel);
-                return;
             }
-
-            const filtered = await applyQuestionFilters({
-                circles: culled,
-                questions: currentQuestions,
-                measuringPoiCache,
-                matchingFacilityCache,
-                matchingZoneKey,
-                hidingRadius: $hidingRadius,
-                useCustomStations,
-                includeDefaultStations,
-                planningModeEnabled: planningModeEnabled.get(),
-                toast,
-            });
-            if (gen !== filterGenRef.current) {
-                if (import.meta.env.DEV) console.timeEnd(markLabel);
-                return;
-            }
-
-            // Reachability filter (Phase 3). Only runs if the user has
-            // executed a reachability query and the OSM↔GTFS match
-            // bundle has been built. Overrides always win and can be
-            // set even without a query — we still need the arrivals
-            // map for the classification-based keep/drop decision, so
-            // skip entirely when no result is present.
-            let final = filtered;
-            if ($reachabilityResult && reachabilityBundle) {
-                const overridesMap = new Map<string, "include" | "exclude">(
-                    Object.entries($reachabilityOverrides),
-                );
-                const { filtered: reachFiltered, classifications } =
-                    filterCirclesByReachability({
-                        circles: filtered,
-                        matches: reachabilityBundle.matches,
-                        arrivalsByStopId: $reachabilityResult.arrivalSeconds,
-                        stopById: reachabilityBundle.stopById,
-                        budgetMinutes: $reachabilityResult.query.budgetMinutes,
-                        overrides: overridesMap,
-                        unknownDefault: "include",
-                    });
-                final = reachFiltered;
-                reachabilityClassifications.set(classifications);
-            } else {
-                // No active query → clear stale classifications so the
-                // sidebar doesn't show status badges from an old run.
-                reachabilityClassifications.set(new Map());
-            }
-
-            setStations(final);
-            if (import.meta.env.DEV) console.timeEnd(markLabel);
         };
 
         run().catch((error) => {
