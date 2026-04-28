@@ -274,6 +274,38 @@ export const MatchingQuestionComponent = ({
             | string
             | undefined) ??
         "nearest station";
+
+    const trainLineChips = React.useMemo(() => {
+        if (data.type !== "same-train-line") return [];
+        const manual = String(
+            (data as { lineRef?: string }).lineRef ?? "",
+        ).trim();
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const r of trainLineOptions) {
+            const k = r.toUpperCase();
+            if (seen.has(k)) continue;
+            seen.add(k);
+            out.push(r);
+        }
+        if (manual) {
+            const k = manual.toUpperCase();
+            if (!seen.has(k)) {
+                seen.add(k);
+                out.push(manual);
+            }
+        }
+        return out.sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true }),
+        );
+    }, [
+        data.type,
+        trainLineOptions,
+        data.type === "same-train-line"
+            ? (data as { lineRef?: string }).lineRef
+            : null,
+    ]);
+
     React.useEffect(() => {
         if (data.type !== "same-train-line") {
             setTrainLineOptions([]);
@@ -324,9 +356,14 @@ export const MatchingQuestionComponent = ({
                     questionModified((data.lineRef = refs[0]!));
                 }
             })
-            .catch(() => {
+            .catch(async () => {
                 if (cancelled) return;
-                setTrainLineOptions([]);
+                try {
+                    const gtfs = await getSubwayLineRefOptionsFromGtfs();
+                    if (!cancelled) setTrainLineOptions(gtfs);
+                } catch {
+                    if (!cancelled) setTrainLineOptions([]);
+                }
             })
             .finally(() => {
                 if (!cancelled) setTrainLineOptionsLoading(false);
@@ -422,11 +459,12 @@ export const MatchingQuestionComponent = ({
                             <div className="flex justify-center py-1 w-full">
                                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                             </div>
-                        ) : trainLineOptions.length > 0 ? (
+                        ) : trainLineChips.length > 0 ? (
                             <div className="flex flex-wrap gap-1.5">
-                                {trainLineOptions.map((lineRef) => {
+                                {trainLineChips.map((lineRef) => {
                                     const selected =
-                                        (data.lineRef ?? "").trim() === lineRef;
+                                        (data.lineRef ?? "").trim().toUpperCase() ===
+                                        lineRef.toUpperCase();
                                     return (
                                         <button
                                             key={lineRef}
@@ -451,9 +489,9 @@ export const MatchingQuestionComponent = ({
                             </div>
                         ) : (
                             <p className="text-xs text-muted-foreground leading-tight">
-                                No line refs detected for this location. Move
-                                the marker to another station or enter one
-                                manually.
+                                No line list yet (Overpass offline or no GTFS
+                                subway feed). Type a ref below (e.g. 7) or
+                                install &quot;NYC Subway&quot; under transit.
                             </p>
                         )}
                     </SidebarMenuItem>

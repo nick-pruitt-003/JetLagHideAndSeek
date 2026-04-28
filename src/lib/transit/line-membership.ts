@@ -123,7 +123,11 @@ export async function getGtfsStationNamesForLineRef(
 const isSubwayFeed = (s: { id: string; name: string }) => {
     const id = s.id.toLowerCase();
     const name = s.name.toLowerCase();
-    return id.includes("subway") || name.includes("subway");
+    return (
+        id.includes("subway") ||
+        name.includes("subway") ||
+        id.includes("nyct")
+    );
 };
 
 /**
@@ -132,8 +136,12 @@ const isSubwayFeed = (s: { id: string; name: string }) => {
  */
 export async function getSubwayLineRefOptionsFromGtfs(): Promise<string[]> {
     const systems = await listSystems();
-    const systemIds = systems.filter(isSubwayFeed).map((s) => s.id);
-    if (systemIds.length === 0) return [];
+    if (systems.length === 0) return [];
+
+    let systemIds = systems.filter(isSubwayFeed).map((s) => s.id);
+    if (systemIds.length === 0) {
+        systemIds = systems.map((s) => s.id);
+    }
 
     const routes = await getAllRoutes(systemIds);
     const refs = new Set<string>();
