@@ -29,18 +29,18 @@ import Layout from "@/layouts/Layout.astro";
                 >
                     <div class="w-full h-full relative">
                         <div
-                            class="absolute top-[72px] md:top-2 left-2 z-1030 group-[.fullscreen]:hidden p-1"
+                            class="absolute top-[72px] md:top-2 left-2 z-[1030] group-[.fullscreen]:hidden p-1"
                             data-tutorial-id="left-sidebar-trigger"
                         >
                             <SidebarTriggerL client:load />
                         </div>
                         <div
-                            class="absolute top-[72px] md:top-2 right-2 z-1030 group-[.fullscreen]:hidden p-1"
+                            class="absolute top-[72px] md:top-2 right-2 z-[1030] group-[.fullscreen]:hidden p-1"
                         >
                             <SidebarTriggerR client:load />
                         </div>
                         <div
-                            class="flex shrink max-w-fit z-1030 absolute left-4 right-0 m-auto group-[.fullscreen]:hidden"
+                            class="flex shrink max-w-fit z-[1030] absolute left-4 right-0 m-auto group-[.fullscreen]:hidden"
                         >
                             <PlacePicker
                                 client:only="react"
@@ -48,7 +48,7 @@ import Layout from "@/layouts/Layout.astro";
                             />
                         </div>
                         <div
-                            class="right-2 mx-auto mb-2 w-fit absolute z-1030 group-[.fullscreen]:hidden"
+                            class="right-2 mx-auto mb-2 w-fit absolute z-[1030] group-[.fullscreen]:hidden"
                             style="bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px))"
                         >
                             <OptionDrawers client:load />

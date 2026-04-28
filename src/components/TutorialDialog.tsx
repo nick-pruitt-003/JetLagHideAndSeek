@@ -850,7 +850,7 @@ const TutorialOverlay = ({
     const padding = 12;
 
     return (
-        <div className="fixed inset-0 z-9999 pointer-events-none">
+        <div className="fixed inset-0 z-[9999] pointer-events-none">
             {highlightedElement && rect ? (
                 <div>
                     <div
@@ -910,17 +910,28 @@ export const TutorialDialog = () => {
     const currentTutorialStep = tutorialSteps[$tutorialStep];
 
     useEffect(() => {
-        const timeoutId = setTimeout(() => {
+        const getViewportBounds = () => {
+            const visualViewport = window.visualViewport;
+
+            return {
+                height: visualViewport?.height ?? window.innerHeight,
+                left: visualViewport?.offsetLeft ?? 0,
+                top: visualViewport?.offsetTop ?? 0,
+                width: visualViewport?.width ?? window.innerWidth,
+            };
+        };
+
+        const positionDialog = () => {
             if (!$showTutorial || !dialogRef.current) return;
 
             const dialogElement = dialogRef.current;
-            const isMobile = window.innerWidth < 768; // Tailwind md breakpoint
+            const viewport = getViewportBounds();
+            const isMobile = viewport.width < 768; // Tailwind md breakpoint
             // Reserve 2rem (32px) total horizontal margin on mobile so
             // the dialog never touches the viewport edges. Desktop keeps
             // its 680px cap.
-            const maxWidth = isMobile
-                ? Math.max(280, window.innerWidth - 32)
-                : 760;
+            const maxWidth = isMobile ? Math.max(0, viewport.width - 32) : 760;
+            const viewportPadding = isMobile ? 16 : 20;
 
             dialogElement.style.maxWidth = `${maxWidth}px`;
             // Use an explicit width rather than `auto`. On iOS Safari
@@ -931,8 +942,8 @@ export const TutorialDialog = () => {
 
             if (!currentTutorialStep.targetSelector) {
                 dialogElement.style.position = "fixed";
-                dialogElement.style.left = "50%";
-                dialogElement.style.top = "50%";
+                dialogElement.style.left = `${viewport.left + viewport.width / 2}px`;
+                dialogElement.style.top = `${viewport.top + viewport.height / 2}px`;
                 dialogElement.style.transform = "translate(-50%, -50%)";
                 dialogElement.style.right = "auto";
                 dialogElement.style.bottom = "auto";
@@ -946,8 +957,8 @@ export const TutorialDialog = () => {
             if (!targetElement) {
                 // If target element not found, center the dialog
                 dialogElement.style.position = "fixed";
-                dialogElement.style.left = "50%";
-                dialogElement.style.top = "50%";
+                dialogElement.style.left = `${viewport.left + viewport.width / 2}px`;
+                dialogElement.style.top = `${viewport.top + viewport.height / 2}px`;
                 dialogElement.style.transform = "translate(-50%, -50%)";
                 dialogElement.style.right = "auto";
                 dialogElement.style.bottom = "auto";
@@ -956,7 +967,7 @@ export const TutorialDialog = () => {
 
             const rect = targetElement.getBoundingClientRect();
             const position = currentTutorialStep.position || "center";
-            const padding = 20;
+            const padding = viewportPadding;
 
             // Ensure positioning is set but don't reset transform immediately
             dialogElement.style.position = "fixed";
@@ -978,7 +989,7 @@ export const TutorialDialog = () => {
             // On mobile, use simpler positioning logic
             if (isMobile) {
                 // On mobile, always center horizontally and position vertically based on target
-                finalX = (window.innerWidth - dialogWidth) / 2;
+                finalX = viewport.left + (viewport.width - dialogWidth) / 2;
 
                 switch (position) {
                     case "top": {
@@ -990,7 +1001,7 @@ export const TutorialDialog = () => {
                         if (finalY < padding) {
                             finalY = Math.min(
                                 rect.bottom + padding,
-                                window.innerHeight - dialogHeight - padding,
+                                viewport.height - dialogHeight - padding,
                             );
                         }
                         break;
@@ -998,13 +1009,10 @@ export const TutorialDialog = () => {
                     case "bottom": {
                         finalY = Math.min(
                             rect.bottom + padding,
-                            window.innerHeight - dialogHeight - padding,
+                            viewport.height - dialogHeight - padding,
                         );
                         // If no space below, move to above
-                        if (
-                            finalY + dialogHeight >
-                            window.innerHeight - padding
-                        ) {
+                        if (finalY + dialogHeight > viewport.height - padding) {
                             finalY = Math.max(
                                 padding,
                                 rect.top - dialogHeight - padding,
@@ -1014,16 +1022,24 @@ export const TutorialDialog = () => {
                     }
                     default:
                         // Center
-                        finalY = (window.innerHeight - dialogHeight) / 2;
+                        finalY = (viewport.height - dialogHeight) / 2;
                         break;
                 }
 
                 // Ensure dialog stays within viewport bounds
                 finalY = Math.max(
-                    padding,
+                    viewport.top + padding,
                     Math.min(
-                        finalY,
-                        window.innerHeight - dialogHeight - padding,
+                        finalY + viewport.top,
+                        viewport.top + viewport.height - dialogHeight - padding,
+                    ),
+                );
+
+                finalX = Math.max(
+                    viewport.left + padding,
+                    Math.min(
+                        finalX,
+                        viewport.left + viewport.width - dialogWidth - padding,
                     ),
                 );
             } else {
@@ -1033,7 +1049,7 @@ export const TutorialDialog = () => {
                         finalX = Math.max(
                             padding,
                             Math.min(
-                                window.innerWidth - dialogWidth - padding,
+                                viewport.width - dialogWidth - padding,
                                 rect.left + rect.width / 2 - dialogWidth / 2,
                             ),
                         );
@@ -1051,16 +1067,13 @@ export const TutorialDialog = () => {
                         finalX = Math.max(
                             padding,
                             Math.min(
-                                window.innerWidth - dialogWidth - padding,
+                                viewport.width - dialogWidth - padding,
                                 rect.left + rect.width / 2 - dialogWidth / 2,
                             ),
                         );
                         finalY = rect.bottom + padding;
                         // If no space below, flip to above
-                        if (
-                            finalY + dialogHeight >
-                            window.innerHeight - padding
-                        ) {
+                        if (finalY + dialogHeight > viewport.height - padding) {
                             finalY = Math.max(
                                 padding,
                                 rect.top - dialogHeight - padding,
@@ -1070,8 +1083,8 @@ export const TutorialDialog = () => {
                     }
                     default:
                         // Center
-                        dialogElement.style.left = "50%";
-                        dialogElement.style.top = "50%";
+                        dialogElement.style.left = `${viewport.left + viewport.width / 2}px`;
+                        dialogElement.style.top = `${viewport.top + viewport.height / 2}px`;
                         dialogElement.style.transform = "translate(-50%, -50%)";
                         dialogElement.style.right = "auto";
                         dialogElement.style.bottom = "auto";
@@ -1085,9 +1098,27 @@ export const TutorialDialog = () => {
             dialogElement.style.top = `${finalY}px`;
             dialogElement.style.right = "auto";
             dialogElement.style.bottom = "auto";
-        }, 300);
+        };
 
-        return () => clearTimeout(timeoutId);
+        const timeoutId = setTimeout(positionDialog, 300);
+        window.addEventListener("resize", positionDialog);
+        window.addEventListener("orientationchange", positionDialog);
+        window.visualViewport?.addEventListener("resize", positionDialog);
+        window.visualViewport?.addEventListener("scroll", positionDialog);
+
+        return () => {
+            clearTimeout(timeoutId);
+            window.removeEventListener("resize", positionDialog);
+            window.removeEventListener("orientationchange", positionDialog);
+            window.visualViewport?.removeEventListener(
+                "resize",
+                positionDialog,
+            );
+            window.visualViewport?.removeEventListener(
+                "scroll",
+                positionDialog,
+            );
+        };
         // `currentTutorialStep` is derived from `$tutorialStep` and
         // read inside the timeout callback, so keying the effect on the
         // step index + visibility is sufficient.
@@ -1144,14 +1175,14 @@ export const TutorialDialog = () => {
                 <AlertDialogPrimitive.AlertDialogContent
                     ref={dialogRef}
                     className={cn(
-                        "fixed z-10000 flex flex-col overflow-hidden border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+                        "fixed z-[10000] flex flex-col overflow-hidden border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
                         // Cap height. Body uses max-h + scroll (not flex-1) so short
                         // steps don’t leave a huge empty band above the footer.
                         // Targeted steps stay shorter so the map highlight stays visible.
                         "tutorial-dialog",
                         currentTutorialStep.targetSelector
                             ? "max-h-[70vh]"
-                            : "max-h-[85vh] left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%]",
+                            : "max-h-[85vh] left-[50%] top-[50%]",
                     )}
                     style={{
                         // Explicit width (not `auto`) — iOS Safari
