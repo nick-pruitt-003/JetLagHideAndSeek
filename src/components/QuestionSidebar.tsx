@@ -18,7 +18,8 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from "@/components/ui/sidebar-l";
-import { SidebarContext } from "@/components/ui/sidebar-l-context";
+import { SidebarContext as RightSidebarContext } from "@/components/ui/sidebar-r";
+import { SidebarContext as LeftSidebarContext } from "@/components/ui/sidebar-l-context";
 import {
     autoSave,
     isLoading,
@@ -32,6 +33,8 @@ export const QuestionSidebar = () => {
     const $questions = useStore(questions);
     const $autoSave = useStore(autoSave);
     const $isLoading = useStore(isLoading);
+    const leftSidebar = useStore(LeftSidebarContext);
+    const rightSidebar = useStore(RightSidebarContext);
 
     return (
         <Sidebar>
@@ -40,7 +43,7 @@ export const QuestionSidebar = () => {
                 <SidebarCloseIcon
                     className="mr-2 visible md:hidden"
                     onClick={() => {
-                        SidebarContext.get().setOpenMobile(false);
+                        leftSidebar.setOpenMobile(false);
                     }}
                 />
             </div>
@@ -95,6 +98,23 @@ export const QuestionSidebar = () => {
             <SidebarGroup>
                 <SidebarGroupContent>
                     <SidebarMenu data-tutorial-id="add-questions-buttons">
+                        <SidebarMenuItem>
+                            <SidebarMenuButton
+                                onClick={() => {
+                                    // Mobile: swap drawers so the hiding-zone
+                                    // controls are reachable while questions are open.
+                                    leftSidebar.setOpenMobile(false);
+                                    if (rightSidebar.isMobile) {
+                                        rightSidebar.setOpenMobile(true);
+                                    } else {
+                                        rightSidebar.setOpen(true);
+                                    }
+                                }}
+                                disabled={$isLoading}
+                            >
+                                Open Hiding Zones
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
                         <SidebarMenuItem>
                             <AddQuestionDialog>
                                 <SidebarMenuButton disabled={$isLoading}>

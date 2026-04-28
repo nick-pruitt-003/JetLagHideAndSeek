@@ -27,12 +27,13 @@ import { MENU_ITEM_CLASSNAME } from "@/components/ui/sidebar-l";
 import {
     Sidebar,
     SidebarContent,
-    SidebarContext,
     SidebarGroup,
     SidebarGroupContent,
     SidebarMenu,
     SidebarMenuItem,
 } from "@/components/ui/sidebar-r";
+import { SidebarContext as RightSidebarContext } from "@/components/ui/sidebar-r";
+import { SidebarContext as LeftSidebarContext } from "@/components/ui/sidebar-l-context";
 import { UnitSelect } from "@/components/UnitSelect";
 import {
     activeStationsOnly as activeStationsOnlyAtom,
@@ -105,6 +106,7 @@ import {
     stationsSignature,
 } from "@/maps/geo-utils";
 import { filterCirclesByReachability } from "@/maps/geo-utils/zonePipeline";
+import { findMatchingPlaces } from "@/maps/questions/matching";
 
 function _previewText(count: number) {
     return `${count} custom station${count === 1 ? "" : "s"} imported`;
@@ -130,6 +132,8 @@ export const ZoneSidebar = () => {
     const excludeHeritageRailways = useStore(excludeHeritageRailwaysAtom);
     const $reachabilityResult = useStore(reachabilityResultAtom);
     const $reachabilityOverrides = useStore(reachabilityOverridesAtom);
+    const leftSidebar = useStore(LeftSidebarContext);
+    const rightSidebar = useStore(RightSidebarContext);
     const $reachabilityClassifications = useStore(reachabilityClassifications);
     const $customStations = useStore(customStationsAtom);
     const $questions = useStore(questions);
@@ -879,7 +883,7 @@ export const ZoneSidebar = () => {
                 <SidebarCloseIcon
                     className="mr-2 visible md:hidden scale-x-[-1]"
                     onClick={() => {
-                        SidebarContext.get().setOpenMobile(false);
+                        rightSidebar.setOpenMobile(false);
                     }}
                 />
             </div>
@@ -888,6 +892,25 @@ export const ZoneSidebar = () => {
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
+                            <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => {
+                                        // Mobile: swap drawers so users can
+                                        // return to question editing directly.
+                                        rightSidebar.setOpenMobile(false);
+                                        if (leftSidebar.isMobile) {
+                                            leftSidebar.setOpenMobile(true);
+                                        } else {
+                                            leftSidebar.setOpen(true);
+                                        }
+                                    }}
+                                    disabled={$isLoading}
+                                >
+                                    Back to Questions
+                                </Button>
+                            </SidebarMenuItem>
                             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                                 <Label className="font-semibold font-poppins flex items-center gap-1.5">
                                     Display hiding zones?
@@ -1729,6 +1752,64 @@ async function selectionProcess(
 
     for (const question of questions.get()) {
         if (planningModeEnabled.get() && question.data.drag) {
+            continue;
+        }
+
+        if (
+            question.id === "matching" &&
+            (question.data.type === "airport" ||
+                question.data.type === "major-city" ||
+                question.data.type === "custom-points" ||
+                question.data.type.endsWith("-full"))
+        ) {
+            const raw = await findMatchingPlaces(question.data);
+            const points = Array.isArray(raw)
+                ? turf.featureCollection(raw as any)
+                : (raw as FeatureCollection<Point>);
+
+            if (!points || points.features.length === 0) {
+                continue;
+            }
+
+            const seekerPoint = turf.point([question.data.lng, question.data.lat]);
+            const nearestQuestion = turf.nearestPoint(seekerPoint, points as any);
+            const nearestName = nearestQuestion.properties?.name as
+                | string
+                | undefined;
+
+            if (!nearestName) {
+                continue;
+            }
+
+            const voronoi = geoSpatialVoronoi(points as FeatureCollection<Point>);
+            const correctPolygon = voronoi.features.find((feature: any) => {
+                return (
+                    feature?.properties?.site?.properties?.name === nearestName
+                );
+            });
+
+            if (!correctPolygon) {
+                if (question.data.same) {
+                    mapData = BLANK_GEOJSON;
+                }
+                continue;
+            }
+
+            if (question.data.same) {
+                mapData = safeUnion(
+                    turf.featureCollection([
+                        ...mapData.features,
+                        turf.mask(correctPolygon),
+                    ]),
+                );
+            } else {
+                mapData = safeUnion(
+                    turf.featureCollection([
+                        ...mapData.features,
+                        correctPolygon,
+                    ]),
+                );
+            }
             continue;
         }
 

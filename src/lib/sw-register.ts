@@ -27,6 +27,31 @@ import { Serwist } from "@serwist/window";
 import { toast } from "react-toastify";
 
 const TOAST_ID = "sw-update-available";
+const DISMISSED_WAITING_SW_KEY = "dismissedWaitingSwScriptURL";
+
+function getDismissedWaitingScriptURL(): string | null {
+    try {
+        return localStorage.getItem(DISMISSED_WAITING_SW_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function setDismissedWaitingScriptURL(scriptURL: string) {
+    try {
+        localStorage.setItem(DISMISSED_WAITING_SW_KEY, scriptURL);
+    } catch {
+        // Ignore storage failures (private mode / restricted webview).
+    }
+}
+
+function clearDismissedWaitingScriptURL() {
+    try {
+        localStorage.removeItem(DISMISSED_WAITING_SW_KEY);
+    } catch {
+        // Ignore storage failures (private mode / restricted webview).
+    }
+}
 
 export function registerServiceWorker() {
     if (typeof window === "undefined") return;
@@ -50,12 +75,25 @@ export function registerServiceWorker() {
     navigator.serviceWorker.addEventListener("controllerchange", () => {
         if (reloadingForUpdate) return;
         reloadingForUpdate = true;
+        clearDismissedWaitingScriptURL();
         // New SW took control — reload so the freshly-precached
         // assets are picked up on the next navigation.
         window.location.reload();
     });
 
-    sw.addEventListener("waiting", () => {
+    sw.addEventListener("waiting", async () => {
+        const registration = await navigator.serviceWorker.getRegistration(scope);
+        const waitingScriptURL = registration?.waiting?.scriptURL ?? null;
+
+        // If the user already dismissed this exact waiting SW, do not
+        // re-show the banner until a different SW build is waiting.
+        if (
+            waitingScriptURL &&
+            getDismissedWaitingScriptURL() === waitingScriptURL
+        ) {
+            return;
+        }
+
         // Sticky toast with a manual Reload button. `autoClose: false`
         // so users in the middle of a game don't lose it.
         toast.info("A new version of the app is ready.", {
@@ -63,6 +101,11 @@ export function registerServiceWorker() {
             autoClose: false,
             closeOnClick: false,
             draggable: false,
+            onClose: () => {
+                if (waitingScriptURL) {
+                    setDismissedWaitingScriptURL(waitingScriptURL);
+                }
+            },
             onClick: () => {
                 reloadingForUpdate = true;
                 sw.messageSkipWaiting();
