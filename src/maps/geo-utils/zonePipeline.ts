@@ -28,6 +28,7 @@ import type { toast as toastFn } from "react-toastify";
 
 import {
     lookupArrivalWithParentFallback,
+    stationNameMatchKey,
     type MatchedStation,
 } from "@/lib/transit/osm-gtfs-match";
 import { getGtfsStationNamesForLineRef } from "@/lib/transit/line-membership";
@@ -361,16 +362,40 @@ export interface ApplyQuestionFiltersOptions {
         osmIdPath: string,
         lineRef?: string,
         aroundLatLng?: { latitude: number; longitude: number },
-    ) => Promise<number[]>;
+    ) => Promise<{
+        nodeIds: number[];
+        stops: { lat: number; lon: number; nameKey: string }[];
+    }>;
 }
 
-const normalizeStationName = (value: string) =>
-    value
-        .toUpperCase()
-        .normalize("NFKD")
-        .replace(/[^\w\s]|_/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+/**
+ * Maximum distance, in meters, between an OSM route stop and a hiding-zone
+ * station for them to be considered the same physical place. OSM mapping
+ * routinely puts the `railway=station` point and the `public_transport=
+ * stop_position` point of one station 50-150 m apart; a couple-hundred-meter
+ * tolerance covers that without collapsing genuinely distinct stations on
+ * the same line (the closest pairs in dense networks like NYC are ~400 m).
+ */
+const TRAIN_LINE_STOP_PROXIMITY_METERS = 250;
+
+/** Cheap haversine — avoids spinning up turf.point for every circle/stop pair. */
+function haversineMeters(
+    aLat: number,
+    aLon: number,
+    bLat: number,
+    bLon: number,
+): number {
+    const R = 6_371_000;
+    const toRad = Math.PI / 180;
+    const dLat = (bLat - aLat) * toRad;
+    const dLon = (bLon - aLon) * toRad;
+    const lat1 = aLat * toRad;
+    const lat2 = bLat * toRad;
+    const h =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
 
 /**
  * Apply every active matching/measuring filter to the circle set. Pure
@@ -499,7 +524,7 @@ export async function applyQuestionFilters({
                     const trainLineRef = question.data.lineRef ?? "";
                     const wantSameTrainLine = question.data.same;
 
-                    const nodes = await resolveTrainLineNodes(
+                    const { nodeIds, stops } = await resolveTrainLineNodes(
                         nid,
                         trainLineRef,
                         {
@@ -508,59 +533,111 @@ export async function applyQuestionFilters({
                         },
                     );
 
-                    const filterByGtfsLine = async (): Promise<
-                        StationCircle[] | null
-                    > => {
-                        const gtfsNames =
-                            await getGtfsStationNamesForLineRef(trainLineRef);
-                        if (gtfsNames.size === 0) {
-                            toast?.warning(
-                                `No train line found for ${extractStationName(
-                                    nearestTrainStation,
-                                )}`,
-                            );
-                            return null;
+                    const nodeIdSet = new Set(nodeIds);
+                    const osmNameKeys = new Set(
+                        stops.map((s) => s.nameKey).filter(Boolean),
+                    );
+
+                    /** True iff this circle's underlying station sits within
+                     *  the proximity radius of any stop on the route. Used to
+                     *  disambiguate homonyms — e.g. "111 St" on the J in
+                     *  Richmond Hill is ~8 km from "111 St" on the 7 in
+                     *  Corona, far outside the radius. */
+                    const circleIsOnRouteByGeometry = (
+                        circle: StationCircle,
+                    ): boolean => {
+                        const coord = circle.properties.geometry.coordinates;
+                        if (!coord || coord.length < 2) return false;
+                        const [lon, lat] = coord;
+                        for (const stop of stops) {
+                            if (
+                                haversineMeters(lat, lon, stop.lat, stop.lon) <=
+                                TRAIN_LINE_STOP_PROXIMITY_METERS
+                            ) {
+                                return true;
+                            }
                         }
-                        return current.filter((circle) => {
+                        return false;
+                    };
+
+                    const filterByNameSet = (
+                        nameSet: Set<string>,
+                    ): StationCircle[] =>
+                        current.filter((circle) => {
                             const stationName = extractStationName(
                                 circle.properties,
                             );
                             if (!stationName) return false;
-                            const onLine = gtfsNames.has(
-                                normalizeStationName(stationName),
+                            const onLine = nameSet.has(
+                                stationNameMatchKey(stationName),
                             );
                             return wantSameTrainLine ? onLine : !onLine;
                         });
-                    };
 
-                    if (nodes.length === 0) {
-                        const gtfsCurrent = await filterByGtfsLine();
-                        if (gtfsCurrent) current = gtfsCurrent;
-                        continue;
+                    // 1. Match by OSM node id. Works when zone circles are
+                    //    tagged with the same `node/<id>` the route relation
+                    //    references — typical for `railway=station` zones.
+                    let next: StationCircle[] | null = null;
+                    if (nodeIdSet.size > 0) {
+                        next = current.filter((circle) => {
+                            const idProp = circle.properties.properties.id;
+                            if (!idProp || !idProp.includes("/")) return false;
+                            const id = parseInt(idProp.split("/")[1], 10);
+                            return wantSameTrainLine
+                                ? nodeIdSet.has(id)
+                                : !nodeIdSet.has(id);
+                        });
                     }
 
-                    let next = current.filter((circle) => {
-                        const idProp = circle.properties.properties.id;
-                        if (!idProp || !idProp.includes("/")) return false;
-                        const id = parseInt(idProp.split("/")[1], 10);
-                        return wantSameTrainLine
-                            ? nodes.includes(id)
-                            : !nodes.includes(id);
-                    });
-
-                    // OSM stop nodes often disagree with the railway=station
-                    // points used for hiding zones; if nothing matched, fall back
-                    // to GTFS stop names (NYCT 7, etc.).
+                    // 2. Fallback: match by spatial proximity to any route
+                    //    stop. Zone circles sometimes use a different OSM id
+                    //    (relation, way, or a sibling station node) than the
+                    //    route relation members. Geometry-based matching is
+                    //    homonym-safe — same-named stations on different
+                    //    lines (e.g. 111 St on J vs 7) are kilometers apart.
                     if (
-                        wantSameTrainLine &&
-                        next.length === 0 &&
-                        current.length > 0
+                        (next == null || next.length === 0) &&
+                        stops.length > 0
                     ) {
-                        const gtfsCurrent = await filterByGtfsLine();
-                        if (gtfsCurrent) next = gtfsCurrent;
+                        next = current.filter((circle) => {
+                            const onLine = circleIsOnRouteByGeometry(circle);
+                            return wantSameTrainLine ? onLine : !onLine;
+                        });
                     }
 
-                    current = next;
+                    // 3. Last-resort fallback: GTFS stop names for this line
+                    //    ref. Loses homonym disambiguation but better than a
+                    //    silent no-op when Overpass returns no geometry.
+                    //    Falls back to OSM names from this query first (also
+                    //    name-only, but at least free of a GTFS dependency).
+                    if (next == null || next.length === 0) {
+                        if (osmNameKeys.size > 0) {
+                            next = filterByNameSet(osmNameKeys);
+                        }
+                        if (next == null || next.length === 0) {
+                            const gtfsNames =
+                                await getGtfsStationNamesForLineRef(
+                                    trainLineRef,
+                                );
+                            if (gtfsNames.size > 0) {
+                                next = filterByNameSet(gtfsNames);
+                            }
+                        }
+                    }
+
+                    if (next == null) {
+                        // Nothing usable from OSM nodes, OSM geometry, OSM
+                        // names, or GTFS. Don't silently zero out the zone —
+                        // keep `current` and warn so the user knows the
+                        // filter was a no-op.
+                        toast?.warning(
+                            `No train line data found for ${extractStationName(
+                                nearestTrainStation,
+                            )}; skipping 'same train line' filter.`,
+                        );
+                    } else {
+                        current = next;
+                    }
                 }
             }
 

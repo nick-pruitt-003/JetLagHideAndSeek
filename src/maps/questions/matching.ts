@@ -35,6 +35,7 @@ import {
     validateFullFacilityFetch,
 } from "@/maps/questions/facility-full";
 import { getGtfsStationNamesForLineRef } from "@/lib/transit/line-membership";
+import { stationNameMatchKey } from "@/lib/transit/osm-gtfs-match";
 import type {
     APILocations,
     HomeGameMatchingQuestions,
@@ -45,14 +46,6 @@ import type {
 export function normalizeMatchingAirportIata(s: string): string {
     return s.trim().toUpperCase();
 }
-
-const normalizeStationName = (value: string) =>
-    value
-        .toUpperCase()
-        .normalize("NFKD")
-        .replace(/[^\w\s]|_/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
 
 async function fetchAirportPointsUnfiltered(
     question: MatchingQuestion,
@@ -425,7 +418,7 @@ export const hiderifyMatching = async (question: MatchingQuestion) => {
         );
 
         if (question.type === "same-train-line") {
-            const nodes = await trainLineNodeFinder(
+            const { nodeIds, stops } = await trainLineNodeFinder(
                 nearestSeekerTrainStation.properties.id,
                 question.lineRef,
                 { latitude: question.lat, longitude: question.lng },
@@ -434,32 +427,90 @@ export const hiderifyMatching = async (question: MatchingQuestion) => {
             const hiderName =
                 nearestHiderTrainStation.properties["name:en"] ||
                 nearestHiderTrainStation.properties.name;
+            const hiderKey = hiderName
+                ? stationNameMatchKey(String(hiderName))
+                : "";
+            const hiderCoord =
+                nearestHiderTrainStation.geometry?.coordinates ?? [];
+            const [hiderLon, hiderLat] = hiderCoord;
 
-            if (nodes.length > 0) {
-                const hiderId = parseInt(
-                    nearestHiderTrainStation.properties.id.split("/")[1],
-                    10,
-                );
-                if (nodes.includes(hiderId)) {
+            // ~6,371,000 m * acos shortcut: small distances → planar OK,
+            // but we want consistency with the zone filter's haversine
+            // proximity check. Inline (no shared util import to avoid
+            // ts/eslint cross-file churn).
+            const distanceMeters = (
+                aLat: number,
+                aLon: number,
+                bLat: number,
+                bLon: number,
+            ) => {
+                const R = 6_371_000;
+                const toRad = Math.PI / 180;
+                const dLat = (bLat - aLat) * toRad;
+                const dLon = (bLon - aLon) * toRad;
+                const lat1 = aLat * toRad;
+                const lat2 = bLat * toRad;
+                const h =
+                    Math.sin(dLat / 2) ** 2 +
+                    Math.cos(lat1) * Math.cos(lat2) *
+                        Math.sin(dLon / 2) ** 2;
+                return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+            };
+            const PROXIMITY_M = 250;
+
+            // Match priority: OSM node id → spatial proximity to a route
+            // stop → OSM stop names → GTFS names. Proximity is the homonym
+            // killer (e.g. "111 St" on J vs 7).
+            let resolved = false;
+            if (nodeIds.length > 0) {
+                const hiderIdRaw = nearestHiderTrainStation.properties.id;
+                const hiderIdNum =
+                    typeof hiderIdRaw === "string" && hiderIdRaw.includes("/")
+                        ? parseInt(hiderIdRaw.split("/")[1], 10)
+                        : NaN;
+                if (!Number.isNaN(hiderIdNum) && nodeIds.includes(hiderIdNum)) {
                     question.same = true;
-                } else {
-                    const gtfsNames = await getGtfsStationNamesForLineRef(
-                        question.lineRef ?? "",
-                    );
-                    question.same =
-                        gtfsNames.size > 0 &&
-                        !!hiderName &&
-                        gtfsNames.has(
-                            normalizeStationName(String(hiderName)),
-                        );
+                    resolved = true;
                 }
-            } else {
+            }
+            if (
+                !resolved &&
+                stops.length > 0 &&
+                typeof hiderLat === "number" &&
+                typeof hiderLon === "number"
+            ) {
+                const onLine = stops.some(
+                    (s) =>
+                        distanceMeters(hiderLat, hiderLon, s.lat, s.lon) <=
+                        PROXIMITY_M,
+                );
+                if (onLine) {
+                    question.same = true;
+                    resolved = true;
+                }
+            }
+            if (!resolved) {
+                const osmNameKeys = new Set(
+                    stops.map((s) => s.nameKey).filter(Boolean),
+                );
+                if (osmNameKeys.size > 0 && hiderKey) {
+                    if (osmNameKeys.has(hiderKey)) {
+                        question.same = true;
+                        resolved = true;
+                    }
+                }
+            }
+            if (!resolved) {
                 const gtfsNames = await getGtfsStationNamesForLineRef(
                     question.lineRef ?? "",
                 );
-                question.same =
-                    !!hiderName &&
-                    gtfsNames.has(normalizeStationName(String(hiderName)));
+                if (gtfsNames.size > 0 && hiderKey) {
+                    question.same = gtfsNames.has(hiderKey);
+                    resolved = true;
+                }
+            }
+            if (!resolved) {
+                question.same = false;
             }
         }
 

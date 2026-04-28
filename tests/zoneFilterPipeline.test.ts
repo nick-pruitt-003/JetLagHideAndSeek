@@ -740,7 +740,10 @@ describe("applyQuestionFilters", () => {
             useCustomStations: false,
             includeDefaultStations: true,
             planningModeEnabled: false,
-            resolveTrainLineNodes: async () => [100, 200],
+            resolveTrainLineNodes: async () => ({
+                nodeIds: [100, 200],
+                stops: [],
+            }),
         });
         const ids = out.map((c) => c.properties.properties.id).sort();
         expect(ids).toEqual(["node/100", "node/200"]);

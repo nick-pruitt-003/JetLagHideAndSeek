@@ -18,7 +18,6 @@ const MAX_POLY_INLINE_LENGTH = 5200;
 /** HTTP statuses where a single delayed retry sometimes succeeds (busy public Overpass). */
 const OVERPASS_RETRYABLE_HTTP = new Set([502, 503, 504, 529, 599]);
 const OVERPASS_RETRY_DELAY_MS = 3000;
-import _ from "lodash";
 import { toast } from "react-toastify";
 
 import {
@@ -27,6 +26,7 @@ import {
     playableTerritoryUnion,
     polyGeoJSON,
 } from "@/lib/context";
+import { stationNameMatchKey } from "@/lib/transit/osm-gtfs-match";
 import { cacheFetch, determineCache } from "@/maps/api/cache";
 import {
     LOCATION_FIRST_TAG,
@@ -630,13 +630,40 @@ function isStopLikeStationNode(element: {
     return false;
 }
 
+/**
+ * Result of resolving stations on the same train line.
+ *
+ *  - `nodeIds`: OSM node ids of stop-like stations on this route. Used when
+ *    the zone circle's `properties.id` is itself a `node/<id>` (the common
+ *    case for `railway=station` zones).
+ *  - `stops`: lat/lon + normalized name key for every stop-like node on the
+ *    route. Used to match zone circles by spatial proximity (homonym-safe:
+ *    "111 St" on the J in Richmond Hill is ~8 km from "111 St" on the 7 in
+ *    Corona, so a small radius cleanly disambiguates) — and the name key is
+ *    kept around for the GTFS-style fallback Set when the geometry is
+ *    unavailable.
+ */
+export interface TrainLineRouteStop {
+    lat: number;
+    lon: number;
+    nameKey: string;
+}
+export interface TrainLineStationMatchers {
+    nodeIds: number[];
+    stops: TrainLineRouteStop[];
+}
+
 export const trainLineNodeFinder = async (
     node: string,
     lineRef?: string,
     aroundLatLng?: { latitude: number; longitude: number },
-): Promise<number[]> => {
+): Promise<TrainLineStationMatchers> => {
+    const empty: TrainLineStationMatchers = {
+        nodeIds: [],
+        stops: [],
+    };
     const origin = lineOriginSetsQuery(node);
-    if (!origin) return [];
+    if (!origin) return empty;
     // Build the line set from route relations directly connected to this
     // station node. Fallback to route relations on nearby rail ways because
     // some station points are mapped adjacent to (not on) track members.
@@ -672,22 +699,37 @@ out body;
         fallbackPromise ?? Promise.resolve({ elements: [] as any[] }),
     ]);
 
-    const collectStopLikeNodeIds = (elements: any[] | undefined) => {
-        const out: number[] = [];
+    const nodeIds: number[] = [];
+    const stops: TrainLineRouteStop[] = [];
+    const seenNodeIds = new Set<number>();
+    const collect = (elements: any[] | undefined) => {
         for (const element of elements ?? []) {
             if (!isStopLikeStationNode(element)) continue;
-            out.push(element.id);
+            if (typeof element.id === "number" && !seenNodeIds.has(element.id)) {
+                seenNodeIds.add(element.id);
+                nodeIds.push(element.id);
+            }
+            const lat =
+                typeof element.lat === "number" ? element.lat : undefined;
+            const lon =
+                typeof element.lon === "number" ? element.lon : undefined;
+            if (lat == null || lon == null) continue;
+            const tags = element.tags ?? {};
+            const rawName = tags["name:en"] || tags.name || "";
+            const nameKey = rawName
+                ? stationNameMatchKey(String(rawName))
+                : "";
+            stops.push({ lat, lon, nameKey });
         }
-        return out;
     };
 
     // Union graph- and geography-based hits. The nearest railway=station OSM
     // node is often tied to one mode (e.g. LIRR); subway routes may only appear
     // via nearby railway=subway ways unless we always merge the around: query.
-    return _.uniq([
-        ...collectStopLikeNodeIds(primaryData.elements),
-        ...collectStopLikeNodeIds(fallbackData.elements),
-    ]);
+    collect(primaryData.elements);
+    collect(fallbackData.elements);
+
+    return { nodeIds, stops };
 };
 
 export const trainLineRefsForStation = async (

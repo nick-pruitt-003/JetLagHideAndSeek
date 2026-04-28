@@ -1,3 +1,4 @@
+import { stationNameMatchKey } from "./osm-gtfs-match";
 import {
     getAllRoutes,
     getAllStops,
@@ -15,14 +16,6 @@ const normalizeLineRef = (value: string) =>
         .replace(/^<+/, "")
         .replace(/>+$/, "")
         .toUpperCase();
-
-const normalizeStationName = (value: string) =>
-    value
-        .toUpperCase()
-        .normalize("NFKD")
-        .replace(/[^\w\s]|_/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
 
 const lineRefMatchesTokenString = (
     normalizedRef: string,
@@ -57,13 +50,20 @@ export async function getGtfsStationNamesForLineRef(
 
     const pending = (async () => {
         const systems = await listSystems();
-        const systemIds = systems
+        let systemIds = systems
             .filter((s) => {
                 const id = s.id.toLowerCase();
                 const name = s.name.toLowerCase();
-                return id.includes("subway") || name.includes("subway");
+                return (
+                    id.includes("subway") ||
+                    name.includes("subway") ||
+                    id.includes("nyct")
+                );
             })
             .map((s) => s.id);
+        if (systemIds.length === 0) {
+            systemIds = systems.map((s) => s.id);
+        }
 
         const [routes, trips, stopTimes, stops] = await Promise.all([
             getAllRoutes(systemIds.length > 0 ? systemIds : undefined),
@@ -102,12 +102,12 @@ export async function getGtfsStationNamesForLineRef(
         for (const stopId of stopIds) {
             const stop = stopById.get(stopId);
             if (!stop) continue;
-            const n = normalizeStationName(stop.name);
+            const n = stationNameMatchKey(stop.name);
             if (n) stationNames.add(n);
             if (stop.parentStopId) {
                 const parent = stopById.get(stop.parentStopId);
                 if (parent) {
-                    const pn = normalizeStationName(parent.name);
+                    const pn = stationNameMatchKey(parent.name);
                     if (pn) stationNames.add(pn);
                 }
             }

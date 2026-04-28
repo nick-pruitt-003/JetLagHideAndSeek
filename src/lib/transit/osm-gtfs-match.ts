@@ -101,6 +101,17 @@ export function normalizeStationName(raw: string): string[] {
     );
 }
 
+/**
+ * Stable key for exact membership checks (e.g. all GTFS stops on a line vs
+ * OSM `railway=station` names). Uses the same token rules as
+ * {@link normalizeStationName} so “103rd Street” and “103 St” collide.
+ */
+export function stationNameMatchKey(raw: string): string {
+    const tokens = normalizeStationName(raw);
+    if (tokens.length === 0) return "";
+    return [...tokens].sort().join(" ");
+}
+
 /** Jaccard similarity of two station names after normalization. 0..1. */
 export function nameSimilarity(a: string, b: string): number {
     const ta = new Set(normalizeStationName(a));

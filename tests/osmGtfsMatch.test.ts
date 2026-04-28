@@ -6,6 +6,7 @@ import {
     matchOsmToGtfs,
     nameSimilarity,
     normalizeStationName,
+    stationNameMatchKey,
     type OsmStationInput,
     rollUpToParent,
 } from "@/lib/transit/osm-gtfs-match";
@@ -143,6 +144,15 @@ describe("normalizeStationName", () => {
     it("returns empty for pure noise input", () => {
         expect(normalizeStationName("Station")).toEqual([]);
         expect(normalizeStationName("")).toEqual([]);
+    });
+});
+
+describe("stationNameMatchKey", () => {
+    it("aligns OSM-style ordinals with GTFS-style street abbreviations", () => {
+        const osm = "103rd Street—Corona Plaza";
+        const gtfs = "103 St-Corona Plaza";
+        expect(stationNameMatchKey(osm)).toBe(stationNameMatchKey(gtfs));
+        expect(stationNameMatchKey(osm)).toBe("103 corona");
     });
 });
 
