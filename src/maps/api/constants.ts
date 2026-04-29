@@ -1,8 +1,7 @@
 import type { APILocations } from "@/maps/schema";
 
 export const OVERPASS_API = "https://overpass-api.de/api/interpreter";
-export const OVERPASS_API_FALLBACK =
-    "https://overpass.private.coffee/api/interpreter";
+const OVERPASS_API_FALLBACK = "https://overpass.private.coffee/api/interpreter";
 
 /**
  * Interpreter endpoints tried in order. Public .de often drops connections

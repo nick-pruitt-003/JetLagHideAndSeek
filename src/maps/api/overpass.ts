@@ -834,7 +834,7 @@ function lineStringCoastFeatures(
  * Does **not** fetch {@code natural=water} polygons, so inland lakes (Central
  * Park, etc.) are not coastline for measuring.
  */
-export async function fetchCoastlineLinesOsmInBbox(
+async function fetchCoastlineLinesOsmInBbox(
     bbox: BBox,
 ): Promise<FeatureCollection<LineString | MultiLineString>> {
     const [west, south, east, north] = bbox;
