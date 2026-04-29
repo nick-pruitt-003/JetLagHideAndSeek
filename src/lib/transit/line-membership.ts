@@ -1,4 +1,3 @@
-import { stationNameMatchKey } from "./osm-gtfs-match";
 import {
     getAllRoutes,
     getAllStops,
@@ -6,6 +5,7 @@ import {
     getAllTrips,
     listSystems,
 } from "./gtfs-store";
+import { stationNameMatchKey } from "./osm-gtfs-match";
 import type { TransitRoute } from "./types";
 
 const lineMembershipCache = new Map<string, Promise<Set<string>>>();

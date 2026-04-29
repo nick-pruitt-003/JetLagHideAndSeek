@@ -6,9 +6,9 @@ import {
     matchOsmToGtfs,
     nameSimilarity,
     normalizeStationName,
-    stationNameMatchKey,
     type OsmStationInput,
     rollUpToParent,
+    stationNameMatchKey,
 } from "@/lib/transit/osm-gtfs-match";
 import type { TransitStop } from "@/lib/transit/types";
 

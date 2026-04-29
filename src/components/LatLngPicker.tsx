@@ -34,7 +34,12 @@ import { SidebarMenuItem } from "@/components/ui/sidebar-l";
 import { useDebounce } from "@/hooks/useDebounce";
 import { allowGooglePlusCodes, isLoading } from "@/lib/context";
 import { cn } from "@/lib/utils";
-import { determineName, geocode, ICON_COLORS } from "@/maps/api";
+import {
+    determineName,
+    geocode,
+    ICON_COLOR_USE_DARK_TEXT,
+    ICON_COLORS,
+} from "@/maps/api";
 
 const parseCoordinatesFromText = (
     text: string,
@@ -355,7 +360,11 @@ export const LatitudeLongitude = ({
                             $isLoading && "opacity-50",
                         )}
                         style={{
-                            color: colorName === "gold" ? "black" : undefined,
+                            color:
+                                colorName &&
+                                ICON_COLOR_USE_DARK_TEXT.has(colorName)
+                                    ? "black"
+                                    : undefined,
                         }}
                     >
                         <div className="text-2xl font-semibold font-poppins">

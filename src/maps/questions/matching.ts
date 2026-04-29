@@ -16,9 +16,15 @@ import {
     playableTerritoryUnion,
     polyGeoJSON,
 } from "@/lib/context";
+import { getGtfsStationNamesForLineRef } from "@/lib/transit/line-membership";
+import { stationNameMatchKey } from "@/lib/transit/osm-gtfs-match";
 import {
+    DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC,
     findAdminBoundary,
+    findLandmassBoundaryAtPoint,
     findPlacesInZone,
+    findPoliticalDistrictBoundaryAtPoint,
+    findZipBoundaryAtPoint,
     nearestToQuestion,
     OVERPASS_MAJOR_CITY_FILTER,
     overpassAirportIataFilter,
@@ -34,8 +40,6 @@ import {
     osmElementsToFacilityPoints,
     validateFullFacilityFetch,
 } from "@/maps/questions/facility-full";
-import { getGtfsStationNamesForLineRef } from "@/lib/transit/line-membership";
-import { stationNameMatchKey } from "@/lib/transit/osm-gtfs-match";
 import type {
     APILocations,
     HomeGameMatchingQuestions,
@@ -103,6 +107,11 @@ export async function listAirportMatchingCandidates(
 
 export const findMatchingPlaces = async (question: MatchingQuestion) => {
     switch (question.type) {
+        case "pick-type":
+        case "same-landmass":
+        case "same-zip":
+        case "same-district":
+            return [];
         case "airport": {
             return filterAirportsByDisabled(
                 await fetchAirportPointsUnfiltered(question),
@@ -155,10 +164,57 @@ export const findMatchingPlaces = async (question: MatchingQuestion) => {
 };
 
 export const determineMatchingBoundary = _.memoize(
-    async (question: MatchingQuestion) => {
+    async (
+        question: MatchingQuestion,
+        overpassTimeoutSeconds: number = DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC,
+    ) => {
         let boundary;
 
         switch (question.type) {
+            case "pick-type":
+                return false;
+            case "same-landmass": {
+                boundary = await findLandmassBoundaryAtPoint(
+                    question.lat,
+                    question.lng,
+                    overpassTimeoutSeconds,
+                );
+                if (!boundary) {
+                    toast.warning(
+                        "Could not find a landmass boundary for this location.",
+                    );
+                    return false;
+                }
+                break;
+            }
+            case "same-zip": {
+                boundary = await findZipBoundaryAtPoint(
+                    question.lat,
+                    question.lng,
+                    overpassTimeoutSeconds,
+                );
+                if (!boundary) {
+                    toast.warning(
+                        "Could not find a ZIP/postal boundary for this location.",
+                    );
+                    return false;
+                }
+                break;
+            }
+            case "same-district": {
+                boundary = await findPoliticalDistrictBoundaryAtPoint(
+                    question.lat,
+                    question.lng,
+                    overpassTimeoutSeconds,
+                );
+                if (!boundary) {
+                    toast.warning(
+                        "Could not find a political district for this location.",
+                    );
+                    return false;
+                }
+                break;
+            }
             case "aquarium":
             case "zoo":
             case "theme_park":
@@ -185,6 +241,7 @@ export const determineMatchingBoundary = _.memoize(
                     question.lat,
                     question.lng,
                     question.cat.adminLevel,
+                    overpassTimeoutSeconds,
                 );
 
                 if (!boundary) {
@@ -230,6 +287,7 @@ export const determineMatchingBoundary = _.memoize(
                             [
                                 `[admin_level=${question.cat.adminLevel}]["name"~"^${letter}.+"]`,
                             ], // Regex is faster than filtering afterward
+                            overpassTimeoutSeconds,
                         ),
                     ).features.filter(
                         (x): x is Feature<Polygon | MultiPolygon> =>
@@ -355,6 +413,10 @@ export const adjustPerMatching = async (
 export const hiderifyMatching = async (question: MatchingQuestion) => {
     const $hiderMode = hiderMode.get();
     if ($hiderMode === false) {
+        return question;
+    }
+
+    if (question.type === "pick-type") {
         return question;
     }
 

@@ -1,5 +1,5 @@
 import { useStore } from "@nanostores/react";
-import { type DragEndEvent, Icon } from "leaflet";
+import { DivIcon, type DragEndEvent, Icon } from "leaflet";
 import { useState } from "react";
 import { Fragment } from "react/jsx-runtime";
 import { Marker } from "react-leaflet";
@@ -24,9 +24,39 @@ import {
     startingLocation,
     triggerLocalRefresh,
 } from "@/lib/context";
-import type { ICON_COLORS } from "@/maps/api";
+import {
+    ICON_COLORS,
+    type IconColorKey,
+    LEAFLET_COLOR_MARKER_SLUGS,
+} from "@/maps/api";
 
 let isDragging = false;
+
+const LEAFLET_MARKER_LAYOUT = {
+    shadowUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+    iconSize: [25, 41] as [number, number],
+    iconAnchor: [12, 41] as [number, number],
+    popupAnchor: [1, -34] as [number, number],
+    shadowSize: [41, 41] as [number, number],
+};
+
+function iconForPinColor(color: IconColorKey) {
+    if (LEAFLET_COLOR_MARKER_SLUGS.has(color)) {
+        return new Icon({
+            iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+            ...LEAFLET_MARKER_LAYOUT,
+        });
+    }
+    const hex = ICON_COLORS[color];
+    return new DivIcon({
+        className: "jl-hex-pin",
+        html: `<div class="jl-hex-pin__blob" style="background-color:${hex}"></div>`,
+        iconSize: [28, 36],
+        iconAnchor: [14, 34],
+        popupAnchor: [0, -30],
+    });
+}
 
 const ColoredMarker = ({
     latitude,
@@ -39,7 +69,7 @@ const ColoredMarker = ({
     onChange: (event: DragEndEvent) => void;
     latitude: number;
     longitude: number;
-    color: keyof typeof ICON_COLORS;
+    color: IconColorKey;
     questionKey: number;
     sub?: string;
 }) => {
@@ -53,19 +83,7 @@ const ColoredMarker = ({
         <Dialog open={open} onOpenChange={setOpen}>
             <Marker
                 position={[latitude, longitude]}
-                icon={
-                    color
-                        ? new Icon({
-                              iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
-                              shadowUrl:
-                                  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-                              iconSize: [25, 41],
-                              iconAnchor: [12, 41],
-                              popupAnchor: [1, -34],
-                              shadowSize: [41, 41],
-                          })
-                        : undefined
-                }
+                icon={iconForPinColor(color)}
                 draggable={true}
                 eventHandlers={{
                     dragstart: () => {

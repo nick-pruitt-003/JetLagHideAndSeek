@@ -1,10 +1,20 @@
-import * as turf from "@turf/turf";
+ import * as turf from "@turf/turf";
 import type {
+    BBox,
     Feature,
     FeatureCollection,
+    LineString,
+    MultiLineString,
     MultiPolygon,
     Polygon,
 } from "geojson";
+
+/**
+ * Server-side Overpass timeout (seconds) for heavy admin-boundary queries
+ * (`is_in` + relation `out geom`, letter-zone relation searches). Public so
+ * call sites can align with {@link findAdminBoundary} / matching flows.
+ */
+export const DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC = 120;
 
 /** GET URLs longer than this often fail (browser/proxy limits); use POST instead. */
 const MAX_OVERPASS_GET_URL_LENGTH = 7500;
@@ -474,9 +484,14 @@ export const findAdminBoundary = async (
     latitude: number,
     longitude: number,
     adminLevel: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10,
+    timeoutDuration: number = DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC,
 ) => {
+    const jsonHeader =
+        timeoutDuration !== 0
+            ? `[out:json][timeout:${timeoutDuration}]`
+            : `[out:json]`;
     const query = `
-[out:json];
+${jsonHeader};
 is_in(${latitude}, ${longitude})->.a;
 rel(pivot.a)["admin_level"="${adminLevel}"];
 out geom;
@@ -486,15 +501,309 @@ out geom;
     return geo.features?.[0];
 };
 
-export const fetchCoastline = async () => {
-    const response = await cacheFetch(
-        import.meta.env.BASE_URL + "/coastline50.geojson",
-        "Fetching coastline data...",
+type PolyFeature = Feature<Polygon | MultiPolygon>;
+
+function polygonFeaturesOnly(fc: FeatureCollection): PolyFeature[] {
+    return fc.features.filter(
+        (f): f is PolyFeature =>
+            !!f.geometry &&
+            (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"),
+    );
+}
+
+function chooseContainingOrLargestPolygon(
+    features: PolyFeature[],
+    latitude: number,
+    longitude: number,
+): PolyFeature | null {
+    if (features.length === 0) return null;
+    const pt = turf.point([longitude, latitude]);
+    const containing = features.filter((f) => turf.booleanPointInPolygon(pt, f));
+    const pool = containing.length > 0 ? containing : features;
+    const sorted = [...pool].sort(
+        (a, b) => turf.area(b as any) - turf.area(a as any),
+    );
+    return sorted[0] ?? null;
+}
+
+function asPolygonFeature(feature: Feature | null | undefined): PolyFeature | null {
+    if (!feature?.geometry) return null;
+    return feature.geometry.type === "Polygon" ||
+        feature.geometry.type === "MultiPolygon"
+        ? (feature as PolyFeature)
+        : null;
+}
+
+export const findZipBoundaryAtPoint = async (
+    latitude: number,
+    longitude: number,
+    timeoutDuration: number = DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC,
+): Promise<PolyFeature | null> => {
+    const header =
+        timeoutDuration !== 0
+            ? `[out:json][timeout:${timeoutDuration}]`
+            : `[out:json]`;
+    const query = `
+${header};
+is_in(${latitude}, ${longitude})->.a;
+(
+  rel(pivot.a)["boundary"="postal_code"];
+  way(pivot.a)["boundary"="postal_code"];
+  rel(pivot.a)["postal_code"];
+  way(pivot.a)["postal_code"];
+);
+out geom tags;
+`;
+    const data = await getOverpassData(
+        query,
+        "Finding ZIP/postal boundary...",
+        CacheType.ZONE_CACHE,
+    );
+    const geo = osmtogeojson(data) as FeatureCollection;
+    return chooseContainingOrLargestPolygon(
+        polygonFeaturesOnly(geo),
+        latitude,
+        longitude,
+    );
+};
+
+export const findPoliticalDistrictBoundaryAtPoint = async (
+    latitude: number,
+    longitude: number,
+    timeoutDuration: number = DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC,
+): Promise<PolyFeature | null> => {
+    const header =
+        timeoutDuration !== 0
+            ? `[out:json][timeout:${timeoutDuration}]`
+            : `[out:json]`;
+    const nycCouncilQuery = `
+${header};
+is_in(${latitude}, ${longitude})->.a;
+(
+  rel(pivot.a)["boundary"="political"]["name"~"New York City Council District",i];
+  way(pivot.a)["boundary"="political"]["name"~"New York City Council District",i];
+);
+out geom tags;
+`;
+    const nycData = await getOverpassData(
+        nycCouncilQuery,
+        "Finding NYC council district...",
+        CacheType.ZONE_CACHE,
+    );
+    const nycGeo = osmtogeojson(nycData) as FeatureCollection;
+    const nycDistrict = chooseContainingOrLargestPolygon(
+        polygonFeaturesOnly(nycGeo),
+        latitude,
+        longitude,
+    );
+    if (nycDistrict) return nycDistrict;
+
+    const query = `
+${header};
+is_in(${latitude}, ${longitude})->.a;
+(
+  rel(pivot.a)["boundary"="political"];
+  way(pivot.a)["boundary"="political"];
+);
+out geom tags;
+`;
+    const data = await getOverpassData(
+        query,
+        "Finding political district...",
+        CacheType.ZONE_CACHE,
+    );
+    const geo = osmtogeojson(data) as FeatureCollection;
+    const polys = polygonFeaturesOnly(geo);
+    if (polys.length > 0) {
+        const districtish = polys.filter((f) => {
+            const props = (f.properties ?? {}) as Record<string, unknown>;
+            const name = String(props.name ?? "");
+            const shortName = String(props.short_name ?? "");
+            const boundary = String(props.boundary ?? "");
+            const descriptor = `${name} ${shortName} ${boundary}`.toLowerCase();
+            return (
+                descriptor.includes("district") ||
+                descriptor.includes("council") ||
+                descriptor.includes("assembly") ||
+                descriptor.includes("senate") ||
+                descriptor.includes("legislative")
+            );
+        });
+        const picked = chooseContainingOrLargestPolygon(
+            districtish.length > 0 ? districtish : polys,
+            latitude,
+            longitude,
+        );
+        if (picked) return picked;
+    }
+
+    // Fallback when political districts are absent/poorly tagged.
+    return (
+        asPolygonFeature(
+            await findAdminBoundary(latitude, longitude, 6, timeoutDuration),
+        ) ??
+        asPolygonFeature(
+            await findAdminBoundary(latitude, longitude, 5, timeoutDuration),
+        ) ??
+        asPolygonFeature(
+            await findAdminBoundary(latitude, longitude, 4, timeoutDuration),
+        ) ??
+        null
+    );
+};
+
+export const findLandmassBoundaryAtPoint = async (
+    latitude: number,
+    longitude: number,
+    timeoutDuration: number = DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC,
+): Promise<PolyFeature | null> => {
+    const header =
+        timeoutDuration !== 0
+            ? `[out:json][timeout:${timeoutDuration}]`
+            : `[out:json]`;
+    const query = `
+${header};
+is_in(${latitude}, ${longitude})->.a;
+(
+  rel(pivot.a)["place"="island"];
+  way(pivot.a)["place"="island"];
+  rel(pivot.a)["natural"="island"];
+  way(pivot.a)["natural"="island"];
+  rel(pivot.a)["natural"="islet"];
+  way(pivot.a)["natural"="islet"];
+);
+out geom tags;
+`;
+    const data = await getOverpassData(
+        query,
+        "Finding landmass boundary...",
+        CacheType.ZONE_CACHE,
+    );
+    const geo = osmtogeojson(data) as FeatureCollection;
+    const island = chooseContainingOrLargestPolygon(
+        polygonFeaturesOnly(geo),
+        latitude,
+        longitude,
+    );
+    if (island) return island;
+
+    // Non-island fallback: county-ish boundary approximates mainland buckets.
+    return (
+        asPolygonFeature(
+            await findAdminBoundary(latitude, longitude, 6, timeoutDuration),
+        ) ??
+        asPolygonFeature(
+            await findAdminBoundary(latitude, longitude, 5, timeoutDuration),
+        ) ??
+        null
+    );
+};
+
+/** Pinned Natural Earth 50m coast (public domain) when OSM bbox returns nothing. */
+const NATURAL_EARTH_50M_COAST =
+    "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_50m_coastline.geojson";
+
+const COASTLINE_BBOX_PAD_DEG = 0.08;
+
+function lineStringCoastFeatures(
+    fc: FeatureCollection,
+): Feature<LineString | MultiLineString>[] {
+    const out: Feature<LineString | MultiLineString>[] = [];
+    for (const f of fc.features) {
+        const t = f.geometry?.type;
+        if (t === "LineString" || t === "MultiLineString") {
+            out.push(f as Feature<LineString | MultiLineString>);
+        }
+    }
+    return out;
+}
+
+/**
+ * OSM shorelines in the game bbox: sea/land {@code natural=coastline} plus
+ * {@code waterway=riverbank} (tidal river banks, e.g. Hudson / East River).
+ * Does **not** fetch {@code natural=water} polygons, so inland lakes (Central
+ * Park, etc.) are not coastline for measuring.
+ */
+export async function fetchCoastlineLinesOsmInBbox(
+    bbox: BBox,
+): Promise<FeatureCollection<LineString | MultiLineString>> {
+    const [west, south, east, north] = bbox;
+    const w = west - COASTLINE_BBOX_PAD_DEG;
+    const s = south - COASTLINE_BBOX_PAD_DEG;
+    const e = east + COASTLINE_BBOX_PAD_DEG;
+    const n = north + COASTLINE_BBOX_PAD_DEG;
+    const query = `
+[out:json][timeout:90];
+(
+  way["natural"="coastline"](${s},${w},${n},${e});
+  relation["natural"="coastline"](${s},${w},${n},${e});
+  way["waterway"="riverbank"](${s},${w},${n},${e});
+);
+out geom;
+`;
+    const data = await getOverpassData(
+        query,
+        "Fetching shoreline (OSM) for measuring…",
+        CacheType.ZONE_CACHE,
+    );
+    const geo = osmtogeojson(data) as FeatureCollection;
+    const features = lineStringCoastFeatures(geo);
+    return { type: "FeatureCollection", features };
+}
+
+async function fetchCoastlineNaturalEarthLines(): Promise<
+    FeatureCollection<LineString | MultiLineString>
+> {
+    const base = import.meta.env.BASE_URL.replace(/\/?$/, "");
+    const localPath = `${base}/coastline50.geojson`;
+    let response = await cacheFetch(
+        localPath,
+        undefined,
         CacheType.PERMANENT_CACHE,
     );
-    const data = await response.json();
-    return data;
-};
+    if (!response.ok) {
+        response = await cacheFetch(
+            NATURAL_EARTH_50M_COAST,
+            "Fetching coastline data (fallback)…",
+            CacheType.PERMANENT_CACHE,
+        );
+    }
+    if (!response.ok) {
+        return { type: "FeatureCollection", features: [] };
+    }
+    let data: unknown;
+    try {
+        data = await response.json();
+    } catch {
+        return { type: "FeatureCollection", features: [] };
+    }
+    const raw = data as FeatureCollection | Feature;
+    const fc: FeatureCollection =
+        raw.type === "FeatureCollection"
+            ? raw
+            : raw.type === "Feature"
+              ? { type: "FeatureCollection", features: [raw] }
+              : { type: "FeatureCollection", features: [] };
+    return {
+        type: "FeatureCollection",
+        features: lineStringCoastFeatures(fc),
+    };
+}
+
+/**
+ * Line geometry for “distance to coastline” measuring: prefer OSM shoreline +
+ * river banks in the current map extent; fall back to Natural Earth ocean coast
+ * (or optional {@code public/coastline50.geojson}).
+ */
+export async function fetchCoastlinesForMeasuring(
+    bbox: BBox,
+): Promise<FeatureCollection<LineString | MultiLineString>> {
+    const osm = await fetchCoastlineLinesOsmInBbox(bbox);
+    if (osm.features.length > 0) {
+        return osm;
+    }
+    return fetchCoastlineNaturalEarthLines();
+}
 
 const escapeOverpassRegex = (value: string) =>
     value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

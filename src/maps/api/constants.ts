@@ -28,16 +28,70 @@ export const PASTEBIN_API_RAW_URL = "https://pastebin.com/raw/";
 export const PASTEBIN_API_RAW_URL_PROXIED =
     "https://cors-anywhere.com/https://pastebin.com/raw/";
 
+/**
+ * Pin / sidebar tints. Keys that appear in {@link LEAFLET_COLOR_MARKER_SLUGS}
+ * use matching PNGs from leaflet-color-markers; others render as CSS pins on
+ * the map so we are not limited to that pack.
+ */
 export const ICON_COLORS = {
     black: "#3D3D3D",
     blue: "#2A81CB",
+    cyan: "#0891B2",
     gold: "#FFD326",
     green: "#2AAD27",
     grey: "#7B7B7B",
+    indigo: "#4F46E5",
+    lime: "#65A30D",
+    magenta: "#C026D3",
     orange: "#CB8427",
+    pink: "#DB2777",
     red: "#CB2B3E",
+    teal: "#0D9488",
     violet: "#9C2BCB",
-};
+    yellow: "#CA8A04",
+} as const;
+
+export type IconColorKey = keyof typeof ICON_COLORS;
+
+/** leaflet-color-markers `marker-icon-2x-${name}.png` stems (pointhi). */
+export const LEAFLET_COLOR_MARKER_SLUGS: ReadonlySet<IconColorKey> = new Set([
+    "black",
+    "blue",
+    "gold",
+    "green",
+    "grey",
+    "orange",
+    "red",
+    "violet",
+    "yellow",
+]);
+
+/** Sidebar labels: use dark text on these fairly light pin backgrounds. */
+export const ICON_COLOR_USE_DARK_TEXT: ReadonlySet<IconColorKey> = new Set([
+    "gold",
+    "yellow",
+    "lime",
+    "cyan",
+]);
+
+/** Human-readable labels for pin-color dropdowns (every {@link IconColorKey}). */
+export const ICON_COLOR_LABELS = {
+    black: "Black",
+    blue: "Blue",
+    cyan: "Cyan",
+    gold: "Gold",
+    green: "Green",
+    grey: "Grey",
+    indigo: "Indigo",
+    lime: "Lime",
+    magenta: "Magenta",
+    orange: "Orange",
+    pink: "Pink",
+    red: "Red",
+    teal: "Teal",
+    violet: "Violet",
+    yellow: "Yellow",
+} as const satisfies Record<IconColorKey, string>;
 
 export const LOCATION_FIRST_TAG: {
     [key in APILocations]:

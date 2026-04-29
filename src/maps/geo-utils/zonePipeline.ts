@@ -26,14 +26,15 @@ import type {
 } from "geojson";
 import type { toast as toastFn } from "react-toastify";
 
+import { getGtfsStationNamesForLineRef } from "@/lib/transit/line-membership";
 import {
     lookupArrivalWithParentFallback,
-    stationNameMatchKey,
     type MatchedStation,
+    stationNameMatchKey,
 } from "@/lib/transit/osm-gtfs-match";
-import { getGtfsStationNamesForLineRef } from "@/lib/transit/line-membership";
 import type { TransitStop } from "@/lib/transit/types";
 import {
+    DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC,
     findPlacesSpecificInZone,
     QuestionSpecificLocation,
     type StationCircle,
@@ -388,6 +389,32 @@ export interface ApplyQuestionFiltersOptions {
  * the same line (the closest pairs in dense networks like NYC are ~400 m).
  */
 const TRAIN_LINE_STOP_PROXIMITY_METERS = 250;
+const MATCHING_ADMIN_REGION_RETRY_ATTEMPTS = 3;
+const MATCHING_ADMIN_REGION_RETRY_DELAY_MS = 300;
+
+async function retryResolveMatchingAdminRegion(
+    resolveMatchingAdminRegion: (
+        data: MatchingQuestion,
+    ) => Promise<Feature<Polygon | MultiPolygon> | null>,
+    data: MatchingQuestion,
+): Promise<Feature<Polygon | MultiPolygon> | null> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < MATCHING_ADMIN_REGION_RETRY_ATTEMPTS; attempt++) {
+        try {
+            return await resolveMatchingAdminRegion(data);
+        } catch (error) {
+            lastError = error;
+            if (attempt < MATCHING_ADMIN_REGION_RETRY_ATTEMPTS - 1) {
+                const delayMs =
+                    MATCHING_ADMIN_REGION_RETRY_DELAY_MS * 2 ** attempt;
+                await new Promise((resolve) =>
+                    setTimeout(resolve, delayMs),
+                );
+            }
+        }
+    }
+    throw lastError;
+}
 
 function boundaryToPolygonFeature(
     boundary: unknown,
@@ -426,7 +453,10 @@ function boundaryToPolygonFeature(
 async function defaultResolveMatchingAdminRegion(
     data: MatchingQuestion,
 ): Promise<Feature<Polygon | MultiPolygon> | null> {
-    const raw = await determineMatchingBoundary(data);
+    const raw = await determineMatchingBoundary(
+        data,
+        DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC,
+    );
     return boundaryToPolygonFeature(raw);
 }
 
@@ -584,33 +614,43 @@ export async function applyQuestionFilters({
             (question.data.type === "zone" ||
                 question.data.type === "same-admin-zone" ||
                 question.data.type === "letter-zone" ||
+                question.data.type === "same-landmass" ||
+                question.data.type === "same-zip" ||
+                question.data.type === "same-district" ||
                 question.data.type === "custom-zone")
         ) {
             if (current.length === 0) break;
 
             const data = question.data as MatchingQuestion;
-            let region: Feature<Polygon | MultiPolygon> | null = null;
+            let resolvedRegion: Feature<Polygon | MultiPolygon> | null;
             try {
-                region = await resolveMatchingAdminRegion(data);
+                resolvedRegion = await retryResolveMatchingAdminRegion(
+                    resolveMatchingAdminRegion,
+                    data,
+                );
             } catch {
                 toast?.warning(
                     "Could not load a zone matching boundary; skipping that filter.",
                 );
                 continue;
             }
-            if (!region) {
+            if (!resolvedRegion) {
                 toast?.warning(
                     "No zone geometry for a matching question; skipping that filter.",
                 );
                 continue;
             }
+            const regionNonNull = resolvedRegion;
 
             const wantSame = data.same === true;
             current = current.filter((circle) => {
                 const stationPoint = turf.point(
                     turf.getCoord(circle.properties as Feature<Point>),
                 );
-                const inside = turf.booleanPointInPolygon(stationPoint, region);
+                const inside = turf.booleanPointInPolygon(
+                    stationPoint,
+                    regionNonNull,
+                );
                 return wantSame ? inside : !inside;
             });
         }

@@ -386,6 +386,37 @@ export const MatchingQuestionComponent = ({
     }, [data.type, nearestTrainStationId, data.lat, data.lng]);
 
     switch (data.type) {
+        case "pick-type":
+            questionSpecific = (
+                <p className="px-2 text-center text-sm text-muted-foreground">
+                    Choose a matching type above. No Overpass or facility fetch
+                    runs until you pick one.
+                </p>
+            );
+            break;
+        case "same-landmass":
+            questionSpecific = (
+                <span className="px-2 text-center text-orange-500">
+                    Uses island polygons when available; falls back to county-ish
+                    mainland boundaries where island data is missing.
+                </span>
+            );
+            break;
+        case "same-zip":
+            questionSpecific = (
+                <span className="px-2 text-center text-orange-500">
+                    Uses OSM postal-code boundaries for the seeker location.
+                </span>
+            );
+            break;
+        case "same-district":
+            questionSpecific = (
+                <span className="px-2 text-center text-orange-500">
+                    Uses tagged political districts when available; otherwise
+                    falls back to county/state-level admin boundaries.
+                </span>
+            );
+            break;
         case "zone":
         case "same-admin-zone":
         case "letter-zone":
@@ -791,6 +822,7 @@ export const MatchingQuestionComponent = ({
                     disabled={!data.drag || $isLoading}
                 />
             )}
+            {data.type !== "pick-type" && (
             <div
                 className={cn(
                     "flex gap-2 items-center p-2",
@@ -864,6 +896,7 @@ export const MatchingQuestionComponent = ({
                     </ToggleGroup>
                 )}
             </div>
+            )}
         </QuestionCard>
     );
 };

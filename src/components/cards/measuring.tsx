@@ -63,6 +63,14 @@ export const MeasuringQuestionComponent = ({
     let questionSpecific = <></>;
 
     switch (data.type) {
+        case "pick-type":
+            questionSpecific = (
+                <p className="px-2 text-center text-sm text-muted-foreground">
+                    Choose a measuring type above. No coastline, airport, or
+                    other fetch runs until you pick one.
+                </p>
+            );
+            break;
         case "city":
         case "aquarium-full":
         case "zoo-full":
@@ -285,6 +293,7 @@ export const MeasuringQuestionComponent = ({
                 }}
                 disabled={!data.drag || $isLoading}
             />
+            {data.type !== "pick-type" && (
             <div className="flex gap-2 items-center p-2">
                 <Label
                     className={cn(
@@ -313,6 +322,7 @@ export const MeasuringQuestionComponent = ({
                     </ToggleGroupItem>
                 </ToggleGroup>
             </div>
+            )}
         </QuestionCard>
     );
 };

@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import { defaultUnit } from "@/lib/context";
-import { ICON_COLORS } from "@/maps/api/constants";
+import {
+    ICON_COLORS,
+    type IconColorKey,
+} from "@/maps/api/constants";
 
 export const NO_GROUP = "NO_GROUP";
 
@@ -26,16 +29,10 @@ const unitsSchema = z.union([
     z.literal("meters"),
 ]);
 
-const iconColorSchema = z.union([
-    z.literal("green"),
-    z.literal("black"),
-    z.literal("blue"),
-    z.literal("gold"),
-    z.literal("grey"),
-    z.literal("orange"),
-    z.literal("red"),
-    z.literal("violet"),
-]);
+const _iconColorKeys = Object.keys(ICON_COLORS) as IconColorKey[];
+const iconColorSchema = z.enum(
+    _iconColorKeys as [IconColorKey, ...IconColorKey[]],
+);
 
 type IconColor = z.infer<typeof iconColorSchema>;
 
@@ -79,7 +76,9 @@ const thermometerQuestionSchema = z
     })
     .transform((question) => {
         if (question.colorA === question.colorB) {
-            question.colorB = "green";
+            const keys = Object.keys(ICON_COLORS) as IconColor[];
+            question.colorB =
+                keys.find((k) => k !== question.colorA) ?? keys[0]!;
         }
 
         return question;
@@ -214,6 +213,16 @@ const ordinaryMatchingQuestionSchema = baseMatchingQuestionSchema.extend({
     type: z
         .union([
             z
+                .literal("pick-type")
+                .describe("Choose matching type (no network until you pick)"),
+            z
+                .literal("same-landmass")
+                .describe("Same Landmass (Island/Mainland) Question"),
+            z.literal("same-zip").describe("Same ZIP/Postal Code Question"),
+            z
+                .literal("same-district")
+                .describe("Same Political District Question"),
+            z
                 .literal("airport")
                 .describe("Commercial Airport In Zone Question"),
             z
@@ -251,7 +260,7 @@ const ordinaryMatchingQuestionSchema = baseMatchingQuestionSchema.extend({
                 .literal("park-full")
                 .describe("Park Question (Small+Medium Games)"),
         ])
-        .default("airport"),
+        .default("pick-type"),
 });
 
 const zoneMatchingQuestionsSchema = baseMatchingQuestionSchema.extend({
@@ -338,6 +347,9 @@ const ordinaryMeasuringQuestionSchema = baseMeasuringQuestionSchema.extend({
     disabledFacilityOsmRefs: z.array(z.string()).default([]),
     type: z
         .union([
+            z
+                .literal("pick-type")
+                .describe("Choose measuring type (no network until you pick)"),
             z.literal("coastline").describe("Coastline Question"),
             z
                 .literal("airport")
@@ -380,7 +392,7 @@ const ordinaryMeasuringQuestionSchema = baseMeasuringQuestionSchema.extend({
                 .literal("park-full")
                 .describe("Park Question (Small+Medium Games)"),
         ])
-        .default("coastline"),
+        .default("pick-type"),
 });
 
 const hidingZoneMeasuringQuestionsSchema = baseMeasuringQuestionSchema.extend({

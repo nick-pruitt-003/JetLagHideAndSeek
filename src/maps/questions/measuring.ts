@@ -1,5 +1,13 @@
 import * as turf from "@turf/turf";
-import type { Feature, MultiPolygon, Polygon } from "geojson";
+import type {
+    BBox,
+    Feature,
+    FeatureCollection,
+    LineString,
+    MultiLineString,
+    MultiPolygon,
+    Polygon,
+} from "geojson";
 import _ from "lodash";
 
 import {
@@ -11,7 +19,7 @@ import {
     trainStations,
 } from "@/lib/context";
 import {
-    fetchCoastline,
+    fetchCoastlinesForMeasuring,
     findPlacesInZone,
     findPlacesSpecificInZone,
     nearestToQuestion,
@@ -90,10 +98,66 @@ const bboxExtension = (
     ];
 };
 
+const COASTLINE_BUFFER_EPS_MI = 1e-6;
+
+function* eachLineStringOfCoast(
+    f: Feature<LineString | MultiLineString>,
+): Generator<Feature<LineString>> {
+    const g = f.geometry;
+    if (g.type === "LineString") {
+        yield turf.lineString(g.coordinates);
+    } else {
+        for (const ring of g.coordinates) {
+            yield turf.lineString(ring);
+        }
+    }
+}
+
+/** Clip shoreline lines to bbox, buffer each by `bufferMiles`, union for exclusion geometry. */
+function mergeCoastalLineBuffers(
+    coastFc: FeatureCollection<LineString | MultiLineString>,
+    clipBbox: BBox,
+    bufferMiles: number,
+): Feature<Polygon | MultiPolygon> | null {
+    const buf = Math.max(bufferMiles, COASTLINE_BUFFER_EPS_MI);
+    const pieces: Feature<Polygon | MultiPolygon>[] = [];
+
+    for (const f of coastFc.features) {
+        let clipped: Feature | undefined;
+        try {
+            clipped = turf.bboxClip(f, clipBbox) as Feature | undefined;
+        } catch {
+            continue;
+        }
+        if (!clipped?.geometry) continue;
+        const gt = clipped.geometry.type;
+        if (gt !== "LineString" && gt !== "MultiLineString") continue;
+
+        const b = turf.buffer(
+            clipped as Feature<LineString | MultiLineString>,
+            buf,
+            { units: "miles", steps: 64 },
+        );
+        if (b) pieces.push(b as Feature<Polygon | MultiPolygon>);
+    }
+
+    if (pieces.length === 0) return null;
+    if (pieces.length === 1) return pieces[0]!;
+
+    let acc = pieces[0]!;
+    for (let i = 1; i < pieces.length; i++) {
+        const u = turf.union(turf.featureCollection([acc, pieces[i]!]));
+        if (u) acc = u as Feature<Polygon | MultiPolygon>;
+    }
+    return acc;
+}
+
+type BBox4 = [number, number, number, number];
+
 export const determineMeasuringBoundary = async (
     question: MeasuringQuestion,
 ) => {
-    const bBox = turf.bbox(mapGeoJSON.get()!);
+    const bBox = turf.bbox(mapGeoJSON.get()!) as BBox4;
 
     switch (question.type) {
         case "highspeed-measure-shinkansen": {
@@ -109,42 +173,47 @@ export const determineMeasuringBoundary = async (
             return [highSpeedBase(features)];
         }
         case "coastline": {
-            const coastline = turf.lineToPolygon(
-                await fetchCoastline(),
-            ) as Feature<MultiPolygon>;
+            /**
+             * Shorelines from OSM in the map bbox: `natural=coastline` and
+             * `waterway=riverbank` (e.g. Hudson / East River). Inland
+             * `natural=water` polygons are not fetched, so lakes (Central Park,
+             * etc.) are not treated as coastline. Falls back to Natural Earth
+             * ocean coast when OSM returns nothing.
+             */
+            const pt = turf.point([question.lng, question.lat]);
+            const coastFc = await fetchCoastlinesForMeasuring(bBox);
 
-            const distanceToCoastline = turf.pointToPolygonDistance(
-                turf.point([question.lng, question.lat]),
-                coastline,
-                {
-                    units: "miles",
-                    method: "geodesic",
-                },
+            if (coastFc.features.length === 0) {
+                return [turf.bboxPolygon(bBox)];
+            }
+
+            let distanceToCoastline = Infinity;
+            for (const f of coastFc.features) {
+                for (const line of eachLineStringOfCoast(f)) {
+                    const d = turf.pointToLineDistance(pt, line, {
+                        units: "miles",
+                        method: "geodesic",
+                    });
+                    if (d < distanceToCoastline) distanceToCoastline = d;
+                }
+            }
+
+            const bufMiles = Math.max(distanceToCoastline, COASTLINE_BUFFER_EPS_MI);
+            const extendedBbox = bboxExtension(bBox, bufMiles);
+
+            const exclusion = mergeCoastalLineBuffers(
+                coastFc,
+                extendedBbox,
+                bufMiles,
             );
+            if (!exclusion) {
+                return [turf.bboxPolygon(bBox)];
+            }
 
-            return [
-                turf.difference(
-                    turf.featureCollection([
-                        turf.bboxPolygon(bBox),
-                        turf.buffer(
-                            turf.bboxClip(
-                                coastline,
-                                bBox
-                                    ? bboxExtension(
-                                          bBox as any,
-                                          distanceToCoastline,
-                                      )
-                                    : [-180, -90, 180, 90],
-                            ),
-                            distanceToCoastline,
-                            {
-                                units: "miles",
-                                steps: 64,
-                            },
-                        )!,
-                    ]),
-                )!,
-            ];
+            const diff = turf.difference(
+                turf.featureCollection([turf.bboxPolygon(bBox), exclusion]),
+            );
+            return diff ? [diff] : [turf.bboxPolygon(bBox)];
         }
         case "airport":
             return [
@@ -236,6 +305,7 @@ export const determineMeasuringBoundary = async (
         case "mcdonalds":
         case "seven11":
         case "rail-measure":
+        case "pick-type":
             return false;
     }
 };
@@ -304,6 +374,10 @@ export const adjustPerMeasuring = async (
 export const hiderifyMeasuring = async (question: MeasuringQuestion) => {
     const $hiderMode = hiderMode.get();
     if ($hiderMode === false) {
+        return question;
+    }
+
+    if (question.type === "pick-type") {
         return question;
     }
 
