@@ -78,8 +78,6 @@ import {
     findHeritageRailwayMemberNodeIds,
     findPlacesInZone,
     findPlacesSpecificInZone,
-    findTentacleLocations,
-    nearestToQuestion,
     normalizeToStationFeatures,
     OVERPASS_ACTIVE_RAIL_STATION_EXCLUSIONS,
     overpassZoneCacheKey,
@@ -1837,65 +1835,48 @@ async function selectionProcess(
                 question.data.type === "consulate" ||
                 question.data.type === "park")
         ) {
-            const nearestQuestion = await nearestToQuestion(question.data);
+            const fullType = `${question.data.type}-full`;
+            const raw = await findMatchingPlaces({
+                ...(question.data as any),
+                type: fullType,
+            } as any);
+            const points = Array.isArray(raw)
+                ? turf.featureCollection(raw as any)
+                : (raw as FeatureCollection<Point>);
+            if (!points || points.features.length === 0) {
+                continue;
+            }
 
-            let radius = 30;
+            const seekerPoint = turf.point([question.data.lng, question.data.lat]);
+            const nearestQuestion = turf.nearestPoint(seekerPoint, points as any);
 
-            let instances: any = { features: [] };
+            const distances: any[] = points.features.map((x: any) => {
+                return {
+                    distance: turf.distance(
+                        turf.point(turf.getCoord(x)),
+                        station.properties,
+                        {
+                            units: "miles",
+                        },
+                    ),
+                    point: x,
+                };
+            });
+            const minimumPoint = _.minBy(distances, "distance");
+            if (!minimumPoint) {
+                continue;
+            }
 
-            const nearestPoints = [];
-
-            while (instances.features.length === 0) {
-                instances = await findTentacleLocations(
-                    {
-                        lat: station.properties.geometry.coordinates[1],
-                        lng: station.properties.geometry.coordinates[0],
-                        radius: radius,
-                        unit: "miles",
-                        location: false,
-                        locationType: question.data.type,
-                        drag: false,
-                        color: "black",
-                        collapsed: false,
-                    },
-                    "Finding matching locations to hiding zone...",
-                );
-
-                const distances: any[] = instances.features.map((x: any) => {
-                    return {
-                        distance: turf.distance(
-                            turf.point(turf.getCoord(x)),
-                            station.properties,
-                            {
-                                units: "miles",
-                            },
-                        ),
-                        point: x,
-                    };
-                });
-
-                if (distances.length === 0) {
-                    radius += 30;
-                    continue;
-                }
-
-                const minimumPoint = _.minBy(distances, "distance")!;
-
-                if (minimumPoint.distance + $hidingRadius * 2 > radius) {
-                    radius = minimumPoint.distance + $hidingRadius * 2;
-                    continue;
-                }
-
-                nearestPoints.push(
-                    ...distances
-                        .filter(
-                            (x) =>
-                                x.distance <
-                                    minimumPoint.distance + $hidingRadius * 2 &&
-                                x.point.properties.name, // If it doesn't have a name, it's not a valid location
-                        )
-                        .map((x) => x.point),
-                );
+            const nearestPoints = distances
+                .filter(
+                    (x) =>
+                        x.distance <
+                            minimumPoint.distance + $hidingRadius * 2 &&
+                        x.point.properties.name, // If it doesn't have a name, it's not a valid location
+                )
+                .map((x) => x.point);
+            if (nearestPoints.length === 0) {
+                continue;
             }
 
             if (question.id === "matching") {
