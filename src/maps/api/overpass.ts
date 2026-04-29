@@ -32,6 +32,7 @@ import { toast } from "react-toastify";
 
 import {
     additionalMapGeoLocations,
+    mapGeoJSON,
     mapGeoLocation,
     playableTerritoryUnion,
     polyGeoJSON,
@@ -502,12 +503,23 @@ out geom;
 };
 
 type PolyFeature = Feature<Polygon | MultiPolygon>;
+type WaterLineFeature = Feature<LineString | MultiLineString>;
+const LANDMASS_WATER_LINE_BUFFER_MILES = 0.06;
 
 function polygonFeaturesOnly(fc: FeatureCollection): PolyFeature[] {
     return fc.features.filter(
         (f): f is PolyFeature =>
             !!f.geometry &&
             (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"),
+    );
+}
+
+function waterLineFeaturesOnly(fc: FeatureCollection): WaterLineFeature[] {
+    return fc.features.filter(
+        (f): f is WaterLineFeature =>
+            !!f.geometry &&
+            (f.geometry.type === "LineString" ||
+                f.geometry.type === "MultiLineString"),
     );
 }
 
@@ -532,6 +544,51 @@ function asPolygonFeature(feature: Feature | null | undefined): PolyFeature | nu
         feature.geometry.type === "MultiPolygon"
         ? (feature as PolyFeature)
         : null;
+}
+
+function explodePolyFeature(feature: PolyFeature): PolyFeature[] {
+    if (feature.geometry.type === "Polygon") return [feature];
+    const props = feature.properties ?? {};
+    return feature.geometry.coordinates.map(
+        (coords) => turf.polygon(coords, props) as PolyFeature,
+    );
+}
+
+export function deriveLandmassComponents(
+    territory: PolyFeature,
+    waterPolys: PolyFeature[],
+    waterLines: WaterLineFeature[] = [],
+): PolyFeature[] {
+    const bufferedLinePolys = waterLines
+        .map((line) =>
+            turf.buffer(line as Feature, LANDMASS_WATER_LINE_BUFFER_MILES, {
+                units: "miles",
+                steps: 32,
+            }),
+        )
+        .filter(
+            (f): f is Feature<Polygon | MultiPolygon> =>
+                !!f &&
+                !!f.geometry &&
+                (f.geometry.type === "Polygon" ||
+                    f.geometry.type === "MultiPolygon"),
+        ) as PolyFeature[];
+    const allWaterPolys = [...waterPolys, ...bufferedLinePolys];
+    if (allWaterPolys.length === 0) return explodePolyFeature(territory);
+    const mergedWater = safeUnion(
+        turf.featureCollection(allWaterPolys) as FeatureCollection<
+            Polygon | MultiPolygon
+        >,
+    ) as PolyFeature;
+    const split = turf.difference(turf.featureCollection([territory, mergedWater]));
+    if (
+        split &&
+        (split.geometry.type === "Polygon" ||
+            split.geometry.type === "MultiPolygon")
+    ) {
+        return explodePolyFeature(split as PolyFeature);
+    }
+    return explodePolyFeature(territory);
 }
 
 export const findZipBoundaryAtPoint = async (
@@ -657,6 +714,59 @@ export const findLandmassBoundaryAtPoint = async (
     longitude: number,
     timeoutDuration: number = DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC,
 ): Promise<PolyFeature | null> => {
+    // First pass: split the current territory by OSM water polygons/rivers.
+    // This better separates nearby islands/mainland than coarse admin fallbacks.
+    const territory = asPolygonFeature(
+        (playableTerritoryUnion.get() as Feature | null | undefined) ??
+            (mapGeoJSON.get()
+                ? (safeUnion(mapGeoJSON.get() as any) as Feature | null)
+                : null),
+    );
+    if (territory) {
+        try {
+            const [west, south, east, north] = turf.bbox(territory);
+            const header =
+                timeoutDuration !== 0
+                    ? `[out:json][timeout:${timeoutDuration}]`
+                    : `[out:json]`;
+            const waterQuery = `
+${header};
+(
+  way["natural"="water"](${south},${west},${north},${east});
+  relation["natural"="water"](${south},${west},${north},${east});
+  way["waterway"="riverbank"](${south},${west},${north},${east});
+  relation["waterway"="riverbank"](${south},${west},${north},${east});
+  way["waterway"~"^(river|canal|tidal_channel|stream)$"](${south},${west},${north},${east});
+  relation["waterway"~"^(river|canal|tidal_channel|stream)$"](${south},${west},${north},${east});
+);
+out geom;
+`;
+            const waterData = await getOverpassData(
+                waterQuery,
+                "Finding separating waterways...",
+                CacheType.ZONE_CACHE,
+            );
+            const waterGeo = osmtogeojson(waterData) as FeatureCollection;
+            const waterPolys = polygonFeaturesOnly(waterGeo);
+            const waterLines = waterLineFeaturesOnly(waterGeo);
+            if (waterPolys.length > 0 || waterLines.length > 0) {
+                const landParts = deriveLandmassComponents(
+                    territory,
+                    waterPolys,
+                    waterLines,
+                );
+                const picked = chooseContainingOrLargestPolygon(
+                    landParts,
+                    latitude,
+                    longitude,
+                );
+                if (picked) return picked;
+            }
+        } catch {
+            // Fall back to island/admin approaches below.
+        }
+    }
+
     const header =
         timeoutDuration !== 0
             ? `[out:json][timeout:${timeoutDuration}]`

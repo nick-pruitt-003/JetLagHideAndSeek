@@ -2,7 +2,6 @@ import importAlias from "@dword-design/eslint-plugin-import-alias";
 import pluginJs from "@eslint/js";
 import eslintReact from "@eslint-react/eslint-plugin";
 import pluginAstro from "eslint-plugin-astro";
-import pluginReact from "eslint-plugin-react";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -19,11 +18,6 @@ export default [
     { languageOptions: { globals: globals.browser } },
     pluginJs.configs.recommended,
     ...tseslint.configs.recommended,
-    // Legacy React plugin stays on during the gradual migration so nothing
-    // silently regresses. All rules that overlap with @eslint-react are
-    // switched off below by the `disable-conflict-eslint-plugin-react`
-    // preset — @eslint-react's own rule is the source of truth.
-    pluginReact.configs.flat.recommended,
     ...pluginAstro.configs["flat/recommended"],
     // @eslint-react runs on TS/TSX only. Astro files have an Astro-specific
     // JSX-like syntax that would false-positive on many React rules, and
@@ -32,10 +26,6 @@ export default [
         files: ["**/*.{ts,tsx}"],
         ...eslintReact.configs["recommended-typescript"],
     },
-    // Turn off legacy eslint-plugin-react rules that overlap with the new
-    // @eslint-react versions so we don't get duplicate reports. Remove
-    // once eslint-plugin-react is fully retired.
-    eslintReact.configs["disable-conflict-eslint-plugin-react"],
     {
         files: ["**/*.{ts,tsx}"],
         rules: {
@@ -68,15 +58,6 @@ export default [
             "@eslint-react/purity": "off",
         },
     },
-    // In Astro templates: `class` is correct HTML (not a React prop), and
-    // `Fragment` / `Slot` are Astro built-ins that don't need React imports.
-    {
-        files: ["**/*.astro"],
-        rules: {
-            "react/no-unknown-property": "off",
-            "react/jsx-no-undef": "off",
-        },
-    },
     // Node config files — `process`, `require`, etc. (the default
     // browser globals block above wrongly marks `process` as undefined).
     {
@@ -87,13 +68,7 @@ export default [
         plugins: {
             "simple-import-sort": simpleImportSort,
         },
-        settings: {
-            react: {
-                version: "19",
-            },
-        },
         rules: {
-            "react/react-in-jsx-scope": "off",
             "@typescript-eslint/no-explicit-any": "off", // Would be great to remove all `any` types...
             // Treat `_`-prefixed names as intentionally unused. Matches
             // the TypeScript compiler's own ts(6133) convention so the

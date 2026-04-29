@@ -5,6 +5,20 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 type Options<T extends string> = Partial<Record<T, string>>;
+const mapObj = <T,>(
+    obj: Partial<Record<string, T>>,
+    fn: (key: string, value: T) => React.ReactNode,
+) => Object.entries(obj).map(([k, v]) => fn(k, v!));
+
+function renderOptions<T extends string>(
+    options: Options<T>,
+    disabled?: boolean,
+) {
+    return mapObj(options, (value, children) => (
+        <SelectItem key={value} {...{ disabled, value, children }} />
+    ));
+}
+
 const Select = <T extends string>({
     trigger,
     options,
@@ -23,44 +37,35 @@ const Select = <T extends string>({
 }) => {
     const { placeholder, className } =
         typeof trigger == "string" ? { placeholder: trigger } : trigger;
-    const mapObj = <T,>(
-        obj: Partial<Record<string, T>>,
-        fn: (key: string, value: T) => React.ReactNode,
-    ) => Object.entries(obj).map(([k, v]) => fn(k, v!));
-    const Options = ({
-        options,
-        ...rest
-    }: {
-        options: Options<T>;
-        disabled?: boolean;
-    }) =>
-        mapObj(options, (value, children) => (
-            <SelectItem key={value} {...{ ...rest, value, children }} />
-        ));
     return (
         <SelectPrimitive.Root {...rest}>
             <SelectTrigger {...{ className }}>
                 <SelectValue {...{ placeholder }} />
             </SelectTrigger>
             <SelectContent>
-                {options && <Options {...{ options }} />}
+                {options && renderOptions(options)}
                 {groups &&
                     mapObj(groups, (children, optionsOrConfig) => {
+                        const normalized: {
+                            options: Options<T>;
+                            disabled?: boolean;
+                        } =
+                            "options" in optionsOrConfig &&
+                            typeof optionsOrConfig.options == "object"
+                                ? optionsOrConfig
+                                : {
+                                      options: optionsOrConfig as Record<
+                                          T,
+                                          string
+                                      >,
+                                  };
                         return (
                             <SelectGroup key={children}>
                                 <SelectLabel {...{ children }} />
-                                <Options
-                                    {...("options" in optionsOrConfig &&
-                                    typeof optionsOrConfig.options == "object"
-                                        ? optionsOrConfig
-                                        : {
-                                              options:
-                                                  optionsOrConfig as Record<
-                                                      T,
-                                                      string
-                                                  >,
-                                          })}
-                                />
+                                {renderOptions(
+                                    normalized.options,
+                                    normalized.disabled,
+                                )}
                             </SelectGroup>
                         );
                     })}
