@@ -327,7 +327,20 @@ export const determineMatchingBoundary = _.memoize(
                     ? turf.featureCollection(data)
                     : (data as FeatureCollection<Point>);
                 if (!fc.features.length) {
+                    if (question.type === "airport") {
+                        toast.warning(
+                            "No commercial airports found in the current territory.",
+                            { toastId: "matching-airport-no-points" },
+                        );
+                        return false;
+                    }
                     break;
+                }
+                if (question.type === "airport" && fc.features.length === 1) {
+                    toast.info(
+                        "Only one commercial airport found. 'Same' matches all zones and 'Different' matches none.",
+                        { toastId: "matching-airport-single-point" },
+                    );
                 }
 
                 const voronoi = geoSpatialVoronoi(fc);
@@ -338,6 +351,37 @@ export const determineMatchingBoundary = _.memoize(
                         boundary = feature;
                         break;
                     }
+                }
+                if (!boundary) {
+                    const nearest = turf.nearestPoint(point, fc as any) as Feature<
+                        Point,
+                        { name?: string } | null
+                    >;
+                    boundary =
+                        voronoi.features.find((feature) => {
+                            const siteCoords = (feature.properties as any)?.site
+                                ?.geometry?.coordinates;
+                            if (
+                                Array.isArray(siteCoords) &&
+                                siteCoords.length >= 2 &&
+                                typeof siteCoords[0] === "number" &&
+                                typeof siteCoords[1] === "number"
+                            ) {
+                                return (
+                                    turf.distance(
+                                        turf.point([siteCoords[0], siteCoords[1]]),
+                                        nearest,
+                                        { units: "kilometers" },
+                                    ) < 0.0001
+                                );
+                            }
+                            return (
+                                (feature.properties as any)?.site?.properties
+                                    ?.name !== undefined &&
+                                (feature.properties as any)?.site?.properties
+                                    ?.name === nearest.properties?.name
+                            );
+                        }) ?? boundary;
                 }
                 break;
             }

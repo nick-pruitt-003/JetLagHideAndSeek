@@ -1768,7 +1768,23 @@ async function selectionProcess(
                 : (raw as FeatureCollection<Point>);
 
             if (!points || points.features.length === 0) {
+                if (question.id === "matching" && question.data.type === "airport") {
+                    toast.warning(
+                        "No commercial airports found in the current territory.",
+                        { toastId: "matching-airport-no-points" },
+                    );
+                }
                 continue;
+            }
+            if (
+                question.id === "matching" &&
+                question.data.type === "airport" &&
+                points.features.length === 1
+            ) {
+                toast.info(
+                    "Only one commercial airport found. 'Same' matches all zones and 'Different' matches none.",
+                    { toastId: "matching-airport-single-point" },
+                );
             }
 
             const seekerPoint = turf.point([
@@ -1779,20 +1795,30 @@ async function selectionProcess(
                 seekerPoint,
                 points as any,
             );
-            const nearestName = nearestQuestion.properties?.name as
-                | string
-                | undefined;
-
-            if (!nearestName) {
-                continue;
-            }
 
             const voronoi = geoSpatialVoronoi(
                 points as FeatureCollection<Point>,
             );
             const correctPolygon = voronoi.features.find((feature: any) => {
+                const siteCoords = feature?.properties?.site?.geometry?.coordinates;
+                if (
+                    Array.isArray(siteCoords) &&
+                    siteCoords.length >= 2 &&
+                    typeof siteCoords[0] === "number" &&
+                    typeof siteCoords[1] === "number"
+                ) {
+                    return (
+                        turf.distance(
+                            turf.point([siteCoords[0], siteCoords[1]]),
+                            nearestQuestion,
+                            { units: "kilometers" },
+                        ) < 0.0001
+                    );
+                }
                 return (
-                    feature?.properties?.site?.properties?.name === nearestName
+                    feature?.properties?.site?.properties?.name !== undefined &&
+                    feature?.properties?.site?.properties?.name ===
+                        nearestQuestion.properties?.name
                 );
             });
 
