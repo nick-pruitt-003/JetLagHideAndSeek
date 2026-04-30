@@ -240,9 +240,13 @@ export const Map = ({ className }: { className?: string }) => {
                 playableTerritoryUnion.set(null);
             }
 
+            const maskedTerritory = holedMask(territoryBeforeHoled!);
+            if (!maskedTerritory) {
+                throw new Error("No playable territory geometry remained.");
+            }
             mapGeoData = {
                 type: "FeatureCollection",
-                features: [holedMask(territoryBeforeHoled!)!],
+                features: [maskedTerritory],
             };
 
             map.eachLayer((layer: any) => {
@@ -260,7 +264,11 @@ export const Map = ({ className }: { className?: string }) => {
             questionFinishedMapData.set(mapGeoData);
 
             if (autoZoom.get() && focus) {
-                const bbox = turf.bbox(holedMask(mapGeoData) as any);
+                const zoomMask = holedMask(mapGeoData);
+                if (!zoomMask) {
+                    return;
+                }
+                const bbox = turf.bbox(zoomMask as any);
                 const bounds = [
                     [bbox[1], bbox[0]],
                     [bbox[3], bbox[2]],

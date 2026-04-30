@@ -663,9 +663,11 @@ export const hiderifyMatching = async (question: MatchingQuestion) => {
         feature = holedMask((await adjustPerMatching(question, $mapGeoJSON))!);
     } catch {
         try {
+            const maskedMap = holedMask($mapGeoJSON);
+            if (!maskedMap) return question;
             feature = await adjustPerMatching(question, {
                 type: "FeatureCollection",
-                features: [holedMask($mapGeoJSON)],
+                features: [maskedMap],
             });
         } catch {
             return question;

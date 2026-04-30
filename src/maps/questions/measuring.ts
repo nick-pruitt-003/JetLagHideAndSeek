@@ -479,9 +479,11 @@ export const hiderifyMeasuring = async (question: MeasuringQuestion) => {
         feature = holedMask((await adjustPerMeasuring(question, $mapGeoJSON))!);
     } catch {
         try {
+            const maskedMap = holedMask($mapGeoJSON);
+            if (!maskedMap) return question;
             feature = await adjustPerMeasuring(question, {
                 type: "FeatureCollection",
-                features: [holedMask($mapGeoJSON)],
+                features: [maskedMap],
             });
         } catch {
             return question;
