@@ -616,8 +616,11 @@ export async function applyQuestionFilters({
                 const [sx, sy] = seekerNearest.geometry.coordinates;
                 const airportKey = (iata: string, x: number, y: number) =>
                     iata.length > 0 ? `iata:${iata}` : `coord:${x},${y}`;
+                const airportLabel = (iata: string, x: number, y: number) =>
+                    iata.length > 0 ? iata : `${x.toFixed(4)},${y.toFixed(4)}`;
 
                 const seekerKey = airportKey(seekerIata, sx, sy);
+                const nearestCounts = new Map<string, number>();
                 const next = current.filter((circle) => {
                     const stationPoint = turf.point(
                         turf.getCoord(circle.properties as Feature<Point>),
@@ -636,13 +639,22 @@ export async function applyQuestionFilters({
                         .trim()
                         .toUpperCase();
                     const [nx, ny] = nearestForStation.geometry.coordinates;
-                    const sameRegion =
-                        airportKey(stationIata, nx, ny) === seekerKey;
+                    const stationKey = airportKey(stationIata, nx, ny);
+                    const stationLabel = airportLabel(stationIata, nx, ny);
+                    nearestCounts.set(
+                        stationLabel,
+                        (nearestCounts.get(stationLabel) ?? 0) + 1,
+                    );
+                    const sameRegion = stationKey === seekerKey;
                     return wantSame ? sameRegion : !sameRegion;
                 });
                 if (!wantSame && current.length > 0 && next.length === 0) {
+                    const distribution = [...nearestCounts.entries()]
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([label, count]) => `${label}: ${count}`)
+                        .join(", ");
                     toast?.info(
-                        "All current hiding stations are nearest to the same airport as your seeker pin, so 'Different' leaves no stations.",
+                        `All current hiding stations are nearest to the same airport as your seeker pin, so 'Different' leaves no stations. Distribution: ${distribution || "none"}.`,
                         { toastId: "matching-airport-different-empty" },
                     );
                 }
