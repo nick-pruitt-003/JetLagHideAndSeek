@@ -66,6 +66,7 @@ async function fetchAirportPointsUnfiltered(
                 "center",
                 [],
                 240,
+                true,
             )
         ).elements,
         (feature: any) => feature.tags?.iata,

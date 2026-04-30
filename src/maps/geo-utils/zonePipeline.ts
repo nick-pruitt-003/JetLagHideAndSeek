@@ -590,6 +590,19 @@ export async function applyQuestionFilters({
                 points = normalizeMatchingPointsToFc(raw);
                 matchingFacilityCache.set(key, points);
             }
+            if (
+                question.data.type === "airport" &&
+                points.features.length === 1
+            ) {
+                const raw = await findMatchingPlaces(
+                    question.data as MatchingQuestion,
+                );
+                const refreshed = normalizeMatchingPointsToFc(raw);
+                if (refreshed.features.length > points.features.length) {
+                    points = refreshed;
+                    matchingFacilityCache.set(key, points);
+                }
+            }
             if (!points || points.features.length === 0) {
                 // Airports have a dedicated empty-state toast in matching flows.
                 // Suppress the generic Voronoi warning here to avoid duplicate

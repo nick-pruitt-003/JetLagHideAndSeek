@@ -1232,6 +1232,14 @@ export const findPlacesInZone = async (
     outType: "center" | "geom" = "center",
     alternatives: string[] = [],
     timeoutDuration: number = 0,
+    /**
+     * When false (default), drop elements whose center lies outside
+     * {@link playableTerritoryUnion}. Airport Voronoi / nearest-airport
+     * matching needs all metro IATA aerodromes in the query polygon; a hub
+     * can sit just outside the holed playable mask while still defining the
+     * correct catchment split for stations inside the mask.
+     */
+    skipPlayableTerritoryFilter = false,
 ) => {
     const $polyGeoJSON = polyGeoJSON.get();
     const jsonHeader =
@@ -1395,10 +1403,12 @@ out ${outType};
             );
         });
     }
-    data.elements = filterOsmElementsToPlayableTerritory(
-        data.elements,
-        playableTerritoryUnion.get(),
-    );
+    if (!skipPlayableTerritoryFilter) {
+        data.elements = filterOsmElementsToPlayableTerritory(
+            data.elements,
+            playableTerritoryUnion.get(),
+        );
+    }
     return data as { elements: any[]; remark?: string };
 };
 
