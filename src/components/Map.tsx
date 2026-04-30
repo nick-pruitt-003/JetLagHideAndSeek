@@ -230,14 +230,23 @@ export const Map = ({ className }: { className?: string }) => {
             );
 
             const territoryBeforeHoled = mapGeoData;
+            /** Playable area for fitBounds — never use holed elimination geometry (world bbox). */
+            let zoomTargetFeature: Feature<Polygon | MultiPolygon> | null = null;
             try {
-                playableTerritoryUnion.set(
-                    safeUnion(territoryBeforeHoled!) as Feature<
-                        Polygon | MultiPolygon
-                    >,
-                );
+                const unioned = safeUnion(territoryBeforeHoled!) as Feature<
+                    Polygon | MultiPolygon
+                >;
+                playableTerritoryUnion.set(unioned);
+                if ((territoryBeforeHoled?.features?.length ?? 0) > 0) {
+                    zoomTargetFeature = unioned;
+                }
             } catch {
                 playableTerritoryUnion.set(null);
+                if (territoryBeforeHoled?.features?.[0]?.geometry) {
+                    zoomTargetFeature = territoryBeforeHoled.features[0] as Feature<
+                        Polygon | MultiPolygon
+                    >;
+                }
             }
 
             let maskedTerritory = holedMask(territoryBeforeHoled!);
@@ -279,26 +288,31 @@ export const Map = ({ className }: { className?: string }) => {
 
             questionFinishedMapData.set(mapGeoData);
 
-            if (autoZoom.get() && focus) {
-                let zoomMask = holedMask(mapGeoData);
-                if (!zoomMask && mapGeoData.features[0]?.geometry) {
-                    zoomMask = mapGeoData.features[0] as Feature<
-                        Polygon | MultiPolygon
-                    >;
-                }
-                if (!zoomMask) {
-                    return;
-                }
-                const bbox = turf.bbox(zoomMask as any);
-                const bounds = [
-                    [bbox[1], bbox[0]],
-                    [bbox[3], bbox[2]],
-                ];
+            if (autoZoom.get() && focus && zoomTargetFeature?.geometry) {
+                const bbox = turf.bbox(zoomTargetFeature as any);
+                const [west, south, east, north] = bbox;
+                const latSpan = north - south;
+                const lngSpan = east - west;
+                const bboxOk =
+                    Number.isFinite(west) &&
+                    Number.isFinite(south) &&
+                    Number.isFinite(east) &&
+                    Number.isFinite(north) &&
+                    latSpan > 1e-6 &&
+                    lngSpan > 1e-6 &&
+                    latSpan < 170 &&
+                    lngSpan < 300;
 
-                if (animateMapMovements.get()) {
-                    map.flyToBounds(bounds as any);
-                } else {
-                    map.fitBounds(bounds as any);
+                if (bboxOk) {
+                    const bounds = [
+                        [south, west],
+                        [north, east],
+                    ];
+                    if (animateMapMovements.get()) {
+                        map.flyToBounds(bounds as any);
+                    } else {
+                        map.fitBounds(bounds as any);
+                    }
                 }
             }
         } catch (error) {
