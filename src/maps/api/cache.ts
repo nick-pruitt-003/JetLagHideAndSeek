@@ -11,6 +11,36 @@ const determinePermanentCache = _.memoize(() =>
 
 const inFlightFetches = new Map<string, Promise<Response>>();
 
+function reportFetchFailure(args: {
+    url: string;
+    cacheType: CacheType;
+    loadingText?: string;
+    status?: number;
+    statusText?: string;
+    error?: unknown;
+}) {
+    const payload = {
+        url: args.url,
+        cacheType: args.cacheType,
+        loadingText: args.loadingText,
+        status: args.status ?? 599,
+        statusText: args.statusText ?? "Network Error",
+        error:
+            args.error instanceof Error
+                ? args.error.message
+                : args.error != null
+                  ? String(args.error)
+                  : undefined,
+        timestamp: new Date().toISOString(),
+    };
+    if (typeof window !== "undefined") {
+        const w = window as Window & { __jlFetchFailures?: unknown[] };
+        w.__jlFetchFailures = w.__jlFetchFailures ?? [];
+        w.__jlFetchFailures.push(payload);
+    }
+    console.error("[cacheFetch] request failed", payload);
+}
+
 export const determineCache = async (cacheType: CacheType) => {
     switch (cacheType) {
         case CacheType.CACHE:
@@ -50,7 +80,13 @@ export const cacheFetch = async (
             let response: Response;
             try {
                 response = await fetch(url);
-            } catch {
+            } catch (error) {
+                reportFetchFailure({
+                    url,
+                    cacheType,
+                    loadingText,
+                    error,
+                });
                 response = new Response("", {
                     status: 599,
                     statusText: "Network Error",
@@ -59,6 +95,13 @@ export const cacheFetch = async (
             if (response.ok) {
                 await cache.put(url, response.clone());
             } else {
+                reportFetchFailure({
+                    url,
+                    cacheType,
+                    loadingText,
+                    status: response.status,
+                    statusText: response.statusText,
+                });
                 await cache.delete(url);
             }
             return response;
@@ -81,8 +124,24 @@ export const cacheFetch = async (
     } catch (e) {
         console.log(e); // Probably a caches not supported error
         try {
-            return await fetch(url);
-        } catch {
+            const response = await fetch(url);
+            if (!response.ok) {
+                reportFetchFailure({
+                    url,
+                    cacheType,
+                    loadingText,
+                    status: response.status,
+                    statusText: response.statusText,
+                });
+            }
+            return response;
+        } catch (error) {
+            reportFetchFailure({
+                url,
+                cacheType,
+                loadingText,
+                error,
+            });
             return new Response("", {
                 status: 599,
                 statusText: "Network Error",

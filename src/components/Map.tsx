@@ -240,9 +240,25 @@ export const Map = ({ className }: { className?: string }) => {
                 playableTerritoryUnion.set(null);
             }
 
-            const maskedTerritory = holedMask(territoryBeforeHoled!);
+            let maskedTerritory = holedMask(territoryBeforeHoled!);
             if (!maskedTerritory) {
-                throw new Error("No playable territory geometry remained.");
+                try {
+                    const unioned = safeUnion(
+                        territoryBeforeHoled!,
+                    ) as Feature<Polygon | MultiPolygon>;
+                    const masked = turf.mask(unioned as any) as
+                        | Feature<Polygon | MultiPolygon>
+                        | null
+                        | undefined;
+                    if (masked?.geometry) maskedTerritory = masked;
+                } catch {
+                    /* fall through */
+                }
+            }
+            if (!maskedTerritory) {
+                maskedTerritory = safeUnion(
+                    territoryBeforeHoled!,
+                ) as Feature<Polygon | MultiPolygon>;
             }
             mapGeoData = {
                 type: "FeatureCollection",
@@ -264,7 +280,12 @@ export const Map = ({ className }: { className?: string }) => {
             questionFinishedMapData.set(mapGeoData);
 
             if (autoZoom.get() && focus) {
-                const zoomMask = holedMask(mapGeoData);
+                let zoomMask = holedMask(mapGeoData);
+                if (!zoomMask && mapGeoData.features[0]?.geometry) {
+                    zoomMask = mapGeoData.features[0] as Feature<
+                        Polygon | MultiPolygon
+                    >;
+                }
                 if (!zoomMask) {
                     return;
                 }
