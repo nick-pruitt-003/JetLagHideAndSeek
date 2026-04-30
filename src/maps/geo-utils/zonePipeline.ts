@@ -391,6 +391,24 @@ export interface ApplyQuestionFiltersOptions {
 const TRAIN_LINE_STOP_PROXIMITY_METERS = 250;
 const MATCHING_ADMIN_REGION_RETRY_ATTEMPTS = 3;
 const MATCHING_ADMIN_REGION_RETRY_DELAY_MS = 300;
+const AIRPORT_DEBUG_QUERY_PARAM = "debugAirportMatching";
+const AIRPORT_DEBUG_LOCALSTORAGE_KEY = "jl-debug-airport-matching";
+
+function airportDebugEnabled(): boolean {
+    if (typeof window === "undefined") return false;
+    const fromQuery = new URLSearchParams(window.location.search).get(
+        AIRPORT_DEBUG_QUERY_PARAM,
+    );
+    if (fromQuery === "1" || fromQuery === "true") return true;
+    try {
+        const fromStorage = window.localStorage.getItem(
+            AIRPORT_DEBUG_LOCALSTORAGE_KEY,
+        );
+        return fromStorage === "1" || fromStorage === "true";
+    } catch {
+        return false;
+    }
+}
 
 async function retryResolveMatchingAdminRegion(
     resolveMatchingAdminRegion: (
@@ -658,6 +676,23 @@ export async function applyQuestionFilters({
                         { toastId: "matching-airport-different-empty" },
                     );
                 }
+                if (airportDebugEnabled()) {
+                    const distribution = [...nearestCounts.entries()]
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([label, count]) => `${label}: ${count}`)
+                        .join(", ");
+                    console.info(
+                        "[airport-matching]",
+                        JSON.stringify({
+                            mode: wantSame ? "same" : "different",
+                            seekerAirport: airportLabel(seekerIata, sx, sy),
+                            enabledAirports: airportFc.features.length,
+                            stationsBefore: current.length,
+                            stationsAfter: next.length,
+                            distribution,
+                        }),
+                    );
+                }
                 current = next;
                 continue;
             }
@@ -680,17 +715,6 @@ export async function applyQuestionFilters({
 
                 return !inSeekerRegion;
             });
-            if (
-                question.data.type === "airport" &&
-                !wantSame &&
-                current.length > 0 &&
-                next.length === 0
-            ) {
-                toast?.info(
-                    "All current hiding stations are in the same airport region as your seeker pin, so 'Different' leaves no stations.",
-                    { toastId: "matching-airport-different-empty" },
-                );
-            }
             current = next;
         }
 

@@ -18,6 +18,12 @@ import { BLANK_GEOJSON } from "@/maps/api";
 export { geoSpatialVoronoi } from "@/maps/geo-utils/voronoi";
 
 export const safeUnion = (input: FeatureCollection<Polygon | MultiPolygon>) => {
+    if (input.features.length === 0) {
+        // Turf union requires >=2 geometries. During question/filter
+        // transitions we can briefly produce an empty collection; return
+        // a stable blank-world mask feature instead of crashing.
+        return BLANK_GEOJSON.features[0] as Feature<Polygon>;
+    }
     if (input.features.length === 1) return input.features[0];
     const union = turf.union(input);
     if (union) return union;

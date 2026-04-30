@@ -1,7 +1,7 @@
 import * as turf from "@turf/turf";
 import { expect, test } from "vitest";
 
-import { geoSpatialVoronoi } from "@/maps/geo-utils/operators";
+import { geoSpatialVoronoi, safeUnion } from "@/maps/geo-utils/operators";
 
 test("voronoi diagram", () => {
     const BASE_POINT_COUNT = 25;
@@ -34,4 +34,14 @@ test("voronoi diagram", () => {
 
         expect(voronoiIndex).toBe(basePointIndex);
     });
+});
+
+test("safeUnion handles empty feature collections", () => {
+    const empty = turf.featureCollection([]);
+    const result = safeUnion(empty as any);
+    expect(result).toBeDefined();
+    expect(
+        result.geometry.type === "Polygon" ||
+            result.geometry.type === "MultiPolygon",
+    ).toBe(true);
 });
