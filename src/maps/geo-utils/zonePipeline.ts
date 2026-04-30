@@ -560,12 +560,28 @@ export async function applyQuestionFilters({
                 question.data as MatchingQuestion,
                 matchingZoneKey,
             );
-            const points = matchingFacilityCache.get(key);
+            let points = matchingFacilityCache.get(key);
             if (!points || points.features.length === 0) {
-                toast?.warning(
-                    "Voronoi matching has no facility points (still loading or empty territory). That filter was skipped.",
-                    { toastId: "voronoi-matching-no-points" },
+                // Race guard: question objects are mutable and can change while
+                // prefetching. If a key misses here, do an on-demand fetch with
+                // the current question state so we don't emit false "no points"
+                // warnings for valid airport/facility datasets.
+                const raw = await findMatchingPlaces(
+                    question.data as MatchingQuestion,
                 );
+                points = normalizeMatchingPointsToFc(raw);
+                matchingFacilityCache.set(key, points);
+            }
+            if (!points || points.features.length === 0) {
+                // Airports have a dedicated empty-state toast in matching flows.
+                // Suppress the generic Voronoi warning here to avoid duplicate
+                // noisy dialogs for the same condition.
+                if (question.data.type !== "airport") {
+                    toast?.warning(
+                        "Voronoi matching has no facility points (still loading or empty territory). That filter was skipped.",
+                        { toastId: "voronoi-matching-no-points" },
+                    );
+                }
                 continue;
             }
 
@@ -589,7 +605,52 @@ export async function applyQuestionFilters({
             }
 
             const wantSame = question.data.same === true;
-            current = current.filter((circle) => {
+            if (question.data.type === "airport") {
+                const seekerNearest = turf.nearestPoint(seekerPoint, airportFc as any);
+                const seekerIata = String(
+                    (seekerNearest.properties as { iata?: string } | null)?.iata ??
+                        "",
+                )
+                    .trim()
+                    .toUpperCase();
+                const [sx, sy] = seekerNearest.geometry.coordinates;
+                const airportKey = (iata: string, x: number, y: number) =>
+                    iata.length > 0 ? `iata:${iata}` : `coord:${x},${y}`;
+
+                const seekerKey = airportKey(seekerIata, sx, sy);
+                const next = current.filter((circle) => {
+                    const stationPoint = turf.point(
+                        turf.getCoord(circle.properties as Feature<Point>),
+                    );
+                    const nearestForStation = turf.nearestPoint(
+                        stationPoint,
+                        airportFc as any,
+                    );
+                    const stationIata = String(
+                        (
+                            nearestForStation.properties as
+                                | { iata?: string }
+                                | null
+                        )?.iata ?? "",
+                    )
+                        .trim()
+                        .toUpperCase();
+                    const [nx, ny] = nearestForStation.geometry.coordinates;
+                    const sameRegion =
+                        airportKey(stationIata, nx, ny) === seekerKey;
+                    return wantSame ? sameRegion : !sameRegion;
+                });
+                if (!wantSame && current.length > 0 && next.length === 0) {
+                    toast?.info(
+                        "All current hiding stations are nearest to the same airport as your seeker pin, so 'Different' leaves no stations.",
+                        { toastId: "matching-airport-different-empty" },
+                    );
+                }
+                current = next;
+                continue;
+            }
+
+            const next = current.filter((circle) => {
                 const seekerRegion = seekerCell as Feature<
                     Polygon | MultiPolygon
                 >;
@@ -607,6 +668,18 @@ export async function applyQuestionFilters({
 
                 return !inSeekerRegion;
             });
+            if (
+                question.data.type === "airport" &&
+                !wantSame &&
+                current.length > 0 &&
+                next.length === 0
+            ) {
+                toast?.info(
+                    "All current hiding stations are in the same airport region as your seeker pin, so 'Different' leaves no stations.",
+                    { toastId: "matching-airport-different-empty" },
+                );
+            }
+            current = next;
         }
 
         if (
