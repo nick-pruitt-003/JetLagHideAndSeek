@@ -1,0 +1,36 @@
+name: Deploy to Railway
+
+on:
+    workflow_run:
+        workflows: ["Build and Push Docker Image"]
+        types: [completed]
+    workflow_dispatch:
+
+jobs:
+    deploy:
+        if: |
+            github.event_name == 'workflow_dispatch' ||
+            (github.event.workflow_run.conclusion == 'success' &&
+             github.event.workflow_run.head_branch == 'master')
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Install Railway CLI
+              run: npm install -g @railway/cli
+
+            - name: Link Railway project and redeploy
+              env:
+                  RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+                  RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+                  RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+                  RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+              run: |
+                  railway link --service=$RAILWAY_SERVICE_ID --project=$RAILWAY_PROJECT_ID --environment=$RAILWAY_ENVIRONMENT_ID
+                  railway redeploy --yes
