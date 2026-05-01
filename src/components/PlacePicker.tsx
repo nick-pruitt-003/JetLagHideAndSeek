@@ -49,6 +49,16 @@ import {
     type OpenStreetMap,
 } from "@/maps/api";
 
+const osmRef = (loc: OpenStreetMap) =>
+    `${loc.properties.osm_type}/${loc.properties.osm_id}`;
+
+/** Stable list key — never use {@link determineName} alone (duplicate labels break row clicks). */
+const placeRowKey = (entry: {
+    base?: boolean;
+    location: OpenStreetMap;
+    added?: boolean;
+}) => (entry.base ? "base" : osmRef(entry.location));
+
 export const PlacePicker = ({
     className = "",
 }: {
@@ -185,12 +195,17 @@ export const PlacePicker = ({
                 </Button>
             </PopoverTrigger>
             <PopoverContent
-                className="w-[300px] p-0 light"
+                className={cn(
+                    "w-[300px] p-0 light flex flex-col overflow-hidden",
+                    // Long multi-region lists used to grow past the viewport so the
+                    // search field sat below the fold with no obvious scroll target.
+                    "max-h-[min(92dvh,36rem)]",
+                )}
                 data-tutorial-id="place-picker-content"
             >
                 <div
                     className={cn(
-                        "font-normal flex flex-col",
+                        "font-normal flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain",
                         $polyGeoJSON && "bg-muted text-muted-foreground",
                     )}
                 >
@@ -205,7 +220,7 @@ export const PlacePicker = ({
                                 !$polyGeoJSON &&
                                     "transition-colors duration-200 hover:bg-slate-200",
                             )}
-                            key={determineName(location.location)}
+                            key={placeRowKey(location)}
                         >
                             <span className="w-[78%] text-ellipsis">
                                 {determineName(location.location)}
@@ -314,10 +329,9 @@ export const PlacePicker = ({
                             </div>
                         </div>
                     ))}
-                </div>
-                {canUpgradeBoundary && (
+                    {canUpgradeBoundary && (
                     <>
-                        <Separator className="h-[0.5px]" />
+                        <Separator className="h-[0.5px] shrink-0" />
                         <button
                             type="button"
                             onClick={handleUpgradeBoundary}
@@ -347,9 +361,13 @@ export const PlacePicker = ({
                             </span>
                         </button>
                     </>
-                )}
-                <Separator className="h-[0.5px]" />
-                <Command shouldFilter={false}>
+                    )}
+                </div>
+                <Separator className="h-px shrink-0" />
+                <Command
+                    shouldFilter={false}
+                    className="flex shrink-0 flex-col bg-popover"
+                >
                     <CommandInput
                         placeholder="Search place..."
                         onKeyUp={(x) => {
@@ -378,7 +396,8 @@ export const PlacePicker = ({
                         <CommandGroup>
                             {results.map((result) => (
                                 <CommandItem
-                                    key={`${result.properties.osm_id}${result.properties.name}`}
+                                    key={osmRef(result)}
+                                    value={osmRef(result)}
                                     onSelect={() => {
                                         const currentBase =
                                             mapGeoLocation.get();
@@ -388,6 +407,29 @@ export const PlacePicker = ({
                                             currentBase.properties.osm_id ===
                                                 DEFAULT_MAP_GEO_LOCATION_OSM_ID &&
                                             currentAdditionals.length === 0;
+
+                                        const ref = osmRef(result);
+                                        if (osmRef(currentBase) === ref) {
+                                            toast.info(
+                                                "That place is already your primary region.",
+                                                { toastId: "place-dup-base" },
+                                            );
+                                            setOpen(false);
+                                            return;
+                                        }
+                                        if (
+                                            currentAdditionals.some(
+                                                (e) =>
+                                                    osmRef(e.location) === ref,
+                                            )
+                                        ) {
+                                            toast.info(
+                                                "That place is already in the list.",
+                                                { toastId: "place-dup-add" },
+                                            );
+                                            setOpen(false);
+                                            return;
+                                        }
 
                                         if (isDefaultBase) {
                                             mapGeoLocation.set(result);
