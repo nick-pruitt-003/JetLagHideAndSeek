@@ -585,7 +585,12 @@ describe("applyQuestionFilters", () => {
             resolveMatchingAdminRegion: async () => jfkOnlyRegion,
         });
 
-        expect(out.map((c) => c.properties.properties.id).sort()).toEqual([]);
+        // Airport pass leaves near-hvn; admin "same" would remove it (no disk
+        // overlap with JFK box). Anti-softlock skips that step so the seeker
+        // is not left with zero stations.
+        expect(out.map((c) => c.properties.properties.id).sort()).toEqual([
+            "near-hvn",
+        ]);
 
         const outKeepHvn = await applyQuestionFilters({
             circles,
@@ -618,6 +623,177 @@ describe("applyQuestionFilters", () => {
         expect(
             outKeepHvn.map((c) => c.properties.properties.id).sort(),
         ).toEqual(["near-hvn"]);
+    });
+
+    it("zone matching uses hiding disk vs admin polygon, not only center (straddling borders)", async () => {
+        const westRegion = turf.polygon([
+            [
+                [-74.2, 40.55],
+                [-73.62, 40.55],
+                [-73.62, 40.85],
+                [-74.2, 40.85],
+                [-74.2, 40.55],
+            ],
+        ]);
+
+        // Center is east of the admin box, but the disk overlaps west — "Same" keeps.
+        const placeEast = mkPlace(
+            "straddle-same",
+            -73.595,
+            40.7,
+            "StraddleSame",
+        );
+        const circleSame = {
+            ...turf.circle([-73.595, 40.7], 3, { units: "miles" }),
+            properties: placeEast,
+        } as StationCircle;
+
+        const baseAdminQuestion = {
+            id: "matching",
+            key: 1,
+            data: {
+                type: "same-admin-zone" as const,
+                lat: 40.7,
+                lng: -73.9,
+                same: true,
+                drag: false,
+                color: "black",
+                collapsed: false,
+                cat: { adminLevel: 6 as const },
+            },
+        } as unknown as Question;
+
+        const keptSame = await applyQuestionFilters({
+            circles: [circleSame],
+            questions: [baseAdminQuestion],
+            measuringPoiCache: new Map(),
+            matchingZoneKey,
+            hidingRadius: 3,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+            resolveMatchingAdminRegion: async () => westRegion,
+        });
+        expect(keptSame.map((c) => c.properties.properties.id)).toEqual([
+            "straddle-same",
+        ]);
+
+        // Center inside west; disk extends past the east edge — "Different" keeps.
+        const placeInside = mkPlace(
+            "straddle-diff",
+            -73.65,
+            40.7,
+            "StraddleDiff",
+        );
+        const circleDiff = {
+            ...turf.circle([-73.65, 40.7], 5, { units: "miles" }),
+            properties: placeInside,
+        } as StationCircle;
+
+        const questionDifferent = {
+            ...baseAdminQuestion,
+            data: { ...baseAdminQuestion.data, same: false },
+        } as unknown as Question;
+
+        const keptDiff = await applyQuestionFilters({
+            circles: [circleDiff],
+            questions: [questionDifferent],
+            measuringPoiCache: new Map(),
+            matchingZoneKey,
+            hidingRadius: 5,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+            resolveMatchingAdminRegion: async () => westRegion,
+        });
+        expect(keptDiff.map((c) => c.properties.properties.id)).toEqual([
+            "straddle-diff",
+        ]);
+    });
+
+    it("skips zone matching when it would remove every station (seeker anti-softlock)", async () => {
+        const toastInfos: string[] = [];
+        const fakeToast = {
+            info: (msg: string) => {
+                toastInfos.push(msg);
+            },
+        };
+
+        const tinyRegion = turf.polygon([
+            [
+                [-73.99, 40.74],
+                [-73.97, 40.74],
+                [-73.97, 40.76],
+                [-73.99, 40.76],
+                [-73.99, 40.74],
+            ],
+        ]);
+
+        const circles = build([
+            { id: "a", lng: -73.98, lat: 40.75, name: "A" },
+        ]);
+
+        const questionDifferent = {
+            id: "matching",
+            key: 1,
+            data: {
+                type: "same-admin-zone" as const,
+                lat: 40.75,
+                lng: -73.98,
+                same: false,
+                drag: false,
+                color: "black",
+                collapsed: false,
+                cat: { adminLevel: 6 as const },
+            },
+        } as unknown as Question;
+
+        const outDiff = await applyQuestionFilters({
+            circles,
+            questions: [questionDifferent],
+            measuringPoiCache: new Map(),
+            matchingZoneKey,
+            hidingRadius: 0.25,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+            resolveMatchingAdminRegion: async () => tinyRegion,
+            toast: fakeToast as any,
+        });
+        expect(outDiff).toHaveLength(1);
+        expect(toastInfos.some((m) => m.includes("different"))).toBe(true);
+
+        toastInfos.length = 0;
+
+        const farRegion = turf.polygon([
+            [
+                [-70.0, 41.0],
+                [-69.9, 41.0],
+                [-69.9, 41.1],
+                [-70.0, 41.1],
+                [-70.0, 41.0],
+            ],
+        ]);
+
+        const questionSame = {
+            ...questionDifferent,
+            data: { ...questionDifferent.data, same: true },
+        } as unknown as Question;
+
+        const outSame = await applyQuestionFilters({
+            circles,
+            questions: [questionSame],
+            measuringPoiCache: new Map(),
+            matchingZoneKey,
+            hidingRadius: 0.25,
+            useCustomStations: false,
+            includeDefaultStations: true,
+            planningModeEnabled: false,
+            resolveMatchingAdminRegion: async () => farRegion,
+            toast: fakeToast as any,
+        });
+        expect(outSame).toHaveLength(1);
+        expect(toastInfos.some((m) => m.includes("same"))).toBe(true);
     });
 
     it("classifies airport matching by station center, not circle overlap", async () => {

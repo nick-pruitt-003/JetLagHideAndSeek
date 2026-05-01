@@ -42,13 +42,44 @@ import { applyQuestionsToMapGeoData, holedMask, safeUnion } from "@/maps";
 import { hiderifyQuestion } from "@/maps";
 import { clearCache, determineMapBoundaries } from "@/maps/api";
 
+/**
+ * CARTO Dark/Light used the non-`rastertiles` CDN paths while Voyager used
+ * `rastertiles/` — those stacks render softer. Match Voyager's raster stack.
+ */
+const CARTO_LIGHT_RASTER =
+    "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png";
+const CARTO_DARK_RASTER =
+    "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png";
+
+/**
+ * Default Leaflet GeoJSON fill (#3388ff @ 0.2) reads as a milky haze on dark
+ * basemaps and dulls markers / tiles; tune per basemap theme.
+ */
+function eliminationMaskPathOptions(): L.PathOptions {
+    const theme = baseTileLayer.get();
+    if (theme === "dark") {
+        return {
+            interactive: false,
+            stroke: false,
+            fillColor: "#030712",
+            fillOpacity: 0.52,
+        };
+    }
+    return {
+        interactive: false,
+        stroke: false,
+        fillColor: "#64748b",
+        fillOpacity: 0.28,
+    };
+}
+
 const getTileLayer = (tileLayer: string, thunderforestApiKey: string) => {
     switch (tileLayer) {
         case "light":
             return (
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="https://carto.com/attributions">CARTO</a>; Powered by Esri and Turf.js'
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                    url={CARTO_LIGHT_RASTER}
                     subdomains="abcd"
                     maxZoom={20} // This technically should be 6, but once the ratelimiting starts this can take over
                     minZoom={2}
@@ -60,7 +91,7 @@ const getTileLayer = (tileLayer: string, thunderforestApiKey: string) => {
             return (
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="https://carto.com/attributions">CARTO</a>; Powered by Esri and Turf.js'
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    url={CARTO_DARK_RASTER}
                     subdomains="abcd"
                     maxZoom={20} // This technically should be 6, but once the ratelimiting starts this can take over
                     minZoom={2}
@@ -281,7 +312,9 @@ export const Map = ({ className }: { className?: string }) => {
                 }
             });
 
-            const g = L.geoJSON(mapGeoData);
+            const g = L.geoJSON(mapGeoData, {
+                style: () => eliminationMaskPathOptions(),
+            });
             // @ts-expect-error This is a check such that only this type of layer is removed
             g.eliminationGeoJSON = true;
             g.addTo(map);

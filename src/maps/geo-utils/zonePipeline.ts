@@ -484,6 +484,24 @@ async function defaultResolveMatchingAdminRegion(
  * the cell for the {@link turf.nearestPoint} airport — otherwise we skip
  * airport matching entirely and every station stays visible.
  */
+/**
+ * Zone-style matching (admin polygon, zip, custom zone, …): use the full
+ * hiding disk, not just the station center. A disk that straddles a border
+ * can satisfy "Same" via partial overlap and "Different" if any part leaves
+ * the seeker's region; center-only tests drop those incorrectly.
+ */
+function stationCircleMatchesResolvedRegion(
+    circle: StationCircle,
+    region: Feature<Polygon | MultiPolygon>,
+    wantSame: boolean,
+): boolean {
+    const disk = circle as Feature<Polygon | MultiPolygon>;
+    if (wantSame) {
+        return turf.booleanIntersects(disk, region);
+    }
+    return !turf.booleanWithin(disk, region);
+}
+
 function voronoiCellForSeeker(
     seekerPoint: Feature<Point>,
     voronoiFc: FeatureCollection<Polygon | MultiPolygon>,
@@ -765,16 +783,31 @@ export async function applyQuestionFilters({
             const regionNonNull = resolvedRegion;
 
             const wantSame = data.same === true;
-            current = current.filter((circle) => {
-                const stationPoint = turf.point(
-                    turf.getCoord(circle.properties as Feature<Point>),
-                );
-                const inside = turf.booleanPointInPolygon(
-                    stationPoint,
+            const beforeZone = current.length;
+            const zoneFiltered = current.filter((circle) =>
+                stationCircleMatchesResolvedRegion(
+                    circle,
                     regionNonNull,
+                    wantSame,
+                ),
+            );
+            // Hiding disks can skim admin borders and satisfy questions in
+            // non-obvious ways; if this step would remove everyone, skip it so
+            // the seeker is not stuck with an empty map.
+            if (beforeZone > 0 && zoneFiltered.length === 0) {
+                toast?.info(
+                    wantSame
+                        ? 'That "same zone" match would remove every remaining station (disks can straddle borders). The filter was skipped — move the seeker pin, try another question, or adjust hiding radius.'
+                        : 'That "different zone" match would remove every remaining station (every disk lies fully inside the matched area). The filter was skipped — move the seeker pin, try another question, or adjust hiding radius.',
+                    {
+                        toastId: wantSame
+                            ? "matching-zone-same-skipped-empty"
+                            : "matching-zone-different-skipped-empty",
+                    },
                 );
-                return wantSame ? inside : !inside;
-            });
+                continue;
+            }
+            current = zoneFiltered;
         }
 
         if (
