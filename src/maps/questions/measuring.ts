@@ -100,6 +100,103 @@ const bboxExtension = (
 
 const COASTLINE_BUFFER_EPS_MI = 1e-6;
 
+/** Large games pull huge OSM/NE shoreline sets; merging thousands of buffers bricks the main thread. */
+const COASTLINE_MAX_LINE_FEATURES = 140;
+const COASTLINE_BUFFER_STEPS = 10;
+const COASTLINE_SIMPLIFY_SPAN_RATIO = 1 / 600;
+
+function expandBboxDegrees(bbox: BBox, padDeg: number): BBox {
+    return [
+        bbox[0] - padDeg,
+        bbox[1] - padDeg,
+        bbox[2] + padDeg,
+        bbox[3] + padDeg,
+    ];
+}
+
+function coastlineSimplifyTolerance(bbox: BBox): number {
+    const span = Math.max(
+        bbox[2] - bbox[0],
+        bbox[3] - bbox[1],
+        1e-8,
+    );
+    return Math.min(0.025, span * COASTLINE_SIMPLIFY_SPAN_RATIO);
+}
+
+/**
+ * Clip to game extent, simplify vertices, and cap feature count so coastline
+ * measuring stays interactive for metro-state / multi-region games.
+ */
+function lightenCoastlinesForMeasuring(
+    fc: FeatureCollection<LineString | MultiLineString>,
+    gameBbox: BBox,
+): FeatureCollection<LineString | MultiLineString> {
+    const tol = coastlineSimplifyTolerance(gameBbox);
+    const span = Math.max(
+        gameBbox[2] - gameBbox[0],
+        gameBbox[3] - gameBbox[1],
+        0.01,
+    );
+    const clipBbox = expandBboxDegrees(gameBbox, Math.max(span * 0.12, 0.06));
+
+    const scored: {
+        len: number;
+        f: Feature<LineString | MultiLineString>;
+    }[] = [];
+
+    for (const raw of fc.features) {
+        let clipped: Feature | undefined;
+        try {
+            clipped = turf.bboxClip(raw, clipBbox) as Feature | undefined;
+        } catch {
+            continue;
+        }
+        if (!clipped?.geometry) continue;
+        const gt = clipped.geometry.type;
+        if (gt !== "LineString" && gt !== "MultiLineString") continue;
+
+        let f = clipped as Feature<LineString | MultiLineString>;
+        try {
+            f = turf.simplify(f, {
+                tolerance: tol,
+                highQuality: false,
+            }) as Feature<LineString | MultiLineString>;
+        } catch {
+            continue;
+        }
+        const lenKm = turf.length(f, { units: "kilometers" });
+        if (lenKm < 0.02) continue;
+        scored.push({ len: lenKm, f });
+    }
+
+    scored.sort((a, b) => b.len - a.len);
+    const top = scored.slice(0, COASTLINE_MAX_LINE_FEATURES).map((x) => x.f);
+    return { type: "FeatureCollection", features: top };
+}
+
+function mergePolygonsBinary(
+    polys: Feature<Polygon | MultiPolygon>[],
+): Feature<Polygon | MultiPolygon> | null {
+    if (polys.length === 0) return null;
+    let layer = [...polys];
+    while (layer.length > 1) {
+        const next: Feature<Polygon | MultiPolygon>[] = [];
+        for (let i = 0; i < layer.length; i += 2) {
+            if (i + 1 >= layer.length) {
+                next.push(layer[i]!);
+                continue;
+            }
+            const a = layer[i]!;
+            const b = layer[i + 1]!;
+            const u = turf.union(turf.featureCollection([a, b]));
+            if (u) next.push(u as Feature<Polygon | MultiPolygon>);
+            else next.push(a);
+        }
+        layer = next;
+    }
+    return layer[0] ?? null;
+}
+
 function* eachLineStringOfCoast(
     f: Feature<LineString | MultiLineString>,
 ): Generator<Feature<LineString>> {
@@ -136,20 +233,14 @@ function mergeCoastalLineBuffers(
         const b = turf.buffer(
             clipped as Feature<LineString | MultiLineString>,
             buf,
-            { units: "miles", steps: 64 },
+            { units: "miles", steps: COASTLINE_BUFFER_STEPS },
         );
         if (b) pieces.push(b as Feature<Polygon | MultiPolygon>);
     }
 
     if (pieces.length === 0) return null;
     if (pieces.length === 1) return pieces[0]!;
-
-    let acc = pieces[0]!;
-    for (let i = 1; i < pieces.length; i++) {
-        const u = turf.union(turf.featureCollection([acc, pieces[i]!]));
-        if (u) acc = u as Feature<Polygon | MultiPolygon>;
-    }
-    return acc;
+    return mergePolygonsBinary(pieces);
 }
 
 type BBox4 = [number, number, number, number];
@@ -181,7 +272,8 @@ export const determineMeasuringBoundary = async (
              * ocean coast when OSM returns nothing.
              */
             const pt = turf.point([question.lng, question.lat]);
-            const coastFc = await fetchCoastlinesForMeasuring(bBox);
+            const rawCoast = await fetchCoastlinesForMeasuring(bBox);
+            const coastFc = lightenCoastlinesForMeasuring(rawCoast, bBox);
 
             if (coastFc.features.length === 0) {
                 return [turf.bboxPolygon(bBox)];

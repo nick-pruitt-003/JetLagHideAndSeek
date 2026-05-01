@@ -11,6 +11,11 @@ const determinePermanentCache = _.memoize(() =>
 
 const inFlightFetches = new Map<string, Promise<Response>>();
 
+/** Busy upstream / rate limit — Overpass mirror sweep or getOverpassData retry often recovers. */
+const TRANSIENT_FETCH_STATUSES = new Set([
+    408, 429, 502, 503, 504, 507, 529,
+]);
+
 function reportFetchFailure(args: {
     url: string;
     cacheType: CacheType;
@@ -19,11 +24,14 @@ function reportFetchFailure(args: {
     statusText?: string;
     error?: unknown;
 }) {
+    const status = args.status ?? 599;
+    const transient =
+        typeof status === "number" && TRANSIENT_FETCH_STATUSES.has(status);
     const payload = {
         url: args.url,
         cacheType: args.cacheType,
         loadingText: args.loadingText,
-        status: args.status ?? 599,
+        status,
         statusText: args.statusText ?? "Network Error",
         error:
             args.error instanceof Error
@@ -32,13 +40,17 @@ function reportFetchFailure(args: {
                   ? String(args.error)
                   : undefined,
         timestamp: new Date().toISOString(),
+        transient,
     };
     if (typeof window !== "undefined") {
         const w = window as Window & { __jlFetchFailures?: unknown[] };
         w.__jlFetchFailures = w.__jlFetchFailures ?? [];
         w.__jlFetchFailures.push(payload);
     }
-    console.error("[cacheFetch] request failed", payload);
+    const label = transient
+        ? "[cacheFetch] HTTP failure (often recovers via another Overpass mirror or retry)"
+        : "[cacheFetch] request failed";
+    console.error(label, payload);
 }
 
 export const determineCache = async (cacheType: CacheType) => {

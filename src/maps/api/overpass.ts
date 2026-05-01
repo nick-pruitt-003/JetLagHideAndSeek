@@ -20,14 +20,18 @@ export const DEFAULT_ADMIN_BOUNDARY_OVERPASS_TIMEOUT_SEC = 120;
 const MAX_OVERPASS_GET_URL_LENGTH = 7500;
 /** One Overpass query with many `map_to_area` blocks is slow and RAM-heavy; split beyond this. */
 const MULTI_AREA_SPLIT_THRESHOLD = 4;
-/** Avoid too many concurrent Overpass requests per batch. */
-const MULTI_AREA_PARALLEL_CHUNK = 4;
+/** Avoid too many concurrent Overpass requests per batch (429s spike at 4+). */
+const MULTI_AREA_PARALLEL_CHUNK = 2;
+/** Pause between multi-area batches so mirrors are not hammered back-to-back. */
+const MULTI_AREA_CHUNK_GAP_MS = 700;
 /** Keep `poly:"…"` clauses small enough for GET and faster server-side evaluation. */
 const MAX_POLY_INLINE_LENGTH = 5200;
 
-/** HTTP statuses where a single delayed retry sometimes succeeds (busy public Overpass). */
-const OVERPASS_RETRYABLE_HTTP = new Set([502, 503, 504, 529, 599]);
-const OVERPASS_RETRY_DELAY_MS = 3000;
+/** HTTP statuses where delayed retry sometimes succeeds (busy / rate-limited Overpass). */
+const OVERPASS_RETRYABLE_HTTP = new Set([408, 429, 502, 503, 504, 529, 599]);
+const OVERPASS_RETRY_DELAY_MS = 3500;
+const OVERPASS_429_MIN_RETRY_MS = 9000;
+const OVERPASS_MAX_RETRIES = 4;
 import { toast } from "react-toastify";
 
 import {
@@ -148,11 +152,25 @@ export function overpassZoneCacheKey(): string {
     return `rel:${ids}${suffix}`;
 }
 
+function overpassRetryDelayMs(status: number, response: Response): number {
+    if (status === 429) {
+        const ra = response.headers.get("Retry-After");
+        if (ra) {
+            const sec = Number.parseInt(ra, 10);
+            if (Number.isFinite(sec) && sec > 0) {
+                return Math.min(120_000, Math.max(OVERPASS_429_MIN_RETRY_MS, sec * 1000));
+            }
+        }
+        return OVERPASS_429_MIN_RETRY_MS;
+    }
+    return OVERPASS_RETRY_DELAY_MS;
+}
+
 const getOverpassData = async (
     query: string,
     loadingText?: string,
     cacheType: CacheType = CacheType.CACHE,
-    _retry = false,
+    _retryCount = 0,
 ) => {
     const encodedQuery = encodeURIComponent(query);
     const primaryUrl = `${OVERPASS_API}?data=${encodedQuery}`;
@@ -188,7 +206,7 @@ const getOverpassData = async (
                 }
             })();
             last =
-                loadingText && i === 0 && !_retry
+                loadingText && i === 0 && _retryCount === 0
                     ? await toast.promise(pending, { pending: loadingText })
                     : await pending;
             if (last.ok) {
@@ -244,7 +262,7 @@ const getOverpassData = async (
             const url = `${OVERPASS_INTERPRETER_URLS[i]}?data=${encodedQuery}`;
             last = await cacheFetch(
                 url,
-                i === 0 && !_retry ? loadingText : undefined,
+                i === 0 && _retryCount === 0 ? loadingText : undefined,
                 cacheType,
             );
             if (last.ok) {
@@ -279,20 +297,47 @@ const getOverpassData = async (
     }
 
     if (!response.ok) {
-        if (!_retry && OVERPASS_RETRYABLE_HTTP.has(response.status)) {
-            await new Promise((r) => setTimeout(r, OVERPASS_RETRY_DELAY_MS));
-            return getOverpassData(query, loadingText, cacheType, true);
+        if (
+            _retryCount < OVERPASS_MAX_RETRIES &&
+            OVERPASS_RETRYABLE_HTTP.has(response.status)
+        ) {
+            const delay = overpassRetryDelayMs(response.status, response);
+            await new Promise((r) => setTimeout(r, delay));
+            return getOverpassData(query, loadingText, cacheType, _retryCount + 1);
         }
         await debugOverpassFailure(response);
+        const tries = _retryCount + 1;
+        const hint =
+            response.status === 504 || response.status === 502
+                ? " Public Overpass servers time out on large queries; try a smaller territory or wait and retry."
+                : response.status === 429
+                  ? " Rate limited — wait a minute or reduce how many regions load at once."
+                  : "";
         toast.error(
-            `Could not load data from Overpass: ${response.status} ${response.statusText}`,
-            { toastId: "overpass-error" },
+            `OpenStreetMap (Overpass) request failed after ${tries} attempt(s): ${response.status} ${response.statusText}.${hint}`,
+            { autoClose: 12000 },
         );
         return { elements: [] };
     }
 
-    const data = await response.json();
-    return data;
+    let data: unknown;
+    try {
+        data = await response.json();
+    } catch (err) {
+        await debugOverpassFailure(response);
+        toast.error(
+            `Overpass returned data that is not valid JSON: ${
+                err instanceof Error ? err.message : String(err)
+            }. See console for [Overpass debug].`,
+            { autoClose: 12000 },
+        );
+        return { elements: [] };
+    }
+    const raw = (data ?? {}) as { elements?: any[]; [k: string]: unknown };
+    return {
+        ...raw,
+        elements: Array.isArray(raw.elements) ? raw.elements : [],
+    };
 };
 
 const OSM_TYPE_LONG: Record<"W" | "R" | "N", string> = {
@@ -1313,6 +1358,11 @@ out ${outType};
                     i < queries.length;
                     i += MULTI_AREA_PARALLEL_CHUNK
                 ) {
+                    if (i > 0) {
+                        await new Promise((r) =>
+                            setTimeout(r, MULTI_AREA_CHUNK_GAP_MS),
+                        );
+                    }
                     const chunk = queries.slice(
                         i,
                         i + MULTI_AREA_PARALLEL_CHUNK,
@@ -1504,6 +1554,11 @@ out ids;
                 i < queries.length;
                 i += MULTI_AREA_PARALLEL_CHUNK
             ) {
+                if (i > 0) {
+                    await new Promise((r) =>
+                        setTimeout(r, MULTI_AREA_CHUNK_GAP_MS),
+                    );
+                }
                 const chunk = queries.slice(i, i + MULTI_AREA_PARALLEL_CHUNK);
                 const parts = await Promise.all(
                     chunk.map((q) =>
