@@ -8,6 +8,7 @@ import react from "@astrojs/react";
 import { injectManifest } from "@serwist/build";
 import { defineConfig } from "astro/config";
 import { build as esbuild } from "esbuild";
+import tailwindcss from "@tailwindcss/vite";
 
 /** Project root (directory containing this file). */
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
@@ -198,4 +199,31 @@ export default defineConfig({
     adapter: node({
         mode: "standalone",
     }),
+    vite: {
+        plugins: [
+            tailwindcss(),
+            // leaflet-draw is a pure-IIFE side-effect package with no ESM
+            // exports. react-leaflet-draw does `import Draw from "leaflet-draw"`
+            // only to register draw handlers onto the global L namespace, so
+            // Draw is never actually used as a value. Rolldown (Vite 8) is
+            // stricter about missing default exports — this plugin intercepts
+            // only the exact bare `leaflet-draw` specifier (not subpaths like
+            // `leaflet-draw/dist/leaflet.draw.css`) and redirects it to the
+            // local shim that provides a default export.
+            {
+                name: "leaflet-draw-esm-compat",
+                enforce: "pre",
+                resolveId(id) {
+                    if (id === "leaflet-draw") {
+                        return fileURLToPath(
+                            new URL(
+                                "./src/shims/leaflet-draw.js",
+                                import.meta.url,
+                            ),
+                        );
+                    }
+                },
+            },
+        ],
+    },
 });
