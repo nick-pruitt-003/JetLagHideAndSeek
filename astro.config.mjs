@@ -225,5 +225,12 @@ export default defineConfig({
                 },
             },
         ],
+        // Exclude leaflet-draw and react-leaflet-draw from Vite's dep
+        // pre-bundler (which runs before user plugins). Without this, the
+        // optimizer hits the missing default-export error in dev mode before
+        // our leaflet-draw-esm-compat plugin ever gets a chance to intercept.
+        optimizeDeps: {
+            exclude: ["leaflet-draw", "react-leaflet-draw"],
+        },
     },
 });
