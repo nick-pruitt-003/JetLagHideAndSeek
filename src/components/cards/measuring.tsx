@@ -1,5 +1,6 @@
 import { useStore } from "@nanostores/react";
 import * as React from "react";
+import { toast } from "react-toastify";
 
 import { QuestionCard } from "@/components/cards/base";
 import {
@@ -63,7 +64,18 @@ export const MeasuringQuestionComponent = ({
     };
 
     const prefillCustomGeo = async () => {
-        const boundary = await determineMeasuringBoundary(data);
+        let boundary:
+            | Awaited<ReturnType<typeof determineMeasuringBoundary>>
+            | undefined;
+
+        try {
+            boundary = await determineMeasuringBoundary(data);
+        } catch (error) {
+            // Leave the geometry blank rather than half-written, and say so.
+            console.error("Prefilling the custom measuring geometry failed", error);
+            toast.error("Could not prefill from OpenStreetMap; starting blank.");
+        }
+
         if (!(data as any).geo) {
             (data as any).geo = {
                 type: "FeatureCollection",

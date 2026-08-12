@@ -7,7 +7,11 @@ import { Marker } from "react-leaflet";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import { QuestionCardFor } from "@/components/QuestionCards";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { SidebarMenu } from "@/components/ui/sidebar-l";
 import {
     autoSave,
@@ -116,9 +120,9 @@ const ColoredMarker = ({
             <DialogContent className="bg-[hsl(var(--sidebar-background))]! text-white!">
                 {storeMarker && (
                     <>
-                        <h2 className="text-center text-2xl font-bold font-poppins">
+                        <DialogTitle className="text-center text-2xl font-bold font-poppins">
                             {sub}
-                        </h2>
+                        </DialogTitle>
                         <SidebarMenu>
                             <LatitudeLongitude
                                 latitude={storeMarker.location.latitude}

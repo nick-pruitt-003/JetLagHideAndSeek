@@ -3,8 +3,10 @@ import "leaflet-draw/dist/leaflet.draw.css";
 import { useStore } from "@nanostores/react";
 import * as turf from "@turf/turf";
 import type {
+    Feature,
     FeatureCollection,
     MultiPolygon,
+    Point as GeoJSONPoint,
     Polygon as GeoJSONPolygon,
 } from "geojson";
 import L from "leaflet";
@@ -48,7 +50,7 @@ const removeLayersExcept = (
     featureGroup: any,
     keep: (options: any) => boolean,
 ) => {
-    if (!featureGroup) return;
+    if (!featureGroup?._layers) return;
 
     Object.values(featureGroup._layers).forEach((layer: any) => {
         if (!keep(layer.options)) {
@@ -57,12 +59,13 @@ const removeLayersExcept = (
     });
 };
 
-/** Leaflet sometimes hands back the same point twice. */
-const uniqueByCoordinates = (features: any[]) =>
-    uniqBy(
-        features as CustomTentacleQuestion["places"],
-        (x) => x.geometry.coordinates.join(","),
-    );
+/**
+ * Leaflet sometimes hands back the same point twice. Used for tentacle places,
+ * matching points and measuring features alike, so it stays on the shared
+ * point-feature shape rather than one question's type.
+ */
+const uniqueByCoordinates = <T extends Feature<GeoJSONPoint>>(features: T[]) =>
+    uniqBy(features, (x) => x.geometry.coordinates.join(","));
 
 const swapCoordinates = (geojson: any) => {
     return JSON.parse(JSON.stringify(geojson), (_key, value) => {
@@ -129,8 +132,10 @@ const EditablePointMarker = ({
                     {editableName && (
                         <Input
                             className="text-center text-2xl! font-bold font-poppins mt-3"
-                            value={point.properties?.name}
+                            value={point.properties?.name ?? ""}
                             onChange={(e) => {
+                                // Drawn points can arrive without properties.
+                                point.properties ??= {} as typeof point.properties;
                                 point.properties.name = e.target.value;
                                 questionModified();
                             }}

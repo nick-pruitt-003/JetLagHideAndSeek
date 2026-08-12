@@ -22,21 +22,35 @@ const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
-export const MENU_ITEM_CLASSNAME =
+/**
+ * Layout + interaction classes shared by menu items and menu buttons. The
+ * button variant only adds its `peer/menu-button` marker on top, so both
+ * consumers derive from this one string and cannot drift apart.
+ */
+const MENU_ITEM_BASE_CLASSNAME =
     "flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0";
+
+export const MENU_ITEM_CLASSNAME = MENU_ITEM_BASE_CLASSNAME;
 
 /**
  * Each side passes its own atom, so `useStore` stays bound to that instance.
  */
 type SidebarContextStore = WritableAtom<SidebarContextType>;
 
-/** Lets the left sidebar rewrite the visual state while the tutorial runs. */
+/**
+ * Lets the left sidebar rewrite the visual state while the tutorial runs.
+ *
+ * This runs inside `Sidebar`'s render, so an implementation is a hook and must
+ * obey the Rules of Hooks: call its own hooks unconditionally, in a stable
+ * order, on every render — no branching on the passed-in state.
+ */
 type UseDisplayState = (displayState: {
     state: SidebarContextType["state"];
     openMobile: boolean;
 }) => { state: SidebarContextType["state"]; openMobile: boolean };
 
-const identityDisplayState: UseDisplayState = (displayState) => displayState;
+const useIdentityDisplayState: UseDisplayState = (displayState) =>
+    displayState;
 
 /**
  * Builds the sidebar components that need a context atom. Call this once per
@@ -46,7 +60,7 @@ export const createSidebarComponents = (
     SidebarContext: SidebarContextStore,
     {
         triggerIcon,
-        useDisplayState = identityDisplayState,
+        useDisplayState = useIdentityDisplayState,
     }: {
         triggerIcon: React.ReactNode;
         useDisplayState?: UseDisplayState;
@@ -292,6 +306,8 @@ export const createSidebarComponents = (
         return (
             <button
                 ref={ref}
+                type="button"
+                aria-label="Toggle sidebar"
                 data-sidebar="trigger"
                 className={cn(
                     "bg-white hover:bg-[#f4f4f4] text-black rounded-sm border-2 border-black/30 cursor-pointer py-1 px-2",
@@ -479,7 +495,7 @@ export const SidebarMenuItem = React.forwardRef<
 SidebarMenuItem.displayName = "SidebarMenuItem";
 
 const sidebarMenuButtonVariants = cva(
-    "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+    `peer/menu-button ${MENU_ITEM_BASE_CLASSNAME}`,
     {
         variants: {
             variant: {

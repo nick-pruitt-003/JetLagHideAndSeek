@@ -177,15 +177,48 @@ export const MatchingQuestionComponent = ({
     };
 
     const prefillCustomGeo = async (type: "custom-zone" | "custom-points") => {
-        if (type === "custom-zone") {
-            (data as any).geo = await determineMatchingBoundary(data);
-            return;
+        try {
+            if (type === "custom-zone") {
+                (data as any).geo = await determineMatchingBoundary(data);
+                return;
+            }
+            if (supportsPointPrefill(data.type)) {
+                (data as any).geo = await findMatchingPlaces(data);
+            } else {
+                (data as any).geo = [];
+                toast.info("Please draw the points on the map.");
+            }
+        } catch (error) {
+            // A failed Overpass prefill must not leave the question stuck with
+            // no geometry and no explanation — fall back to drawing by hand.
+            console.error("Prefilling the custom matching geometry failed", error);
+            toast.error("Could not prefill from OpenStreetMap; starting blank.");
+            blankCustomGeo(type);
         }
-        if (supportsPointPrefill(data.type)) {
-            (data as any).geo = await findMatchingPlaces(data);
+    };
+
+    /**
+     * Switch the question to one of the custom types: seed its geometry per the
+     * chosen mode, keep `cat` defined so a later zone question cannot throw,
+     * then commit the type. Shared by the init dialog and the type picker.
+     */
+    const applyCustomType = async (
+        type: "custom-zone" | "custom-points",
+        choice: "blank" | "prefill",
+    ) => {
+        if (choice === "blank") {
+            blankCustomGeo(type);
         } else {
-            (data as any).geo = [];
-            toast.info("Please draw the points on the map.");
+            await prefillCustomGeo(type);
+        }
+        ensureZoneCategory();
+        data.type = type;
+    };
+
+    // The category should be defined such that no error is thrown if this is a zone question.
+    const ensureZoneCategory = () => {
+        if (!(data as any).cat) {
+            (data as any).cat = { adminLevel: 3 };
         }
     };
 
@@ -545,12 +578,7 @@ export const MatchingQuestionComponent = ({
                 onOpenChange={setCustomDialogOpen}
                 onChoice={async (choice) => {
                     if (!pendingCustomType) return;
-                    if (choice === "blank") {
-                        blankCustomGeo(pendingCustomType);
-                    } else {
-                        await prefillCustomGeo(pendingCustomType);
-                    }
-                    data.type = pendingCustomType;
+                    await applyCustomType(pendingCustomType, choice);
                     questionModified();
                     setCustomDialogOpen(false);
                 }}
@@ -578,21 +606,23 @@ export const MatchingQuestionComponent = ({
                                 setCustomDialogOpen(true);
                                 return;
                             }
-                            // Apply preference without dialog
-                            if ($customInitPref === "blank") {
-                                blankCustomGeo(value);
-                            } else if ($customInitPref === "prefill") {
-                                await prefillCustomGeo(value);
-                            }
-                        } else if (value === "same-length-station") {
+                            // Apply the remembered preference without asking.
+                            await applyCustomType(
+                                value,
+                                $customInitPref === "prefill"
+                                    ? "prefill"
+                                    : "blank",
+                            );
+                            questionModified();
+                            return;
+                        }
+
+                        if (value === "same-length-station") {
                             data.lengthComparison = "same";
                             data.same = true;
                         }
 
-                        // The category should be defined such that no error is thrown if this is a zone question.
-                        if (!(data as any).cat) {
-                            (data as any).cat = { adminLevel: 3 };
-                        }
+                        ensureZoneCategory();
                         questionModified((data.type = value));
                     }}
                     disabled={!data.drag || $isLoading}

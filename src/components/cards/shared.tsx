@@ -154,9 +154,13 @@ export const RadiusUnitRow = ({
                 className="rounded-md p-2 w-16"
                 value={data.radius}
                 disabled={disabled}
-                onChange={(e) =>
-                    questionModified((data.radius = parseFloat(e.target.value)))
-                }
+                onChange={(e) => {
+                    // An empty or half-typed field parses to NaN, which would
+                    // poison every downstream distance calculation.
+                    const radius = parseFloat(e.target.value);
+                    if (!Number.isFinite(radius)) return;
+                    questionModified((data.radius = radius));
+                }}
             />
             <UnitSelect
                 unit={data.unit}
@@ -178,7 +182,8 @@ export const DrawingEnableNotice = ({
     presetTypeHint,
     disabled,
 }: {
-    subject: React.ReactNode;
+    /** What is being drawn, e.g. "tentacle locations" — also the a11y name. */
+    subject: string;
     questionKey: number;
     data: any;
     presetTypeHint: string;
@@ -192,6 +197,7 @@ export const DrawingEnableNotice = ({
                 To modify {subject}, enable it:
                 <Checkbox
                     className="mx-1 my-1"
+                    aria-label={`Enable drawing ${subject} on the map`}
                     checked={$drawingQuestionKey === questionKey}
                     onCheckedChange={(checked) => {
                         if (checked) {
@@ -223,14 +229,26 @@ export const CustomInitChoiceDialog = ({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onChoice: (choice: "blank" | "prefill") => void | Promise<void>;
-}) => (
-    <CustomInitDialog
-        open={open}
-        onOpenChange={onOpenChange}
-        onBlank={() => onChoice("blank")}
-        onPrefill={() => onChoice("prefill")}
-    />
-);
+}) => {
+    // Callers own their error reporting; this is the backstop that keeps a
+    // rejected choice from becoming an unhandled promise rejection.
+    const run = async (choice: "blank" | "prefill") => {
+        try {
+            await onChoice(choice);
+        } catch (error) {
+            console.error("Custom question initialization failed", error);
+        }
+    };
+
+    return (
+        <CustomInitDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            onBlank={() => run("blank")}
+            onPrefill={() => run("prefill")}
+        />
+    );
+};
 
 /** The "Result" label plus whichever toggle group the question answers with. */
 export const ResultRow = ({
