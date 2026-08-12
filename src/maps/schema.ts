@@ -202,14 +202,18 @@ const adminLevelSchema = z.union([
  * every one of these, so they are declared once.
  */
 const fullFacilityLiterals = [
-    z.literal("aquarium-full").describe("Aquarium Question (Small+Medium Games)"),
+    z
+        .literal("aquarium-full")
+        .describe("Aquarium Question (Small+Medium Games)"),
     z.literal("zoo-full").describe("Zoo Question (Small+Medium Games)"),
     z
         .literal("theme_park-full")
         .describe("Theme Park Question (Small+Medium Games)"),
     z.literal("peak-full").describe("Mountain Question (Small+Medium Games)"),
     z.literal("museum-full").describe("Museum Question (Small+Medium Games)"),
-    z.literal("hospital-full").describe("Hospital Question (Small+Medium Games)"),
+    z
+        .literal("hospital-full")
+        .describe("Hospital Question (Small+Medium Games)"),
     z
         .literal("hospital-nyc-full")
         .describe("Hospital Question — NYC Curated List (Small+Medium Games)"),
@@ -356,9 +360,7 @@ const ordinaryMeasuringQuestionSchema = baseMeasuringQuestionSchema.extend({
             z
                 .literal("highspeed-measure-shinkansen")
                 .describe("High-Speed Rail Question"),
-            z
-                .literal("admin-measure")
-                .describe("Admin Zone Border Question"),
+            z.literal("admin-measure").describe("Admin Zone Border Question"),
             ...fullFacilityLiterals,
         ])
         .default("pick-type"),

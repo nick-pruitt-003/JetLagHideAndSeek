@@ -23,7 +23,8 @@ import {
     hiderMode,
     isLoading,
     questionModified,
-    triggerLocalRefresh,} from "@/lib/context";
+    triggerLocalRefresh,
+} from "@/lib/context";
 import { mapToObj } from "@/lib/utils";
 import { findTentacleLocations } from "@/maps/api";
 import {

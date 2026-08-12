@@ -63,7 +63,10 @@ export const groupedTypeOptions = (
     options
         .filter((option) => option.description !== NO_GROUP)
         .reduce<
-            Record<string, { disabled: boolean; options: Record<string, string> }>
+            Record<
+                string,
+                { disabled: boolean; options: Record<string, string> }
+            >
         >((acc, option) => {
             const group = option.description!;
             const entries = Object.fromEntries(literalEntries(option, field));

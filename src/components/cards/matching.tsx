@@ -39,7 +39,8 @@ import {
     isLoading,
     questionModified,
     trainStations,
-    triggerLocalRefresh,} from "@/lib/context";
+    triggerLocalRefresh,
+} from "@/lib/context";
 import { getSubwayLineRefOptionsFromGtfs } from "@/lib/transit/line-membership";
 import { cn } from "@/lib/utils";
 import { trainLineRefsForStation } from "@/maps/api/overpass";
@@ -50,10 +51,7 @@ import {
     listAirportMatchingCandidates,
     normalizeMatchingAirportIata,
 } from "@/maps/questions/matching";
-import {
-    type MatchingQuestion,
-    matchingQuestionSchema,
-} from "@/maps/schema";
+import { type MatchingQuestion, matchingQuestionSchema } from "@/maps/schema";
 
 function AirportPlayToggles({
     data,
@@ -192,8 +190,13 @@ export const MatchingQuestionComponent = ({
         } catch (error) {
             // A failed Overpass prefill must not leave the question stuck with
             // no geometry and no explanation — fall back to drawing by hand.
-            console.error("Prefilling the custom matching geometry failed", error);
-            toast.error("Could not prefill from OpenStreetMap; starting blank.");
+            console.error(
+                "Prefilling the custom matching geometry failed",
+                error,
+            );
+            toast.error(
+                "Could not prefill from OpenStreetMap; starting blank.",
+            );
             blankCustomGeo(type);
         }
     };

@@ -170,10 +170,7 @@ export const PlacePicker = ({
 
     // Toggling a territory in or out invalidates the drawn map and every
     // answer derived from it.
-    const setPlaceInPlay = (
-        location: { added: boolean },
-        added: boolean,
-    ) => {
+    const setPlaceInPlay = (location: { added: boolean }, added: boolean) => {
         if ($isLoading) return;
 
         location.added = added;

@@ -30,7 +30,8 @@ import {
     hiderMode,
     isLoading,
     questionModified,
-    triggerLocalRefresh,} from "@/lib/context";
+    triggerLocalRefresh,
+} from "@/lib/context";
 import {
     DEFAULT_MEASURING_ADMIN_LEVEL,
     determineMeasuringBoundary,
@@ -146,15 +147,19 @@ export const MeasuringQuestionComponent = ({
 
     const prefillCustomGeo = async () => {
         let boundary:
-            | Awaited<ReturnType<typeof determineMeasuringBoundary>>
-            | undefined;
+            Awaited<ReturnType<typeof determineMeasuringBoundary>> | undefined;
 
         try {
             boundary = await determineMeasuringBoundary(data);
         } catch (error) {
             // Leave the geometry blank rather than half-written, and say so.
-            console.error("Prefilling the custom measuring geometry failed", error);
-            toast.error("Could not prefill from OpenStreetMap; starting blank.");
+            console.error(
+                "Prefilling the custom measuring geometry failed",
+                error,
+            );
+            toast.error(
+                "Could not prefill from OpenStreetMap; starting blank.",
+            );
         }
 
         if (!(data as any).geo) {

@@ -49,8 +49,7 @@ type UseDisplayState = (displayState: {
     openMobile: boolean;
 }) => { state: SidebarContextType["state"]; openMobile: boolean };
 
-const useIdentityDisplayState: UseDisplayState = (displayState) =>
-    displayState;
+const useIdentityDisplayState: UseDisplayState = (displayState) => displayState;
 
 /**
  * Builds the sidebar components that need a context atom. Call this once per

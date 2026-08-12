@@ -7,11 +7,7 @@ import { Marker } from "react-leaflet";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import { QuestionCardFor } from "@/components/QuestionCards";
 import { Button } from "@/components/ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SidebarMenu } from "@/components/ui/sidebar-l";
 import {
     autoSave,

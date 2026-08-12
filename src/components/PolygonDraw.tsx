@@ -135,7 +135,8 @@ const EditablePointMarker = ({
                             value={point.properties?.name ?? ""}
                             onChange={(e) => {
                                 // Drawn points can arrive without properties.
-                                point.properties ??= {} as typeof point.properties;
+                                point.properties ??=
+                                    {} as typeof point.properties;
                                 point.properties.name = e.target.value;
                                 questionModified();
                             }}
@@ -204,7 +205,8 @@ export const PolygonDraw = () => {
         const layers = drawnLayers(featureRef.current);
         if (!layers) return;
 
-        const drawnFeatures = () => layers.map((layer: any) => layer.toGeoJSON());
+        const drawnFeatures = () =>
+            layers.map((layer: any) => layer.toGeoJSON());
 
         if (drawingQuestionKey.get() === -1) {
             const geoJSON = turf.featureCollection(
@@ -303,13 +305,9 @@ export const PolygonDraw = () => {
                         case "Point":
                             return <EditablePointMarker key={key} point={x} />;
                         case "Polygon":
-                            return (
-                                <Polygon key={key} {...outlinedShape(x)} />
-                            );
+                            return <Polygon key={key} {...outlinedShape(x)} />;
                         case "LineString":
-                            return (
-                                <Polyline key={key} {...outlinedShape(x)} />
-                            );
+                            return <Polyline key={key} {...outlinedShape(x)} />;
                         default:
                             return null;
                     }

@@ -4,11 +4,7 @@ import * as React from "react";
 import { CandidatePlayToggles } from "@/components/CandidatePlayToggles";
 import { useOverpassCandidateList } from "@/hooks/use-overpass-candidate-list";
 import { useTerritoryRefreshToken } from "@/hooks/use-territory-refresh-token";
-import {
-    displayHidingZones,
-    isLoading,
-    questionModified,
-} from "@/lib/context";
+import { displayHidingZones, isLoading, questionModified } from "@/lib/context";
 import { prettifyLocation } from "@/maps/api";
 import {
     listOrdinaryFacilityVoronoiCandidates,

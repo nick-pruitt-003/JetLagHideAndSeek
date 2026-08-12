@@ -30,9 +30,4 @@ export {
     SidebarMenu,
     SidebarMenuItem,
 } from "@/components/ui/sidebar-core";
-export {
-    Sidebar,
-    SidebarMenuButton,
-    SidebarProvider,
-    SidebarTrigger,
-};
+export { Sidebar, SidebarMenuButton, SidebarProvider, SidebarTrigger };
