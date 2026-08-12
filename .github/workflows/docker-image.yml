@@ -43,6 +43,14 @@ jobs:
             - name: Type-check
               run: pnpm run typecheck:ts6
 
+            # tsgo is a dev preview pinned to an exact build, so it must never
+            # block the deploy path Railway watches. It currently agrees with
+            # tsc on this codebase; a red step here means the preview diverged
+            # and typecheck:ts7 needs a look, not that the code is broken.
+            - name: Type-check (TypeScript 7 preview, non-blocking)
+              run: pnpm run typecheck:ts7
+              continue-on-error: true
+
             - name: Unit tests
               run: pnpm test run
 
