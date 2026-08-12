@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 
 import { QuestionCard } from "@/components/cards/base";
 import {
+    ADMIN_LEVEL_OPTIONS,
     applyLatLng,
     CustomInitChoiceDialog,
     DrawingEnableNotice,
@@ -30,11 +31,91 @@ import {
     isLoading,
     questionModified,
     triggerLocalRefresh,} from "@/lib/context";
-import { determineMeasuringBoundary } from "@/maps/questions/measuring";
 import {
+    DEFAULT_MEASURING_ADMIN_LEVEL,
+    determineMeasuringBoundary,
+    findAdminZoneName,
+} from "@/maps/questions/measuring";
+import {
+    type AdminLevel,
     type MeasuringQuestion,
     measuringQuestionSchema,
+    type MeasuringQuestionWithAdminZone,
 } from "@/maps/schema";
+
+/**
+ * Controls for the admin-border question: which admin level to measure against,
+ * plus the zone actually found at the seeker's point so the player knows which
+ * border the answer is about.
+ */
+const AdminZoneControls = ({
+    data,
+    disabled,
+}: {
+    data: MeasuringQuestionWithAdminZone;
+    disabled?: boolean;
+}) => {
+    const [zone, setZone] = React.useState<{
+        loading: boolean;
+        name: string | null;
+    }>({ loading: true, name: null });
+
+    const adminLevel = data.cat?.adminLevel ?? DEFAULT_MEASURING_ADMIN_LEVEL;
+
+    React.useEffect(() => {
+        let cancelled = false;
+        setZone({ loading: true, name: null });
+
+        findAdminZoneName(data)
+            .then((name) => {
+                if (!cancelled) setZone({ loading: false, name });
+            })
+            .catch(() => {
+                if (!cancelled) setZone({ loading: false, name: null });
+            });
+
+        return () => {
+            cancelled = true;
+        };
+        // `data` is mutated in place, so depend on the values that change the
+        // lookup rather than on the object identity.
+    }, [data.lat, data.lng, adminLevel]);
+
+    return (
+        <>
+            <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
+                <Select
+                    trigger="OSM Zone"
+                    options={ADMIN_LEVEL_OPTIONS}
+                    value={adminLevel.toString()}
+                    onValueChange={(value) =>
+                        questionModified(
+                            (data.cat = {
+                                adminLevel: parseInt(value) as AdminLevel,
+                            }),
+                        )
+                    }
+                    disabled={disabled}
+                />
+            </SidebarMenuItem>
+            <p className="px-2 text-center text-sm text-muted-foreground">
+                {zone.loading ? (
+                    "Finding the zone at this location..."
+                ) : zone.name ? (
+                    <>
+                        Measured against the border of{" "}
+                        <span className="font-semibold text-foreground">
+                            {zone.name}
+                        </span>
+                        .
+                    </>
+                ) : (
+                    "No zone found at this admin level — try a different one."
+                )}
+            </p>
+        </>
+    );
+};
 
 export const MeasuringQuestionComponent = ({
     data,
@@ -133,6 +214,14 @@ export const MeasuringQuestionComponent = ({
         case "consulate":
         case "park":
             questionSpecific = <HidingZoneClickNotice />;
+            break;
+        case "admin-measure":
+            questionSpecific = (
+                <AdminZoneControls
+                    data={data}
+                    disabled={!data.drag || $isLoading}
+                />
+            );
             break;
         case "custom-measure":
             if (data.drag) {

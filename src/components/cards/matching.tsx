@@ -7,6 +7,7 @@ import { toast } from "react-toastify";
 import { CandidatePlayToggles } from "@/components/CandidatePlayToggles";
 import { QuestionCard } from "@/components/cards/base";
 import {
+    ADMIN_LEVEL_OPTIONS,
     applyLatLng,
     CustomInitChoiceDialog,
     DrawingEnableNotice,
@@ -398,17 +399,7 @@ export const MatchingQuestionComponent = ({
                     <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                         <Select
                             trigger="OSM Zone"
-                            options={{
-                                2: "Admin L2 (country)",
-                                3: "Admin L3 (region/borough in some areas)",
-                                4: "Admin L4 (state/province/county in some areas)",
-                                5: "Admin L5 (county/city in some areas)",
-                                6: "Admin L6 (NYC boroughs / county district in some areas)",
-                                7: "Admin L7 (district/borough in some areas)",
-                                8: "Admin L8 (city/town in many areas)",
-                                9: "Admin L9 (city subdivision/neighborhood)",
-                                10: "Admin L10 (small local subdivision)",
-                            }}
+                            options={ADMIN_LEVEL_OPTIONS}
                             value={data.cat.adminLevel.toString()}
                             onValueChange={(value) =>
                                 questionModified(

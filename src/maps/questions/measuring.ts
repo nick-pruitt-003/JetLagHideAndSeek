@@ -11,6 +11,7 @@ import type {
 } from "geojson";
 import memoize from "lodash/memoize";
 import uniqBy from "lodash/uniqBy";
+import { toast } from "react-toastify";
 
 import {
     hiderMode,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/context";
 import {
     fetchCoastlinesForMeasuring,
+    findAdminBoundary,
     findPlacesInZone,
     findPlacesSpecificInZone,
     OVERPASS_MAJOR_CITY_FILTER,
@@ -51,9 +53,58 @@ import {
 import type {
     HomeGameMeasuringQuestions,
     MeasuringQuestion,
+    MeasuringQuestionWithAdminZone,
     MeasuringQuestionWithFacilityOsmRefs,
 } from "@/maps/schema";
 import { HOME_GAME_FACILITY_TYPES } from "@/maps/schema";
+
+/** Admin level an `admin-measure` question is asked about; L4 ≈ state/province. */
+export const DEFAULT_MEASURING_ADMIN_LEVEL = 4;
+
+const adminLevelFor = (question: MeasuringQuestion) =>
+    (question as MeasuringQuestionWithAdminZone).cat?.adminLevel ??
+    DEFAULT_MEASURING_ADMIN_LEVEL;
+
+/**
+ * The polygon of the admin zone containing the question's point, at the level
+ * the question asks about. Cached per point+level so the card's zone-name
+ * readout and the boundary calculation share one Overpass round trip.
+ */
+const findAdminZoneBoundary = memoize(
+    async (question: MeasuringQuestion) =>
+        findAdminBoundary(question.lat, question.lng, adminLevelFor(question)),
+    (question: MeasuringQuestion) =>
+        `${question.lat.toFixed(6)},${question.lng.toFixed(6)},${adminLevelFor(question)}`,
+);
+
+/**
+ * The border of an admin zone as line features. The answer measures distance to
+ * the zone's EDGE, so the ring(s) are what get buffered — not the filled area.
+ * A MultiPolygon yields one line feature per ring.
+ */
+export const adminBorderFeatures = (
+    boundary: Feature<Polygon | MultiPolygon>,
+): Feature<LineString | MultiLineString>[] => {
+    const border = turf.polygonToLine(boundary);
+
+    return (
+        border.type === "FeatureCollection" ? border.features : [border]
+    ) as Feature<LineString | MultiLineString>[];
+};
+
+/** English name of that zone, for display on the card. */
+export const findAdminZoneName = async (question: MeasuringQuestion) => {
+    const boundary = await findAdminZoneBoundary(question);
+    if (!boundary) return null;
+
+    const properties = boundary.properties ?? {};
+
+    return (
+        (properties["name:en"] as string | undefined) ??
+        (properties.name as string | undefined) ??
+        null
+    );
+};
 
 /**
  * Facility questions measure against every point at once, so the points are
@@ -384,6 +435,21 @@ export const determineMeasuringBoundary = async (
             ).features;
 
             return [highSpeedBase(features)];
+        }
+        case "admin-measure": {
+            const boundary = await findAdminZoneBoundary(question);
+
+            if (!boundary) {
+                toast.error(
+                    `No admin level ${adminLevelFor(question)} boundary covers this location. Try a different level.`,
+                    { toastId: "admin-measure-no-boundary" },
+                );
+                return [turf.multiPolygon([])];
+            }
+
+            return adminBorderFeatures(
+                boundary as Feature<Polygon | MultiPolygon>,
+            );
         }
         case "coastline": {
             /**

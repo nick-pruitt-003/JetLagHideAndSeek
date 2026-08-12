@@ -119,6 +119,22 @@ export const questionCardControls = (data: {
     setHidden: (hidden: boolean) => questionModified((data.hidden = hidden)),
 });
 
+/**
+ * OSM admin-level labels for the zone/border pickers. Level meanings vary by
+ * country, hence the "in some areas" hedging.
+ */
+export const ADMIN_LEVEL_OPTIONS: Record<string, string> = {
+    2: "Admin L2 (country)",
+    3: "Admin L3 (region/borough in some areas)",
+    4: "Admin L4 (state/province/county in some areas)",
+    5: "Admin L5 (county/city in some areas)",
+    6: "Admin L6 (NYC boroughs / county district in some areas)",
+    7: "Admin L7 (district/borough in some areas)",
+    8: "Admin L8 (city/town in many areas)",
+    9: "Admin L9 (city subdivision/neighborhood)",
+    10: "Admin L10 (small local subdivision)",
+};
+
 /** Writes back whichever of the two coordinates the picker changed. */
 export const applyLatLng =
     (data: { lat: number; lng: number }) =>

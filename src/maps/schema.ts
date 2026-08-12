@@ -184,6 +184,19 @@ export const tentacleQuestionSchema = z.union([
     tentacleQuestionSpecificSchemaOne.describe("1 Mile (Typically)"),
 ]);
 
+/** OSM administrative levels the zone questions can be asked about. */
+const adminLevelSchema = z.union([
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+    z.literal(6),
+    z.literal(7),
+    z.literal(8),
+    z.literal(9),
+    z.literal(10),
+]);
+
 /**
  * The whole-territory facility variants. Matching and measuring both offer
  * every one of these, so they are declared once.
@@ -281,19 +294,7 @@ const zoneMatchingQuestionsSchema = baseMatchingQuestionSchema.extend({
             .describe("Zone Starts With Same Letter Question"),
     ]),
     cat: z
-        .object({
-            adminLevel: z.union([
-                z.literal(2),
-                z.literal(3),
-                z.literal(4),
-                z.literal(5),
-                z.literal(6),
-                z.literal(7),
-                z.literal(8),
-                z.literal(9),
-                z.literal(10),
-            ]),
-        })
+        .object({ adminLevel: adminLevelSchema })
         .default(() => ({ adminLevel: 3 }) as { adminLevel: 3 }),
 });
 
@@ -355,9 +356,17 @@ const ordinaryMeasuringQuestionSchema = baseMeasuringQuestionSchema.extend({
             z
                 .literal("highspeed-measure-shinkansen")
                 .describe("High-Speed Rail Question"),
+            z
+                .literal("admin-measure")
+                .describe("Admin Zone Border Question"),
             ...fullFacilityLiterals,
         ])
         .default("pick-type"),
+    /**
+     * Only the `admin-measure` type reads this; it is optional so the other
+     * ordinary measuring types don't carry a dead field in saved/shared JSON.
+     */
+    cat: z.object({ adminLevel: adminLevelSchema }).optional(),
 });
 
 const hidingZoneMeasuringQuestionsSchema = baseMeasuringQuestionSchema.extend({
@@ -435,6 +444,12 @@ export type CustomMeasuringQuestion = z.infer<
     typeof customMeasuringQuestionSchema
 >;
 export type MeasuringQuestion = z.infer<typeof measuringQuestionSchema>;
+/** OSM admin level a zone/border question is asked about. */
+export type AdminLevel = z.infer<typeof adminLevelSchema>;
+/** Union-safe access to the optional admin-zone category on measuring types. */
+export type MeasuringQuestionWithAdminZone = MeasuringQuestion & {
+    cat?: { adminLevel: AdminLevel };
+};
 export type MeasuringQuestionWithFacilityOsmRefs = MeasuringQuestion & {
     disabledFacilityOsmRefs?: string[];
 };
