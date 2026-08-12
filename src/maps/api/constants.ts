@@ -13,15 +13,26 @@ const proxy = (url: string): string =>
     import.meta.env.DEV ? url : `/api/proxy-api?url=${encodeURIComponent(url)}`;
 
 /**
- * Interpreter endpoints tried in order. kumi is primary: across repeated
- * benchmarks (NY-state and Westchester-County station queries) it returned
- * complete data fastest (~24-38s), while private.coffee was slower and
- * sometimes 504'd after 70s+, and the canonical overpass-api.de routinely
- * 504s under load against the Railway IP. So: kumi → private.coffee → de.
- * The app retries down the list, so a slow/failed primary still recovers.
+ * Interpreter endpoints. These are RACED in parallel (see
+ * `overpassFetchStickyOrRace`), so list position is not a priority — whichever
+ * mirror answers ok first wins and becomes sticky. The list is therefore about
+ * which mirrors are worth racing at all, not about ordering.
+ *
+ * Historical Railway-IP benchmarks (NY-state and Westchester-County station
+ * queries): kumi returned complete data fastest (~24-38s), private.coffee was
+ * slower and sometimes 504'd after 70s+, and the canonical overpass-api.de
+ * routinely 504s under load against the Railway IP.
+ *
+ * maps.mail.ru was added after 2026-08-11 spot checks (from a laptop IP, so not
+ * directly comparable to the Railway numbers above) where it served an NYC
+ * station query in ~1.3s with byte-identical results, while kumi failed twice
+ * in a row (25s timeout, then 504). Racing means a mail.ru outage costs
+ * nothing — the other three are still in flight.
+ *
  * Cache keys stay {@link OVERPASS_API}?data=… across mirrors.
  */
 export const OVERPASS_INTERPRETER_URLS: readonly string[] = [
+    proxy("https://maps.mail.ru/osm/tools/overpass/api/interpreter"),
     proxy("https://overpass.kumi.systems/api/interpreter"),
     proxy(OVERPASS_API_FALLBACK),
     proxy(OVERPASS_API),
@@ -107,11 +118,7 @@ export const ICON_COLOR_LABELS = {
 
 export const LOCATION_FIRST_TAG: {
     [key in APILocations]:
-        | "amenity"
-        | "tourism"
-        | "leisure"
-        | "diplomatic"
-        | "natural";
+        "amenity" | "tourism" | "leisure" | "diplomatic" | "natural";
 } = {
     aquarium: "tourism",
     hospital: "amenity",

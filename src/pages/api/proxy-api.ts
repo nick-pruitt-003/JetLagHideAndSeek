@@ -1,6 +1,7 @@
 /**
  * Server-side proxy for external APIs that ad blockers commonly block:
- *   - Overpass API  (overpass-api.de, overpass.private.coffee, overpass.kumi.systems)
+ *   - Overpass API  (overpass-api.de, overpass.private.coffee,
+ *                   overpass.kumi.systems, maps.mail.ru)
  *   - Nominatim     (nominatim.openstreetmap.org)
  *   - Photon        (photon.komoot.io)
  *
@@ -21,6 +22,7 @@ const ALLOWED_HOSTS = [
     "overpass-api.de",
     "overpass.private.coffee",
     "overpass.kumi.systems",
+    "maps.mail.ru", // Overpass mirror at /osm/tools/overpass/api/interpreter
     "nominatim.openstreetmap.org",
     "photon.komoot.io",
 ];
@@ -213,10 +215,7 @@ async function handleRequest(request: Request, url: URL): Promise<Response> {
     }
 
     if (buf === TOO_LARGE) {
-        return jsonError(
-            413,
-            `Response exceeds cap of ${MAX_BYTES} bytes.`,
-        );
+        return jsonError(413, `Response exceeds cap of ${MAX_BYTES} bytes.`);
     }
 
     const headers = new Headers({
@@ -261,7 +260,8 @@ async function fetchAllowlisted(
             // (gateway timeout) rather than a generic 502 bad gateway. A client
             // abort raises AbortError — still reported, though the client is
             // usually gone by then.
-            const isTimeout = err instanceof Error && err.name === "TimeoutError";
+            const isTimeout =
+                err instanceof Error && err.name === "TimeoutError";
             return {
                 ok: false,
                 status: isTimeout ? 504 : 502,
