@@ -885,8 +885,7 @@ export async function applyQuestionFilters({
                     continue;
                 } else {
                     const nid = nearestTrainStation.properties.id as
-                        | string
-                        | undefined;
+                        string | undefined;
                     if (!nid || !nid.includes("/")) {
                         toast?.warning(
                             "Nearest station has no OSM id; skipping 'same train line' filter.",

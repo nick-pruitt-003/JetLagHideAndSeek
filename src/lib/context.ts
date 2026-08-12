@@ -362,11 +362,7 @@ export const reachabilityMaxWalkLegMinutes = persistentAtom<number>(
 // Preset IDs are resolved to a concrete Date at query time by
 // `resolveDeparturePreset`. "custom" uses `reachabilityDepartureCustomISO`.
 export type ReachabilityDeparturePreset =
-    | "now"
-    | "weekday-9am"
-    | "saturday-noon"
-    | "tonight-6pm"
-    | "custom";
+    "now" | "weekday-9am" | "saturday-noon" | "tonight-6pm" | "custom";
 export const reachabilityDeparturePreset =
     persistentAtom<ReachabilityDeparturePreset>(
         gameKey("reachabilityDeparturePreset"),

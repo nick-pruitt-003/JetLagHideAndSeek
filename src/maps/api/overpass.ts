@@ -508,8 +508,7 @@ export const parseNominatimBoundaryPayload = (
             if (!entry || typeof entry !== "object") return null;
             const r = entry as Record<string, unknown>;
             const geom = r.geojson as
-                | { type: string; coordinates: unknown }
-                | undefined;
+                { type: string; coordinates: unknown } | undefined;
             if (!geom || typeof geom !== "object") return null;
             if (geom.type !== "Polygon" && geom.type !== "MultiPolygon") {
                 return null;

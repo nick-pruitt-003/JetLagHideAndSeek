@@ -54,27 +54,23 @@ const NON_PASSENGER_NAMES: ReadonlySet<string> = new Set([
 const BUNDLED_STATIONS: BundledStation[] = [
     ...NYC_MAJOR_SUBWAY_STATIONS.filter(
         (s) => !NON_PASSENGER_NAMES.has(s.name),
-    ).map(
-        (s): BundledStation => ({
-            name: s.name,
-            lat: s.lat,
-            lng: s.lng,
-            id: `bundled/subway-${slugifyStationName(s.name)}-${s.lat}-${s.lng}`,
-        }),
-    ),
+    ).map((s): BundledStation => ({
+        name: s.name,
+        lat: s.lat,
+        lng: s.lng,
+        id: `bundled/subway-${slugifyStationName(s.name)}-${s.lat}-${s.lng}`,
+    })),
     ...METRO_AREA_RAIL_STATIONS.filter(
         (s) => !NON_PASSENGER_NAMES.has(s.name),
-    ).map(
-        (s): BundledStation => ({
-            name: s.name,
-            lat: s.lat,
-            lng: s.lng,
-            // `rail-` namespace + system keeps metro ids from ever colliding
-            // with the subway ids above, even if a future system lowercased
-            // to "subway".
-            id: `bundled/rail-${s.system.toLowerCase()}-${slugifyStationName(s.name)}-${s.lat}-${s.lng}`,
-        }),
-    ),
+    ).map((s): BundledStation => ({
+        name: s.name,
+        lat: s.lat,
+        lng: s.lng,
+        // `rail-` namespace + system keeps metro ids from ever colliding
+        // with the subway ids above, even if a future system lowercased
+        // to "subway".
+        id: `bundled/rail-${s.system.toLowerCase()}-${slugifyStationName(s.name)}-${s.lat}-${s.lng}`,
+    })),
 ];
 
 /** Total bundled stations (subway + metro rail), unfiltered. */

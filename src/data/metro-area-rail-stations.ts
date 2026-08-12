@@ -7,13 +7,7 @@
  */
 
 type RailSystem =
-    | "LIRR"
-    | "MNR"
-    | "NJT"
-    | "NJLR"
-    | "SEPTA"
-    | "Amtrak"
-    | "HartfordLine";
+    "LIRR" | "MNR" | "NJT" | "NJLR" | "SEPTA" | "Amtrak" | "HartfordLine";
 
 export interface MetroRailStation {
     name: string;
