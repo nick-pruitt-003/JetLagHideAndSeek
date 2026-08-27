@@ -20,7 +20,7 @@ overrides:
     js-yaml: "4.3.1" # GHSA-5p4m-2wfm-xmqj (quadratic CPU on !!omap)
     nanoid: "3.3.17" # GHSA-2v37-7h3g-55p8 (infinite loop on size 0)
     postcss: "8.5.23" # GHSA-fxqj-rqcc-2cmp (arbitrary .map read)
-    "@xmldom/xmldom": "0.8.13"
+    "@xmldom/xmldom": "0.8.15"
     serialize-javascript: "7.0.5"
     glob: "13.0.6"
     "@amcharts/amcharts5": "5.17.2"
