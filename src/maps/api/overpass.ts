@@ -1842,6 +1842,176 @@ out ids;
     return heritageNodeIdsFromElements(data.elements);
 };
 
+/**
+ * A bus stop node together with the set of distinct bus lines serving it.
+ * Lines are collected from two sources and unioned:
+ *   1. `route=bus` / `route=trolleybus` relations that reference the node
+ *      as a member (deduped by `ref` so the two directional relations of a
+ *      line count once), and
+ *   2. the stop's own `route_ref` tag ("B41;B44;B46"), which many mappers
+ *      maintain even where route relations are incomplete.
+ */
+export interface BusStopWithLines {
+    id: string;
+    lat: number;
+    lon: number;
+    name?: string;
+    lines: string[];
+}
+
+const busLineKeyFromRelation = (tags: Record<string, any>): string => {
+    const ref = String(tags?.ref ?? "").trim();
+    if (ref) return ref.toUpperCase();
+    const name = String(tags?.name ?? "").trim();
+    return name;
+};
+
+const busStopsFromElements = (
+    elements: any[] | undefined,
+): BusStopWithLines[] => {
+    const stops = new Map<
+        number,
+        BusStopWithLines & { lineSet: Set<string> }
+    >();
+    const relations: any[] = [];
+
+    for (const el of elements ?? []) {
+        if (el?.type === "relation") {
+            relations.push(el);
+            continue;
+        }
+        if (el?.type !== "node") continue;
+        if (typeof el.lat !== "number" || typeof el.lon !== "number") continue;
+        if (stops.has(el.id)) continue;
+        const tags = el.tags ?? {};
+        const lineSet = new Set<string>();
+        // route_ref is semicolon/comma-delimited line refs on the stop itself.
+        const routeRef = String(tags.route_ref ?? "").trim();
+        if (routeRef) {
+            for (const piece of routeRef.split(/[;,]/)) {
+                const key = piece.trim().toUpperCase();
+                if (key) lineSet.add(key);
+            }
+        }
+        stops.set(el.id, {
+            id: `node/${el.id}`,
+            lat: el.lat,
+            lon: el.lon,
+            name: tags["name:en"] || tags.name || undefined,
+            lines: [],
+            lineSet,
+        });
+    }
+
+    for (const rel of relations) {
+        const key = busLineKeyFromRelation(rel.tags ?? {});
+        if (!key) continue;
+        for (const member of rel.members ?? []) {
+            if (member?.type !== "node") continue;
+            const stop = stops.get(member.ref);
+            if (stop) stop.lineSet.add(key);
+        }
+    }
+
+    return [...stops.values()].map(({ lineSet, ...stop }) => ({
+        ...stop,
+        lines: [...lineSet].sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true }),
+        ),
+    }));
+};
+
+/** Stop selectors for the bus-hub query; every bus-served node flavor. */
+const BUS_STOP_FILTERS = [
+    '["highway"="bus_stop"]',
+    '["public_transport"="platform"]["bus"="yes"]',
+    '["public_transport"="stop_position"]["bus"="yes"]',
+];
+
+const busHubQuery = (stopBlock: string) => `
+[out:json][timeout:240][maxsize:536870912];
+(
+${stopBlock}
+)->.bus_stops;
+rel(bn.bus_stops)["type"="route"]["route"~"^(bus|trolleybus)$"];
+out body;
+.bus_stops out body;
+`;
+
+/**
+ * Fetch every bus stop in the current game scope along with the bus lines
+ * serving it. Relations come back with their full member lists (`out body`)
+ * so we can attribute lines to stops client-side; the response is chunky
+ * but cached under ZONE_CACHE like the station query.
+ */
+export const findBusStopsWithLinesInZone = async (): Promise<
+    BusStopWithLines[]
+> => {
+    const $polyGeoJSON = polyGeoJSON.get();
+
+    if ($polyGeoJSON) {
+        const poly = polyClauseStringForOverpass($polyGeoJSON);
+        const stopBlock = BUS_STOP_FILTERS.map(
+            (f) => `node${f}(poly:"${poly}");`,
+        ).join("\n");
+        const data = await getOverpassData(
+            busHubQuery(stopBlock),
+            "Finding bus stops and lines...",
+            CacheType.ZONE_CACHE,
+        );
+        return busStopsFromElements(data.elements);
+    }
+
+    const primaryLocation = mapGeoLocation.get();
+    const additionalLocations = additionalMapGeoLocations
+        .get()
+        .filter((entry) => entry.added)
+        .map((entry) => entry.location);
+    const allLocations = [primaryLocation, ...additionalLocations];
+
+    const queryForLocation = (osmId: number | string) => {
+        const stopBlock = BUS_STOP_FILTERS.map(
+            (f) => `node${f}(area.r0);`,
+        ).join("\n");
+        return `
+[out:json][timeout:240][maxsize:536870912];
+relation(${osmId});map_to_area->.r0;
+(
+${stopBlock}
+)->.bus_stops;
+rel(bn.bus_stops)["type"="route"]["route"~"^(bus|trolleybus)$"];
+out body;
+.bus_stops out body;
+`;
+    };
+
+    const runAll = async () => {
+        const merged: any[] = [];
+        const queries = allLocations.map((loc) =>
+            queryForLocation(loc.properties.osm_id),
+        );
+        for (let i = 0; i < queries.length; i += MULTI_AREA_PARALLEL_CHUNK) {
+            if (i > 0) {
+                await new Promise((r) =>
+                    setTimeout(r, MULTI_AREA_CHUNK_GAP_MS),
+                );
+            }
+            const chunk = queries.slice(i, i + MULTI_AREA_PARALLEL_CHUNK);
+            const parts = await Promise.all(
+                chunk.map((q) =>
+                    getOverpassData(q, undefined, CacheType.ZONE_CACHE),
+                ),
+            );
+            for (const p of parts) merged.push(...(p.elements ?? []));
+        }
+        return busStopsFromElements(dedupeOsmElements(merged));
+    };
+
+    return toast.promise(runAll(), {
+        pending: "Finding bus stops and lines...",
+    });
+};
+
 export const findPlacesSpecificInZone = async (
     location: `${QuestionSpecificLocation}`,
 ) => {

@@ -1,4 +1,5 @@
 export * from "@/maps/api/cache";
+export * from "@/maps/api/citibike";
 export * from "@/maps/api/constants";
 export * from "@/maps/api/geo";
 export * from "@/maps/api/geocode";

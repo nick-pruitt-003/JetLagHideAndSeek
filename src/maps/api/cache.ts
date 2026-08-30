@@ -126,7 +126,16 @@ export function directUrlFromProxied(url: string): string | null {
  * Overpass mirrors have no such UA requirement and serve CORS on errors;
  * they stay direct-first.
  */
-const PROXY_ONLY_HOSTS = new Set(["nominatim.openstreetmap.org"]);
+const PROXY_ONLY_HOSTS = new Set([
+    "nominatim.openstreetmap.org",
+    // The Citi Bike GBFS feed serves no Access-Control-Allow-Origin header
+    // (verified 2026-08: no ACAO even with an Origin request header), so a
+    // browser-direct fetch always CORS-fails — and that failure would flip
+    // `directNetworkBlocked` and needlessly force every later request
+    // proxy-only for the rest of the page load.
+    "gbfs.citibikenyc.com",
+    "gbfs.lyft.com",
+]);
 
 /** True when this reconstructed direct URL is allowed to skip the proxy. */
 export function directFetchAllowed(directUrl: string): boolean {

@@ -37,6 +37,7 @@ import {
     defaultUnit,
     disabledStations,
     displayHidingZonesOptions,
+    enableBusHubs,
     followMe,
     hiderMode,
     hidingRadius,
@@ -279,6 +280,10 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
 
             if (typeof geojson.includeDefaultStations === "boolean") {
                 includeDefaultStations.set(geojson.includeDefaultStations);
+            }
+
+            if (typeof geojson.busHubs === "boolean") {
+                enableBusHubs.set(geojson.busHubs);
             }
 
             if (geojson.permanentOverlay) {

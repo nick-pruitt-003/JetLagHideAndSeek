@@ -48,6 +48,7 @@ import {
     displayHidingZones,
     displayHidingZonesOptions,
     displayHidingZonesStyle,
+    enableBusHubs as enableBusHubsAtom,
     excludeHeritageRailways as excludeHeritageRailwaysAtom,
     hidingRadius,
     hidingRadiusUnits,
@@ -63,6 +64,7 @@ import {
     reachabilityClassifications,
     reachabilityOverrides as reachabilityOverridesAtom,
     reachabilityResult as reachabilityResultAtom,
+    showCitiBikeStations as showCitiBikeStationsAtom,
     trainStations,
     triggerLocalRefresh,
     useBundledStations as useBundledStationsAtom,
@@ -79,6 +81,8 @@ import type { TransitStop } from "@/lib/transit/types";
 import { cn } from "@/lib/utils";
 import {
     BLANK_GEOJSON,
+    fetchCitiBikeStations,
+    findBusStopsWithLinesInZone,
     findHeritageRailwayMemberNodeIds,
     findPlacesInZone,
     findPlacesSpecificInZone,
@@ -93,7 +97,11 @@ import {
 import osmtogeojson from "@/maps/api/osm-to-geojson";
 import {
     applyQuestionFilters,
+    buildBusHubComplexes,
     buildCirclesFromPlaces,
+    BUS_HUB_CLUSTER_MILES,
+    BUS_HUB_MIN_LINES,
+    BUS_HUB_MIN_RAIL_DISTANCE_MILES,
     cullCirclesAgainstZone,
     extractStationLabel,
     extractStationName,
@@ -133,6 +141,8 @@ export const ZoneSidebar = () => {
     const activeStationsOnly = useStore(activeStationsOnlyAtom);
     const useBundledStations = useStore(useBundledStationsAtom);
     const excludeHeritageRailways = useStore(excludeHeritageRailwaysAtom);
+    const $enableBusHubs = useStore(enableBusHubsAtom);
+    const $showCitiBike = useStore(showCitiBikeStationsAtom);
     const $reachabilityResult = useStore(reachabilityResultAtom);
     const $reachabilityOverrides = useStore(reachabilityOverridesAtom);
     const leftSidebar = useStore(LeftSidebarContext);
@@ -351,6 +361,99 @@ export const ZoneSidebar = () => {
     }, [$questionFinishedMapData]);
 
     // ------------------------------------------------------------------
+    // Citi Bike overlay: docks inside the currently displayed hiding
+    // zones. Display-only — never affects which zones qualify. Reads the
+    // culled `stations` set from Phase B so docks in eliminated zones
+    // disappear along with them.
+    // ------------------------------------------------------------------
+    useEffect(() => {
+        if (!map) return;
+
+        const removeCitiBikeLayer = () => {
+            map.eachLayer((layer: any) => {
+                if (layer.citiBikeStations) {
+                    map.removeLayer(layer);
+                }
+            });
+        };
+        removeCitiBikeLayer();
+
+        if (!$showCitiBike || !$displayHidingZones || stations.length === 0) {
+            return;
+        }
+
+        let cancelled = false;
+        (async () => {
+            const bikes = await fetchCitiBikeStations();
+            if (cancelled) return;
+
+            const centers = stations.map(
+                (circle) =>
+                    circle.properties.geometry.coordinates as [number, number],
+            );
+            const radiusMiles = turf.convertLength(
+                $hidingRadius,
+                $hidingRadiusUnits as turf.Units,
+                "miles",
+            );
+            const nearby = bikes.filter((bike) =>
+                centers.some(
+                    ([lon, lat]) =>
+                        turf.distance([bike.lon, bike.lat], [lon, lat], {
+                            units: "miles",
+                        }) <= radiusMiles,
+                ),
+            );
+            if (cancelled) return;
+            if (nearby.length === 0) {
+                toast.info(
+                    "No Citi Bike docks inside the current hiding zones",
+                    { toastId: "no-citibike-docks" },
+                );
+                return;
+            }
+
+            const layer = L.layerGroup(
+                nearby.map((bike) =>
+                    L.marker([bike.lat, bike.lon], {
+                        icon: L.divIcon({
+                            html: `<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:#1d4ed8;border:1.5px solid white;font-size:12px;line-height:1;">🚲</div>`,
+                            className: "",
+                            iconSize: [20, 20],
+                            iconAnchor: [10, 10],
+                        }),
+                    }).bindPopup(
+                        `<b>${bike.name}</b> (Citi Bike)${
+                            bike.capacity != null
+                                ? `<br/>${bike.capacity} docks`
+                                : ""
+                        }`,
+                    ),
+                ),
+            );
+            (layer as any).citiBikeStations = true;
+            layer.addTo(map);
+        })().catch((err) => {
+            console.log("Citi Bike overlay failed:", err);
+            toast.error("Couldn't load Citi Bike stations", {
+                toastId: "citibike-failed",
+            });
+        });
+
+        return () => {
+            cancelled = true;
+            removeCitiBikeLayer();
+        };
+    }, [
+        map,
+        $showCitiBike,
+        $displayHidingZones,
+        stations,
+        $hidingRadius,
+        $hidingRadiusUnits,
+    ]);
+
+    // ------------------------------------------------------------------
     // Phase A: fetch + merge + circle-build.
     //
     // Runs only when the *scope* or *station options* change — NOT on
@@ -528,6 +631,28 @@ export const ZoneSidebar = () => {
                     }
                 }
 
+                // Bus hub house rule: stops pooling ≥5 distinct lines
+                // (clustered at 0.2 mi) become hiding zones, unless within
+                // 0.25 mi of a rail station already in `places`. Runs its
+                // own Overpass query, so it works alongside the bundled and
+                // custom station paths too.
+                if ($enableBusHubs) {
+                    try {
+                        const busStops = await findBusStopsWithLinesInZone();
+                        const hubs = buildBusHubComplexes(busStops, places);
+                        places = places.concat(hubs);
+                    } catch (err) {
+                        console.log("Bus hub fetch failed:", err);
+                        toast.warning(
+                            "Couldn't load bus hub data (Overpass may be rate-limited); bus hubs were NOT added.",
+                            {
+                                toastId: "bus-hub-failed",
+                                autoClose: 8000,
+                            },
+                        );
+                    }
+                }
+
                 if (mergeDuplicates) {
                     places = mergeDuplicateStation(
                         places,
@@ -582,6 +707,7 @@ export const ZoneSidebar = () => {
         mergeDuplicates,
         activeStationsOnly,
         excludeHeritageRailways,
+        $enableBusHubs,
         useBundledStations,
         $polyGeoJSON,
         $mapGeoLocation,
@@ -1103,6 +1229,66 @@ export const ZoneSidebar = () => {
                                 routes like Durango–Silverton or Cuyahoga Valley
                                 Scenic, where stations are still meaningful
                                 hiding spots.
+                            </SidebarMenuItem>
+                            <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
+                                <div className="flex flex-row items-center justify-between w-full">
+                                    <Label className="font-semibold font-poppins flex items-center gap-1.5">
+                                        Bus hubs as hiding zones?
+                                        {isHidingZoneLoading && (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin opacity-70" />
+                                        )}
+                                    </Label>
+                                    <Checkbox
+                                        checked={$enableBusHubs}
+                                        onCheckedChange={(v) =>
+                                            enableBusHubsAtom.set(!!v)
+                                        }
+                                        disabled={$isLoading}
+                                    />
+                                </div>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem
+                                className={cn(
+                                    MENU_ITEM_CLASSNAME,
+                                    "text-xs text-muted-foreground leading-4 -mt-1",
+                                )}
+                            >
+                                Adds bus stops with at least {BUS_HUB_MIN_LINES}{" "}
+                                distinct bus lines as hiding zones. Stops within{" "}
+                                {BUS_HUB_CLUSTER_MILES} mi of each other count
+                                as one complex (lines pooled), and complexes
+                                within {BUS_HUB_MIN_RAIL_DISTANCE_MILES} mi of a
+                                rail station are skipped. OSM has no frequency
+                                data — check the line list in the zone name to
+                                verify hourly-or-better service yourself.
+                            </SidebarMenuItem>
+                            <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
+                                <div className="flex flex-row items-center justify-between w-full">
+                                    <Label className="font-semibold font-poppins flex items-center gap-1.5">
+                                        Show Citi Bike docks in zones?
+                                        {isHidingZoneLoading && (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin opacity-70" />
+                                        )}
+                                    </Label>
+                                    <Checkbox
+                                        checked={$showCitiBike}
+                                        onCheckedChange={(v) =>
+                                            showCitiBikeStationsAtom.set(!!v)
+                                        }
+                                        disabled={$isLoading}
+                                    />
+                                </div>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem
+                                className={cn(
+                                    MENU_ITEM_CLASSNAME,
+                                    "text-xs text-muted-foreground leading-4 -mt-1",
+                                )}
+                            >
+                                Overlays Citi Bike docks that fall inside the
+                                displayed hiding zones (NYC area only).
+                                Display-only intel for bike strats — never
+                                changes which zones qualify.
                             </SidebarMenuItem>
                             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                                 <TransitSystemsButton

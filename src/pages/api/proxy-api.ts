@@ -25,6 +25,8 @@ const ALLOWED_HOSTS = [
     "maps.mail.ru", // Overpass mirror at /osm/tools/overpass/api/interpreter
     "nominatim.openstreetmap.org",
     "photon.komoot.io",
+    "gbfs.citibikenyc.com", // Citi Bike GBFS station feed
+    "gbfs.lyft.com", // Lyft-hosted GBFS mirror for the same feed
 ];
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB — Overpass responses can be large

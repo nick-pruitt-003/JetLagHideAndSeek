@@ -303,6 +303,29 @@ export const excludeHeritageRailways = persistentAtom<boolean>(
         decode: JSON.parse,
     },
 );
+// House rule: bus stops pooling ≥5 distinct bus lines (stops within 0.2 mi
+// clustered as one complex) count as hiding zones, but only when the complex
+// is more than 0.25 mi from the nearest rail station. Off by default; the
+// "service every 60 min" half of the rule isn't in OSM and must be checked
+// by hand (the zone name lists the lines to make that easy).
+export const enableBusHubs = persistentAtom<boolean>(
+    gameKey("enableBusHubs"),
+    false,
+    {
+        encode: JSON.stringify,
+        decode: JSON.parse,
+    },
+);
+// Display-only overlay: Citi Bike docks inside the current hiding zones.
+// Pure seeker/hider intel — never affects which zones qualify.
+export const showCitiBikeStations = persistentAtom<boolean>(
+    gameKey("showCitiBikeStations"),
+    false,
+    {
+        encode: JSON.stringify,
+        decode: JSON.parse,
+    },
+);
 
 // ---------------------------------------------------------------------------
 // Reachability / GTFS filtering
@@ -493,6 +516,7 @@ export const hidingZone = computed(
         useCustomStations,
         customStations,
         includeDefaultStations,
+        enableBusHubs,
         customPresets,
         permanentOverlay,
         startingLocation,
@@ -516,6 +540,7 @@ export const hidingZone = computed(
         useCustom,
         $customStations,
         includeDefault,
+        $enableBusHubs,
         presets,
         $permanentOverlay,
         $startingLocation,
@@ -552,6 +577,7 @@ export const hidingZone = computed(
                 useCustomStations: useCustom,
                 customStations: $customStations,
                 includeDefaultStations: includeDefault,
+                busHubs: $enableBusHubs,
                 presets: structuredClone(presets),
                 permanentOverlay: $permanentOverlay,
                 startingLocation: $startingLocation,
@@ -571,6 +597,7 @@ export const hidingZone = computed(
                 useCustomStations: useCustom,
                 customStations: $customStations,
                 includeDefaultStations: includeDefault,
+                busHubs: $enableBusHubs,
                 presets: structuredClone(presets),
                 permanentOverlay: $permanentOverlay,
                 startingLocation: $startingLocation,
