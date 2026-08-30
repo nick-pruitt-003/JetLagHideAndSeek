@@ -178,6 +178,7 @@ const EditablePointMarker = ({
 export const PolygonDraw = () => {
     const $drawingQuestionKey = useStore(drawingQuestionKey);
     const $questions = useStore(questions);
+    const $polyGeoJSON = useStore(polyGeoJSON);
 
     const featureRef = useRef<any | null>(null);
 
@@ -268,11 +269,42 @@ export const PolygonDraw = () => {
         }
     };
 
+    // Keep the draw layer in sync with the saved custom boundary. Without
+    // this, a drawn game area only lives as editable layers until the page
+    // reloads (or question-drawing mode clears them) — after which the
+    // boundary still applies but can't be edited, and drawing anything new
+    // silently REPLACES it. Hydrating polyGeoJSON back into the feature
+    // group makes the boundary round-trip: reload, tweak a vertex, add a
+    // second area, delete one — all through the same toolbar.
+    //
+    // No feedback loop: onChange → polyGeoJSON.set → this effect rebuilds
+    // equivalent layers, which fires no draw events.
     useEffect(() => {
-        if (featureRef.current && $drawingQuestionKey === -1) {
-            featureRef.current.clearLayers();
+        const group = featureRef.current;
+        if (!group) return;
+
+        if ($drawingQuestionKey !== -1) {
+            // Question-drawing mode shares this feature group; strip only
+            // the hydrated boundary layers (never React-managed children)
+            // so they can't leak into custom question geometry.
+            removeLayersExcept(group, (o) => !o.isBoundary);
+            return;
         }
-    }, [$drawingQuestionKey]);
+
+        group.clearLayers();
+        if (!$polyGeoJSON) return;
+        turf.flatten($polyGeoJSON).features.forEach((feature: any) => {
+            if (turf.getType(feature) !== "Polygon") return;
+            const latlngs = L.GeoJSON.coordsToLatLngs(
+                feature.geometry.coordinates,
+                1,
+            );
+            // Match the shapeOptions used when drawing fresh polygons.
+            group.addLayer(
+                L.polygon(latlngs, { fillOpacity: 0, isBoundary: true } as any),
+            );
+        });
+    }, [$drawingQuestionKey, $polyGeoJSON]);
 
     return (
         <FeatureGroup ref={featureRef}>
