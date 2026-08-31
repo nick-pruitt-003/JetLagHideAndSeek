@@ -62,6 +62,7 @@ import {
     save,
     showTutorial,
     startingLocation,
+    cartoApiKey,
     thunderforestApiKey,
     triggerLocalRefresh,
     useCustomStations,
@@ -95,6 +96,7 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
     const $planningMode = useStore(planningModeEnabled);
     const $baseTileLayer = useStore(baseTileLayer);
     const $thunderforestApiKey = useStore(thunderforestApiKey);
+    const $cartoApiKey = useStore(cartoApiKey);
     const $pastebinApiKey = useStore(pastebinApiKey);
     const $alwaysUsePastebin = useStore(alwaysUsePastebin);
     const $followMe = useStore(followMe);
@@ -522,6 +524,32 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     baseTileLayer.set(v as any)
                                 }
                             />
+                            <div className="flex flex-col items-center gap-2">
+                                <Label>CARTO API Key</Label>
+                                <Input
+                                    type="text"
+                                    value={$cartoApiKey}
+                                    id="cartoApiKey"
+                                    onChange={(e) =>
+                                        cartoApiKey.set(e.target.value)
+                                    }
+                                    placeholder="Enter your CARTO API key"
+                                />
+                                <p className="text-xs text-gray-500">
+                                    Needed for the CARTO map styles — without it
+                                    the tiles carry an &ldquo;API key
+                                    required&rdquo; watermark. Get a free key{" "}
+                                    <a
+                                        href="https://carto.com/basemaps/apikey"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-500 cursor-pointer"
+                                    >
+                                        here.
+                                    </a>
+                                </p>
+                            </div>
+                            <Separator className="bg-slate-300 w-[280px]" />
                             <div className="flex flex-col items-center gap-2">
                                 <Label>Thunderforest API Key</Label>
                                 <Input

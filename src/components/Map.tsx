@@ -26,6 +26,7 @@ import {
     animateMapMovements,
     autoZoom,
     baseTileLayer,
+    cartoApiKey,
     followMe,
     hiderMode,
     isLoading,
@@ -58,6 +59,15 @@ const CARTO_LIGHT_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png";
 const CARTO_DARK_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png";
+const CARTO_VOYAGER_RASTER =
+    "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+
+/**
+ * CARTO raster tiles stamp an "API KEY REQUIRED" watermark unless the request
+ * carries a `key` parameter, so append the user's key when one is configured.
+ */
+const withCartoKey = (url: string, key: string) =>
+    key ? `${url}?key=${encodeURIComponent(key)}` : url;
 
 /**
  * Default Leaflet GeoJSON fill (#3388ff @ 0.2) reads as a milky haze on dark
@@ -80,13 +90,17 @@ function eliminationMaskPathOptions(theme: string): L.PathOptions {
     };
 }
 
-const getTileLayer = (tileLayer: string, thunderforestApiKey: string) => {
+const getTileLayer = (
+    tileLayer: string,
+    thunderforestApiKey: string,
+    cartoApiKey: string,
+) => {
     switch (tileLayer) {
         case "light":
             return (
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="https://carto.com/attributions">CARTO</a>; Powered by Esri and Turf.js'
-                    url={CARTO_LIGHT_RASTER}
+                    url={withCartoKey(CARTO_LIGHT_RASTER, cartoApiKey)}
                     subdomains="abcd"
                     maxZoom={20} // This technically should be 6, but once the ratelimiting starts this can take over
                     minZoom={2}
@@ -98,7 +112,7 @@ const getTileLayer = (tileLayer: string, thunderforestApiKey: string) => {
             return (
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="https://carto.com/attributions">CARTO</a>; Powered by Esri and Turf.js'
-                    url={CARTO_DARK_RASTER}
+                    url={withCartoKey(CARTO_DARK_RASTER, cartoApiKey)}
                     subdomains="abcd"
                     maxZoom={20} // This technically should be 6, but once the ratelimiting starts this can take over
                     minZoom={2}
@@ -147,7 +161,7 @@ const getTileLayer = (tileLayer: string, thunderforestApiKey: string) => {
     return (
         <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="https://carto.com/attributions">CARTO</a>; Powered by Esri and Turf.js'
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+            url={withCartoKey(CARTO_VOYAGER_RASTER, cartoApiKey)}
             subdomains="abcd"
             maxZoom={20} // This technically should be 6, but once the ratelimiting starts this can take over
             minZoom={2}
@@ -251,6 +265,7 @@ export const Map = ({ className }: { className?: string }) => {
     const $questions = useStore(questions);
     const $baseTileLayer = useStore(baseTileLayer);
     const $thunderforestApiKey = useStore(thunderforestApiKey);
+    const $cartoApiKey = useStore(cartoApiKey);
     const $hiderMode = useStore(hiderMode);
     const $followMe = useStore(followMe);
     const $permanentOverlay = useStore(permanentOverlay);
@@ -699,7 +714,11 @@ export const Map = ({ className }: { className?: string }) => {
                     },
                 ]}
             >
-                {getTileLayer($baseTileLayer, $thunderforestApiKey)}
+                {getTileLayer(
+                    $baseTileLayer,
+                    $thunderforestApiKey,
+                    $cartoApiKey,
+                )}
                 <MapTapMenuHandler />
                 <MapPickModeHandler />
                 <DraggableMarkers />
@@ -730,7 +749,7 @@ export const Map = ({ className }: { className?: string }) => {
         // container. Same story for `className`, which is passed from
         // Astro as a static string.
 
-        [map, $baseTileLayer, $thunderforestApiKey],
+        [map, $baseTileLayer, $thunderforestApiKey, $cartoApiKey],
     );
 
     useEffect(() => {

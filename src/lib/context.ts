@@ -634,6 +634,20 @@ export const thunderforestApiKey = persistentAtom<string>(
         decode: (value: string) => value,
     },
 );
+/**
+ * CARTO raster basemaps now watermark unkeyed tiles ("API KEY REQUIRED"), so
+ * every CARTO style needs a `key` query parameter. Seeded from
+ * `PUBLIC_CARTO_API_KEY` at build time (see `.env`) so a deployment can ship a
+ * working default; users can still override it in the settings drawer.
+ */
+export const cartoApiKey = persistentAtom<string>(
+    "cartoApiKey",
+    import.meta.env.PUBLIC_CARTO_API_KEY ?? "",
+    {
+        encode: (value: string) => value,
+        decode: (value: string) => value,
+    },
+);
 export const followMe = persistentAtom<boolean>("followMe", false, {
     encode: JSON.stringify,
     decode: JSON.parse,
