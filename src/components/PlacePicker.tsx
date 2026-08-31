@@ -3,6 +3,7 @@ import {
     ChevronsUpDown,
     Loader2,
     LucideMinusSquare,
+    LucidePencilRuler,
     LucidePlusSquare,
     LucideX,
     Sparkles,
@@ -31,6 +32,7 @@ import {
     additionalMapGeoLocations,
     boundaryDetailLevel,
     DEFAULT_MAP_GEO_LOCATION,
+    drawingQuestionKey,
     hiderMode,
     isLoading,
     mapGeoJSON,
@@ -133,6 +135,43 @@ export const PlacePicker = ({
         } finally {
             setUpgradingBoundary(false);
         }
+    };
+
+    /**
+     * Kick off freehand territory drawing from the picker. The polygon tool
+     * itself lives in the leaflet-draw toolbar at the bottom-left of the map,
+     * which is easy to miss — searching for a place is where people look when
+     * the preset regions don't fit. Clicking the real toolbar button (rather
+     * than instantiating `L.Draw.Polygon` ourselves) keeps the drawn layer
+     * inside PolygonDraw's FeatureGroup, so `draw:created` still fires.
+     */
+    const startDrawingTerritory = () => {
+        // -1 is the "game boundary" drawing target, as opposed to a question's
+        // custom zone.
+        drawingQuestionKey.set(-1);
+        setOpen(false);
+
+        // Wait for the popover to unmount — it traps focus and covers the
+        // toolbar while open.
+        setTimeout(() => {
+            const button = document.querySelector<HTMLElement>(
+                ".leaflet-draw-draw-polygon",
+            );
+
+            if (!button) {
+                toast.error(
+                    "Couldn't open the drawing tool. Use the polygon button at the bottom left of the map.",
+                    { toastId: "draw-territory" },
+                );
+                return;
+            }
+
+            button.click();
+            toast.info(
+                "Click to place points; click the first point again to close the shape.",
+                { autoClose: 5000, toastId: "draw-territory" },
+            );
+        }, 0);
     };
 
     const canUpgradeBoundary =
@@ -374,6 +413,29 @@ export const PlacePicker = ({
                             </button>
                         </>
                     )}
+                    <Separator className="h-px shrink-0" />
+                    <button
+                        type="button"
+                        onClick={startDrawingTerritory}
+                        disabled={$isLoading}
+                        className={cn(
+                            "flex w-full items-start gap-2 px-3 py-2 text-left text-sm",
+                            "text-slate-700 transition-colors duration-150",
+                            "hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60",
+                        )}
+                        aria-label="Draw a custom territory on the map"
+                    >
+                        <LucidePencilRuler className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                        <span className="flex flex-col">
+                            <span className="font-medium">
+                                Draw custom territory
+                            </span>
+                            <span className="text-xs text-slate-500">
+                                Freehand boundary for campuses, neighborhoods,
+                                or anything the preset regions don&apos;t cover.
+                            </span>
+                        </span>
+                    </button>
                 </div>
                 <Separator className="h-px shrink-0" />
                 <Command
