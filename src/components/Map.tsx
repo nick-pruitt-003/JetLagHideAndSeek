@@ -70,6 +70,22 @@ const withCartoKey = (url: string, key: string) =>
     key ? `${url}?key=${encodeURIComponent(key)}` : url;
 
 /**
+ * Keyless CARTO tiles render watermarked rather than failing outright, which
+ * leaves an unusable-looking map with no explanation. Degrade to the standard
+ * OSM raster (no key, no quota) instead whenever a CARTO style is selected
+ * without a key — same fallback shape as the Thunderforest styles.
+ */
+const OSM_FALLBACK_TILE_LAYER = (
+    <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; Powered by Esri and Turf.js'
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        maxZoom={19}
+        minZoom={2}
+        noWrap
+    />
+);
+
+/**
  * Default Leaflet GeoJSON fill (#3388ff @ 0.2) reads as a milky haze on dark
  * basemaps and dulls markers / tiles; tune per basemap theme.
  */
@@ -95,6 +111,15 @@ const getTileLayer = (
     thunderforestApiKey: string,
     cartoApiKey: string,
 ) => {
+    if (
+        !cartoApiKey &&
+        (tileLayer === "light" ||
+            tileLayer === "dark" ||
+            tileLayer === "voyager")
+    ) {
+        return OSM_FALLBACK_TILE_LAYER;
+    }
+
     switch (tileLayer) {
         case "light":
             return (
@@ -157,6 +182,8 @@ const getTileLayer = (
                 />
             );
     }
+
+    if (!cartoApiKey) return OSM_FALLBACK_TILE_LAYER;
 
     return (
         <TileLayer

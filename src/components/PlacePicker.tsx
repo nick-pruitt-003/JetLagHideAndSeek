@@ -297,10 +297,27 @@ export const PlacePicker = ({
                                                     addedLocations[0].location,
                                                 );
                                             } else {
-                                                return toast.error(
-                                                    "Please add another location in addition mode.",
+                                                // Last region standing. The
+                                                // store is non-nullable, so
+                                                // "remove" means reset to the
+                                                // default placeholder region —
+                                                // which the search handler
+                                                // treats as empty, so the next
+                                                // place picked becomes the new
+                                                // primary instead of stacking
+                                                // onto the old one.
+                                                mapGeoLocation.set(
+                                                    DEFAULT_MAP_GEO_LOCATION,
+                                                );
+                                                additionalMapGeoLocations.set(
+                                                    [],
+                                                );
+                                                toast.info(
+                                                    "Region cleared — search below to pick a new one.",
                                                     {
                                                         autoClose: 3000,
+                                                        toastId:
+                                                            "place-cleared",
                                                     },
                                                 );
                                             }
