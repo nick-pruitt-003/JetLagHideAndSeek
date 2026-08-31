@@ -19,6 +19,13 @@ FROM base AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Astro inlines PUBLIC_* vars into the client bundle at BUILD time. Railway
+# service variables reach a Dockerfile build only through build args you
+# declare, so an undeclared key silently builds a keyless bundle (CARTO tiles
+# then fall back to OSM). Declare it here and keep it set in the Railway
+# service variables.
+ARG PUBLIC_CARTO_API_KEY=""
+ENV PUBLIC_CARTO_API_KEY=$PUBLIC_CARTO_API_KEY
 RUN NODE_OPTIONS='--max-old-space-size=4096' pnpm build
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
