@@ -15,7 +15,7 @@ import { useMemo } from "react";
 
 import { METRO_AREA_RAIL_STATIONS } from "@/data/metro-area-rail-stations";
 import { NYC_MAJOR_SUBWAY_STATIONS } from "@/data/nyc-subway-major-stations";
-import { playableTerritoryUnion } from "@/lib/context";
+import { playableTerritoryUnion, trainStations } from "@/lib/context";
 import { cn } from "@/lib/utils";
 
 // Combine subway + metro rail into one flat list for counting.
@@ -52,6 +52,12 @@ const SYSTEM_LABEL: Record<string, string> = {
 
 export const StationCountIndicator = () => {
     const $territory = useStore(playableTerritoryUnion);
+    // Live hiding-zone stations (the green circles) come from Overpass and
+    // cover EVERY [railway=station] node in the territory — a much larger set
+    // than the curated list counted above, which is why the two numbers
+    // disagree on screen. Surface it so the panel isn't read as "the circles
+    // are miscounted".
+    const $trainStations = useStore(trainStations);
 
     const { activeCount, bySystem } = useMemo(() => {
         // No territory yet (no questions applied) — show full count.
@@ -145,6 +151,16 @@ export const StationCountIndicator = () => {
                     }}
                 />
             </div>
+
+            {/* Live hiding-zone count — the green circles actually on the map */}
+            {$trainStations.length > 0 && (
+                <div className="mt-2 flex justify-between border-t border-white/10 pt-1.5 text-[11px] text-white/50">
+                    <span>Hiding zones on map</span>
+                    <span className="tabular-nums">
+                        {$trainStations.length.toLocaleString()}
+                    </span>
+                </div>
+            )}
 
             {/* Per-system breakdown (only when narrowed down enough to be readable) */}
             {activeSystems.length > 0 && activeSystems.length <= 6 && (
