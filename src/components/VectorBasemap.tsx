@@ -17,7 +17,7 @@ import { useMap } from "react-leaflet";
 import { toast } from "react-toastify";
 
 /** Style keys we expose, mapped to CARTO's GL style bundle names. */
-export const CARTO_VECTOR_STYLES = {
+const CARTO_VECTOR_STYLES = {
     voyager: "voyager-gl-style",
     positron: "positron-gl-style",
     "dark-matter": "dark-matter-gl-style",

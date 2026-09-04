@@ -623,8 +623,21 @@ export const autoZoom = persistentAtom<boolean>("autoZoom", true, {
 
 export const isLoading = atom<boolean>(false);
 
+/**
+ * The `*-vector` styles are CARTO's MapLibre GL basemaps (see
+ * `VectorBasemap.tsx`); the bare names are the raster tiles CARTO is
+ * retiring. Raster stays the default until vector has been through a game.
+ */
 export const baseTileLayer = persistentAtom<
-    "voyager" | "light" | "dark" | "transport" | "neighbourhood" | "osmcarto"
+    | "voyager"
+    | "light"
+    | "dark"
+    | "voyager-vector"
+    | "light-vector"
+    | "dark-vector"
+    | "transport"
+    | "neighbourhood"
+    | "osmcarto"
 >("baseTileLayer", "voyager");
 export const thunderforestApiKey = persistentAtom<string>(
     "thunderforestApiKey",

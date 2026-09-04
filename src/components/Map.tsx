@@ -21,6 +21,10 @@ import { LeafletFullScreenButton } from "@/components/LeafletFullScreenButton";
 import { MapPrint } from "@/components/MapPrint";
 import { PolygonDraw } from "@/components/PolygonDraw";
 import {
+    type CartoVectorStyle,
+    VectorBasemap,
+} from "@/components/VectorBasemap";
+import {
     additionalMapGeoLocations,
     addQuestion,
     animateMapMovements,
@@ -59,6 +63,13 @@ const CARTO_LIGHT_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png";
 const CARTO_DARK_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png";
+/** Basemap picker value -> CARTO GL style rendered by {@link VectorBasemap}. */
+const VECTOR_STYLE_BY_LAYER: Record<string, CartoVectorStyle | undefined> = {
+    "voyager-vector": "voyager",
+    "light-vector": "positron",
+    "dark-vector": "dark-matter",
+};
+
 const CARTO_VOYAGER_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
 
@@ -90,7 +101,9 @@ const OSM_FALLBACK_TILE_LAYER = (
  * basemaps and dulls markers / tiles; tune per basemap theme.
  */
 function eliminationMaskPathOptions(theme: string): L.PathOptions {
-    if (theme === "dark") {
+    // "dark" and "dark-vector" are the same cartography, so both need the
+    // dark-tuned mask fill.
+    if (theme.startsWith("dark")) {
         return {
             interactive: false,
             stroke: false,
@@ -111,6 +124,14 @@ const getTileLayer = (
     thunderforestApiKey: string,
     cartoApiKey: string,
 ) => {
+    // Vector styles render keyless today (CARTO enforces the key on raster
+    // only, so far), and VectorBasemap stamps the key on every request once
+    // one is configured — so unlike raster there is nothing to fall back from.
+    const vectorStyle = VECTOR_STYLE_BY_LAYER[tileLayer];
+    if (vectorStyle) {
+        return <VectorBasemap style={vectorStyle} apiKey={cartoApiKey} />;
+    }
+
     if (
         !cartoApiKey &&
         (tileLayer === "light" ||
@@ -594,6 +615,21 @@ export const Map = ({ className }: { className?: string }) => {
                 // Nominatim returns pre-simplified boundaries.
                 center={$mapGeoLocation.geometry.coordinates}
                 zoom={5}
+                // The raster TileLayers carry their own zoom limits; the GL
+                // layer has none, so the vector styles need them here. The
+                // bounds stand in for `noWrap`, which has no GL analogue —
+                // without them the world repeats horizontally when zoomed out.
+                {...(VECTOR_STYLE_BY_LAYER[$baseTileLayer]
+                    ? {
+                          minZoom: 2,
+                          maxZoom: 20,
+                          maxBounds: L.latLngBounds(
+                              L.latLng(-90, -180),
+                              L.latLng(90, 180),
+                          ),
+                          maxBoundsViscosity: 1,
+                      }
+                    : {})}
                 className={cn("w-full h-full", className)}
                 ref={leafletMapContext.set}
                 // @ts-expect-error Typing doesn't update from react-contextmenu
