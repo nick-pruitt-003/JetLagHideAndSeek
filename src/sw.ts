@@ -11,9 +11,12 @@
 //   * App shell (HTML/JS/CSS/fonts/images shipped with the build) —
 //     precached via `self.__SW_MANIFEST`. This is what makes the site
 //     boot offline.
-//   * Map tiles (Carto, OSM, Thunderforest) — StaleWhileRevalidate so
-//     previously-viewed tiles keep rendering offline, with aggressive
-//     expiration caps so we don't blow out storage.
+//   * Map tiles (Carto raster + vector, OSM, Thunderforest) —
+//     StaleWhileRevalidate so previously-viewed tiles keep rendering
+//     offline, with aggressive expiration caps so we don't blow out
+//     storage. Vector basemaps additionally need their style JSON,
+//     sprite and glyph ranges cached or they render blank/label-less
+//     offline; glyphs are immutable so they go CacheFirst.
 //   * Geocoders + boundary APIs (Photon, Nominatim) — SWR for offline
 //     reuse. Overpass is network-only (see runtime route) so production
 //     SW matches localhost behavior and avoids no-response failures.
@@ -59,6 +62,67 @@ const serwist = new Serwist({
             matcher: /^https:\/\/[a-d]\.basemaps\.cartocdn\.com\/.*/i,
             handler: new StaleWhileRevalidate({
                 cacheName: "tiles-cartocdn",
+                plugins: [
+                    new CacheableResponsePlugin({ statuses: [0, 200] }),
+                    new ExpirationPlugin({
+                        maxEntries: 2000,
+                        maxAgeSeconds: 30 * 24 * 60 * 60,
+                        maxAgeFrom: "last-used",
+                    }),
+                ],
+            }),
+        },
+        {
+            // CARTO vector basemaps — style JSON, the source TileJSON and the
+            // sprite sheet. These live on unsubdomained hosts the raster rule
+            // above never matches, so without this rule a vector basemap is
+            // entirely uncached and shows nothing offline. Requests carry
+            // `?key=`, so a rotated key simply misses the cache and refetches.
+            matcher: ({ url }: { url: URL }) =>
+                url.hostname === "basemaps.cartocdn.com" ||
+                (url.hostname === "tiles.basemaps.cartocdn.com" &&
+                    (url.pathname.startsWith("/gl/") ||
+                        url.pathname.startsWith("/vector/"))),
+            handler: new StaleWhileRevalidate({
+                cacheName: "carto-vector-style",
+                plugins: [
+                    new CacheableResponsePlugin({ statuses: [0, 200] }),
+                    new ExpirationPlugin({
+                        maxEntries: 30,
+                        maxAgeSeconds: 30 * 24 * 60 * 60,
+                        maxAgeFrom: "last-used",
+                    }),
+                ],
+            }),
+        },
+        {
+            // Glyph ranges (PBF fonts) for vector labels. Immutable per
+            // fontstack + codepoint range, and a session touches a few dozen,
+            // so cache-first with a long TTL — a missing glyph range means
+            // labels silently vanish from the map.
+            matcher: ({ url }: { url: URL }) =>
+                url.hostname === "tiles.basemaps.cartocdn.com" &&
+                url.pathname.startsWith("/fonts/"),
+            handler: new CacheFirst({
+                cacheName: "carto-vector-fonts",
+                plugins: [
+                    new CacheableResponsePlugin({ statuses: [0, 200] }),
+                    new ExpirationPlugin({
+                        maxEntries: 300,
+                        maxAgeSeconds: 365 * 24 * 60 * 60,
+                        maxAgeFrom: "last-used",
+                    }),
+                ],
+            }),
+        },
+        {
+            // Vector tiles themselves (.mvt). CARTO's data maxzoom is 14 and
+            // MapLibre overzooms past it, so a territory needs far fewer tiles
+            // than the raster equivalent even though each one is larger.
+            matcher:
+                /^https:\/\/tiles-[a-d]\.basemaps\.cartocdn\.com\/vectortiles\/.*/i,
+            handler: new StaleWhileRevalidate({
+                cacheName: "tiles-carto-vector",
                 plugins: [
                     new CacheableResponsePlugin({ statuses: [0, 200] }),
                     new ExpirationPlugin({
