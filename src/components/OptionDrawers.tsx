@@ -30,6 +30,7 @@ import {
     autoSave,
     autoZoom,
     baseTileLayer,
+    cartoApiKey,
     customInitPreference,
     customPresets,
     customStations,
@@ -62,7 +63,6 @@ import {
     save,
     showTutorial,
     startingLocation,
-    cartoApiKey,
     thunderforestApiKey,
     triggerLocalRefresh,
     useCustomStations,
@@ -515,6 +515,9 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     voyager: "CARTO Voyager",
                                     light: "CARTO Light",
                                     dark: "CARTO Dark",
+                                    "voyager-vector": "CARTO Voyager (vector)",
+                                    "light-vector": "CARTO Light (vector)",
+                                    "dark-vector": "CARTO Dark (vector)",
                                     transport: "Thunderforest Transport",
                                     neighbourhood:
                                         "Thunderforest Neighbourhood",
@@ -537,9 +540,12 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     placeholder="Enter your CARTO API key"
                                 />
                                 <p className="text-xs text-gray-500">
-                                    Needed for the CARTO map styles — without it
-                                    the tiles carry an &ldquo;API key
-                                    required&rdquo; watermark. Get a free key{" "}
+                                    Needed for the CARTO raster styles — without
+                                    it they fall back to plain OpenStreetMap
+                                    tiles. The vector styles work either way,
+                                    are sharper at high zoom, and are what CARTO
+                                    is moving to; the same key covers both. Get
+                                    a free key{" "}
                                     <a
                                         href="https://carto.com/basemaps/apikey"
                                         target="_blank"

@@ -21,6 +21,10 @@ import { LeafletFullScreenButton } from "@/components/LeafletFullScreenButton";
 import { MapPrint } from "@/components/MapPrint";
 import { PolygonDraw } from "@/components/PolygonDraw";
 import {
+    type CartoVectorStyle,
+    VectorBasemap,
+} from "@/components/VectorBasemap";
+import {
     additionalMapGeoLocations,
     addQuestion,
     animateMapMovements,
@@ -59,6 +63,13 @@ const CARTO_LIGHT_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png";
 const CARTO_DARK_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png";
+/** Basemap picker value -> CARTO GL style rendered by {@link VectorBasemap}. */
+const VECTOR_STYLE_BY_LAYER: Record<string, CartoVectorStyle | undefined> = {
+    "voyager-vector": "voyager",
+    "light-vector": "positron",
+    "dark-vector": "dark-matter",
+};
+
 const CARTO_VOYAGER_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
 
@@ -90,7 +101,9 @@ const OSM_FALLBACK_TILE_LAYER = (
  * basemaps and dulls markers / tiles; tune per basemap theme.
  */
 function eliminationMaskPathOptions(theme: string): L.PathOptions {
-    if (theme === "dark") {
+    // "dark" and "dark-vector" are the same cartography, so both need the
+    // dark-tuned mask fill.
+    if (theme.startsWith("dark")) {
         return {
             interactive: false,
             stroke: false,
@@ -111,6 +124,14 @@ const getTileLayer = (
     thunderforestApiKey: string,
     cartoApiKey: string,
 ) => {
+    // Vector styles render keyless today (CARTO enforces the key on raster
+    // only, so far), and VectorBasemap stamps the key on every request once
+    // one is configured — so unlike raster there is nothing to fall back from.
+    const vectorStyle = VECTOR_STYLE_BY_LAYER[tileLayer];
+    if (vectorStyle) {
+        return <VectorBasemap style={vectorStyle} apiKey={cartoApiKey} />;
+    }
+
     if (
         !cartoApiKey &&
         (tileLayer === "light" ||
@@ -882,6 +903,31 @@ export const Map = ({ className }: { className?: string }) => {
         // `followMeMarkerRef` and `geoWatchIdRef` are refs, not values;
         // including them in deps would be a hook-rules false positive.
     }, [$followMe, map]);
+
+    // The raster TileLayers carry their own zoom limits and `noWrap`; the GL
+    // layer has neither, so the vector styles need those constraints on the map
+    // itself. They can't ride on MapContainer — Leaflet reads its options once
+    // at creation and ignores later prop changes — so apply them imperatively
+    // whenever the basemap changes, and clear them again for raster.
+    useEffect(() => {
+        if (!map) return;
+
+        if (VECTOR_STYLE_BY_LAYER[$baseTileLayer]) {
+            map.setMinZoom(2);
+            map.setMaxZoom(20);
+            map.options.maxBoundsViscosity = 1;
+            map.setMaxBounds(
+                L.latLngBounds(L.latLng(-90, -180), L.latLng(90, 180)),
+            );
+        } else {
+            // `undefined` hands the limits back to whatever the active tile
+            // layer declares, which is where the raster styles set theirs.
+            map.setMinZoom(undefined as unknown as number);
+            map.setMaxZoom(undefined as unknown as number);
+            map.options.maxBoundsViscosity = 0;
+            map.setMaxBounds(null as unknown as L.LatLngBounds);
+        }
+    }, [map, $baseTileLayer]);
 
     // Re-style the elimination mask when the user switches basemap theme
     // without triggering a full refreshQuestions cycle.

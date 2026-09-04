@@ -175,6 +175,26 @@ const serwist = new Serwist({
             }),
         },
         {
+            // MapLibre's chunks are deliberately excluded from the precache
+            // manifest (see astro.config.mjs) so players on raster basemaps
+            // never download them. Cache them at runtime instead, so someone
+            // who does pick a vector basemap keeps it offline afterwards.
+            matcher: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>
+                sameOrigin &&
+                /maplibre-gl\.[^/]+\.(js|css)$/i.test(url.pathname),
+            handler: new CacheFirst({
+                cacheName: "maplibre-assets",
+                plugins: [
+                    new CacheableResponsePlugin({ statuses: [0, 200] }),
+                    new ExpirationPlugin({
+                        maxEntries: 10,
+                        maxAgeSeconds: 365 * 24 * 60 * 60,
+                        maxAgeFrom: "last-used",
+                    }),
+                ],
+            }),
+        },
+        {
             // Same-origin API routes (on Railway these are live node
             // endpoints; on GH Pages they 404 and the client falls back
             // to the public CORS proxy). NetworkFirst with a short

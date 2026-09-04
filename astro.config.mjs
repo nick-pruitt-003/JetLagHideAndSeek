@@ -158,6 +158,14 @@ const serwistIntegration = ({ disable }) => ({
                     // file under the prerender dir — not relevant to
                     // offline SW and not even in client/, but be safe.
                     "**/sessions/**",
+                    // MapLibre is ~1 MB raw and only loads when someone
+                    // picks a CARTO vector basemap (see VectorBasemap.tsx).
+                    // Precaching it would push that download onto every
+                    // player, defeating the dynamic import. A runtime rule
+                    // in src/sw.ts caches it for whoever actually uses it.
+                    "**/maplibre-gl.*.js",
+                    "**/maplibre-gl.*.css",
+                    "**/leaflet-maplibre-gl.*.js",
                 ],
                 maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
                 injectionPoint: "self.__SW_MANIFEST",
