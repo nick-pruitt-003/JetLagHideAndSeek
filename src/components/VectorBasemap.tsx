@@ -88,8 +88,10 @@ export const VectorBasemap = ({
                     // leaflet-easyprint screenshots the DOM via
                     // `canvas.toDataURL()`, which returns a transparent image
                     // for a WebGL canvas unless the drawing buffer is kept.
-                    // Without this the basemap prints blank.
-                    preserveDrawingBuffer: true,
+                    // Without this the basemap prints blank. MapLibre 5 moved
+                    // the WebGL context attributes here from the top level,
+                    // where the option is now silently ignored.
+                    canvasContextAttributes: { preserveDrawingBuffer: true },
                     transformRequest: cartoTransformRequest(apiKey),
                 } as any);
 

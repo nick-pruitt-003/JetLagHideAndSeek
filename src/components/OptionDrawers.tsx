@@ -541,9 +541,9 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                 />
                                 <p className="text-xs text-gray-500">
                                     Needed for the CARTO raster styles — without
-                                    it the tiles carry an &ldquo;API key
-                                    required&rdquo; watermark. The vector styles
-                                    are sharper at high zoom and are what CARTO
+                                    it they fall back to plain OpenStreetMap
+                                    tiles. The vector styles work either way,
+                                    are sharper at high zoom, and are what CARTO
                                     is moving to; the same key covers both. Get
                                     a free key{" "}
                                     <a
