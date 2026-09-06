@@ -659,6 +659,8 @@ export const baseTileLayer = persistentAtom<
     | "light-vector"
     | "dark-vector"
     | "transport"
+    | "transport-vector"
+    | "transport-dark-vector"
     | "neighbourhood"
     | "osmcarto"
 >("baseTileLayer", "voyager-vector");

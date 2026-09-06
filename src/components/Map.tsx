@@ -21,7 +21,10 @@ import { LeafletFullScreenButton } from "@/components/LeafletFullScreenButton";
 import { MapPrint } from "@/components/MapPrint";
 import { PolygonDraw } from "@/components/PolygonDraw";
 import {
+    cartoStyleUrl,
     type CartoVectorStyle,
+    thunderforestStyleUrl,
+    type ThunderforestVectorStyle,
     VectorBasemap,
 } from "@/components/VectorBasemap";
 import {
@@ -65,10 +68,26 @@ const CARTO_LIGHT_RASTER =
 const CARTO_DARK_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png";
 /** Basemap picker value -> CARTO GL style rendered by {@link VectorBasemap}. */
-const VECTOR_STYLE_BY_LAYER: Record<string, CartoVectorStyle | undefined> = {
+const CARTO_VECTOR_BY_LAYER: Record<string, CartoVectorStyle | undefined> = {
     "voyager-vector": "voyager",
     "light-vector": "positron",
     "dark-vector": "dark-matter",
+};
+
+/** Basemap picker value -> Thunderforest GL style. Neighbourhood is absent
+ *  because Thunderforest has no vector version of it. */
+const THUNDERFOREST_VECTOR_BY_LAYER: Record<
+    string,
+    ThunderforestVectorStyle | undefined
+> = {
+    "transport-vector": "transport",
+    "transport-dark-vector": "transport-dark",
+};
+
+/** Every picker value that renders through MapLibre rather than tile images. */
+const VECTOR_STYLE_BY_LAYER: Record<string, string | undefined> = {
+    ...CARTO_VECTOR_BY_LAYER,
+    ...THUNDERFOREST_VECTOR_BY_LAYER,
 };
 
 const CARTO_VOYAGER_RASTER =
@@ -117,7 +136,7 @@ const OSM_FALLBACK_TILE_LAYER = (
  */
 function eliminationMaskPathOptions(theme: string): L.PathOptions {
     // "dark" and "dark-vector" are the same cartography.
-    if (theme.startsWith("dark")) {
+    if (theme.startsWith("dark") || theme.includes("-dark")) {
         return {
             interactive: false,
             stroke: true,
@@ -147,9 +166,31 @@ const getTileLayer = (
     // Vector styles render keyless today (CARTO enforces the key on raster
     // only, so far), and VectorBasemap stamps the key on every request once
     // one is configured — so unlike raster there is nothing to fall back from.
-    const vectorStyle = VECTOR_STYLE_BY_LAYER[tileLayer];
-    if (vectorStyle) {
-        return <VectorBasemap style={vectorStyle} apiKey={cartoApiKey} />;
+    const cartoVectorStyle = CARTO_VECTOR_BY_LAYER[tileLayer];
+    if (cartoVectorStyle) {
+        return (
+            <VectorBasemap
+                styleUrl={cartoStyleUrl(cartoVectorStyle, cartoApiKey)}
+                apiKey={cartoApiKey}
+            />
+        );
+    }
+
+    // Thunderforest bakes the key into its style document, so without one
+    // there is nothing to render — same as their raster styles, which simply
+    // fall through to the default basemap below.
+    const thunderforestVectorStyle = THUNDERFOREST_VECTOR_BY_LAYER[tileLayer];
+    if (thunderforestVectorStyle && thunderforestApiKey) {
+        return (
+            <VectorBasemap
+                styleUrl={thunderforestStyleUrl(
+                    thunderforestVectorStyle,
+                    thunderforestApiKey,
+                )}
+                apiKey={thunderforestApiKey}
+                provider="thunderforest"
+            />
+        );
     }
 
     if (

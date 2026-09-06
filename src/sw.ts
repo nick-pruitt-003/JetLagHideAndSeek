@@ -167,6 +167,26 @@ const serwist = new Serwist({
             }),
         },
         {
+            // Thunderforest vector basemaps. Everything — style document,
+            // TileJSON, glyphs, sprites and .vector.pbf tiles — is served from
+            // api.thunderforest.com (the raster rule above only matches
+            // tile.thunderforest.com), with the key already baked into each
+            // URL by the style document.
+            matcher: ({ url }: { url: URL }) =>
+                url.hostname === "api.thunderforest.com",
+            handler: new StaleWhileRevalidate({
+                cacheName: "thunderforest-vector",
+                plugins: [
+                    new CacheableResponsePlugin({ statuses: [0, 200] }),
+                    new ExpirationPlugin({
+                        maxEntries: 2000,
+                        maxAgeSeconds: 30 * 24 * 60 * 60,
+                        maxAgeFrom: "last-used",
+                    }),
+                ],
+            }),
+        },
+        {
             // Photon geocoder — direct in dev, proxied in prod via /api/proxy-api.
             matcher: ({ url }: { url: URL }) =>
                 url.hostname === "photon.komoot.io" ||

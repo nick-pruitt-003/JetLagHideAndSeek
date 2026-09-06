@@ -518,9 +518,14 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     voyager: "CARTO Voyager (raster)",
                                     light: "CARTO Light (raster)",
                                     dark: "CARTO Dark (raster)",
-                                    transport: "Thunderforest Transport",
+                                    "transport-vector":
+                                        "Thunderforest Transport",
+                                    "transport-dark-vector":
+                                        "Thunderforest Transport Dark",
+                                    transport:
+                                        "Thunderforest Transport (raster)",
                                     neighbourhood:
-                                        "Thunderforest Neighbourhood",
+                                        "Thunderforest Neighbourhood (raster)",
                                     osmcarto: "OpenStreetMap Carto",
                                 }}
                                 value={$baseTileLayer}

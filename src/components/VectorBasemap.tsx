@@ -25,11 +25,35 @@ const CARTO_VECTOR_STYLES = {
 
 export type CartoVectorStyle = keyof typeof CARTO_VECTOR_STYLES;
 
+/** Thunderforest GL styles. Only some of their maps have a vector version —
+ *  Neighbourhood, for one, is raster-only. */
+const THUNDERFOREST_VECTOR_STYLES = {
+    transport: "transport",
+    "transport-dark": "transport-dark",
+    landscape: "landscape",
+    atlas: "atlas",
+} as const;
+
+export type ThunderforestVectorStyle = keyof typeof THUNDERFOREST_VECTOR_STYLES;
+
 const CARTO_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="https://carto.com/attributions">CARTO</a>; Powered by Esri and Turf.js';
 
-const styleUrl = (style: CartoVectorStyle) =>
-    `https://basemaps.cartocdn.com/gl/${CARTO_VECTOR_STYLES[style]}/style.json`;
+const THUNDERFOREST_ATTRIBUTION =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="http://www.thunderforest.com/">Thunderforest</a>; Powered by Esri and Turf.js';
+
+export const cartoStyleUrl = (style: CartoVectorStyle, apiKey: string) =>
+    `https://basemaps.cartocdn.com/gl/${CARTO_VECTOR_STYLES[style]}/style.json${
+        apiKey ? `?key=${encodeURIComponent(apiKey)}` : ""
+    }`;
+
+/** Thunderforest bakes the key into the tile/glyph/sprite URLs inside the
+ *  style document, so unlike CARTO nothing has to be stamped on afterwards. */
+export const thunderforestStyleUrl = (
+    style: ThunderforestVectorStyle,
+    apiKey: string,
+) =>
+    `https://api.thunderforest.com/styles/${THUNDERFOREST_VECTOR_STYLES[style]}/style.json?apikey=${encodeURIComponent(apiKey)}`;
 
 /**
  * CARTO enforces the API key on raster today and has said vector is next. The
@@ -48,11 +72,13 @@ const cartoTransformRequest =
     };
 
 export const VectorBasemap = ({
-    style,
+    styleUrl,
     apiKey,
+    provider = "carto",
 }: {
-    style: CartoVectorStyle;
+    styleUrl: string;
     apiKey: string;
+    provider?: "carto" | "thunderforest";
 }) => {
     const map = useMap() as LeafletMap;
 
@@ -90,13 +116,14 @@ export const VectorBasemap = ({
                 if (cancelled) return;
 
                 layer = L.maplibreGL({
-                    style: `${styleUrl(style)}${
-                        apiKey ? `?key=${encodeURIComponent(apiKey)}` : ""
-                    }`,
+                    style: styleUrl,
                     // The bridge builds the GL map with `attributionControl:
                     // false`, so CARTO's required attribution has to ride on
                     // the Leaflet layer instead.
-                    attribution: CARTO_ATTRIBUTION,
+                    attribution:
+                        provider === "thunderforest"
+                            ? THUNDERFOREST_ATTRIBUTION
+                            : CARTO_ATTRIBUTION,
                     // `pointer-events: none` on the canvas — every click still
                     // reaches Leaflet, so contextmenu, draw and pick mode are
                     // unaffected.
@@ -108,7 +135,10 @@ export const VectorBasemap = ({
                     // the WebGL context attributes here from the top level,
                     // where the option is now silently ignored.
                     canvasContextAttributes: { preserveDrawingBuffer: true },
-                    transformRequest: cartoTransformRequest(apiKey),
+                    transformRequest:
+                        provider === "carto"
+                            ? cartoTransformRequest(apiKey)
+                            : undefined,
                 } as any);
 
                 layer!.addTo(map);
@@ -138,7 +168,7 @@ export const VectorBasemap = ({
             cancelled = true;
             if (layer) map.removeLayer(layer);
         };
-    }, [map, style, apiKey]);
+    }, [map, styleUrl, apiKey, provider]);
 
     return null;
 };
