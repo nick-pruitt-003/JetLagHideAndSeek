@@ -14,7 +14,7 @@ export interface StationLike {
 }
 
 /** OSM tags live on the inner station Point feature, not the circle. */
-export const stationTags = (station: StationLike) =>
+const stationTags = (station: StationLike) =>
     station.properties?.properties ?? {};
 
 /**

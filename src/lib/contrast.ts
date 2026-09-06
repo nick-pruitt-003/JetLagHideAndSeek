@@ -45,7 +45,9 @@ export const contrastRatio = (a: Rgb | string, b: Rgb | string): number => {
     return (hi + 0.05) / (lo + 0.05);
 };
 
-/** WCAG 2.1 AA minimums. */
+/**
+ * WCAG 2.1 AA minimums. Large text (>=18pt, or >=14pt bold) also passes at 3:1,
+ * but nothing here draws text that big, so only these two are defined.
+ */
 export const AA_TEXT = 4.5;
-export const AA_LARGE_TEXT = 3;
 export const AA_NON_TEXT = 3;
