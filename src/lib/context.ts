@@ -237,6 +237,21 @@ onSet(trainStations, ({ newValue }) => {
     });
 });
 
+/**
+ * Highest hiding-station count seen this game, used as the denominator in the
+ * station gauge. Captured from the live {@link trainStations} set the first
+ * time zones load, so "N of M" compares against the real starting field rather
+ * than a bundled reference list. Cleared by the New Game reset.
+ */
+export const stationCountBaseline = persistentAtom<number | null>(
+    gameKey("stationCountBaseline"),
+    null,
+    {
+        encode: JSON.stringify,
+        decode: JSON.parse,
+    },
+);
+
 export const useCustomStations = persistentAtom<boolean>(
     gameKey("useCustomStations"),
     false,

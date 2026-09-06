@@ -1,26 +1,34 @@
 /**
- * Persistent map overlay showing how many metro-area rail + subway stations
- * remain inside the current playable territory.
+ * Persistent map overlay showing how many stations a hider could still be at
+ * inside the current playable territory.
+ *
+ * The count comes from {@link trainStations} — the same Overpass-derived set
+ * that draws the hiding-zone circles on the map, i.e. *every* qualifying
+ * station, since a team may hide at any subway station rather than only the
+ * major ones. Until zones have been computed there is nothing live to count,
+ * so the panel falls back to a bundled regional rail list and says so.
  *
  * Covers: NYC Subway, MTA LIRR, MTA Metro-North, NJ Transit (rail + light
  * rail), SEPTA, Amtrak, and Hartford Line — useful for NJ/NY/CT/PA games.
- *
- * Shows the full station count on load (before any question), then updates
- * reactively every time a question is applied and the territory is recomputed.
  */
 
 import { useStore } from "@nanostores/react";
 import * as turf from "@turf/turf";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { METRO_AREA_RAIL_STATIONS } from "@/data/metro-area-rail-stations";
 import { NYC_MAJOR_SUBWAY_STATIONS } from "@/data/nyc-subway-major-stations";
-import { playableTerritoryUnion, trainStations } from "@/lib/context";
+import {
+    playableTerritoryUnion,
+    stationCountBaseline,
+    trainStations,
+} from "@/lib/context";
+import { countByOperator } from "@/lib/station-grouping";
 import { cn } from "@/lib/utils";
 
-// Combine subway + metro rail into one flat list for counting.
+// Bundled fallback, used only before any hiding zones have been computed.
 // Each entry just needs { lat, lng } for the point-in-polygon check.
-const ALL_STATIONS = [
+const FALLBACK_STATIONS = [
     ...NYC_MAJOR_SUBWAY_STATIONS.map((s) => ({
         lat: s.lat,
         lng: s.lng,
@@ -33,14 +41,14 @@ const ALL_STATIONS = [
     })),
 ];
 
-const TOTAL = ALL_STATIONS.length;
+const FALLBACK_TOTAL = FALLBACK_STATIONS.length;
 
-// Display-friendly label for each system key. Subway is the curated
-// "major stations" set (same data the bundled-stations flow uses), not the
-// full ~470-station system — qualify the label so the count isn't read as
-// "every subway station".
+// Display-friendly label for each bundled system key. The subway entry is the
+// curated "major stations" list (the one the random-start draw uses), which is
+// a fraction of the ~470-station system — qualify it so the fallback number
+// isn't read as "every subway station".
 const SYSTEM_LABEL: Record<string, string> = {
-    Subway: "NYC Subway (major)",
+    Subway: "NYC Subway (major only)",
     LIRR: "LIRR",
     MNR: "Metro-North",
     NJT: "NJ Transit",
@@ -52,27 +60,39 @@ const SYSTEM_LABEL: Record<string, string> = {
 
 export const StationCountIndicator = () => {
     const $territory = useStore(playableTerritoryUnion);
-    // Live hiding-zone stations (the green circles) come from Overpass and
-    // cover EVERY [railway=station] node in the territory — a much larger set
-    // than the curated list counted above, which is why the two numbers
-    // disagree on screen. Surface it so the panel isn't read as "the circles
-    // are miscounted".
     const $trainStations = useStore(trainStations);
+    const $baseline = useStore(stationCountBaseline);
 
-    const { activeCount, bySystem } = useMemo(() => {
-        // No territory yet (no questions applied) — show full count.
-        if (!$territory) {
-            const bySystem: Record<string, number> = {};
-            for (const s of ALL_STATIONS) {
-                bySystem[s.system] = (bySystem[s.system] ?? 0) + 1;
-            }
-            return { activeCount: TOTAL, bySystem };
+    const liveCount = $trainStations.length;
+    const hasLiveStations = liveCount > 0;
+
+    // Remember the largest field this game has had so the gauge has an honest
+    // denominator. Territory can also grow (a region added mid-setup), so take
+    // the max rather than only the first value seen.
+    useEffect(() => {
+        if (!hasLiveStations) return;
+        if ($baseline === null || liveCount > $baseline) {
+            stationCountBaseline.set(liveCount);
         }
+    }, [hasLiveStations, liveCount, $baseline]);
+
+    const fallback = useMemo(() => {
+        if (hasLiveStations) return null;
 
         const bySystem: Record<string, number> = {};
-        let activeCount = 0;
+        if (!$territory) {
+            for (const s of FALLBACK_STATIONS) {
+                bySystem[s.system] = (bySystem[s.system] ?? 0) + 1;
+            }
+            return {
+                activeCount: FALLBACK_TOTAL,
+                total: FALLBACK_TOTAL,
+                bySystem,
+            };
+        }
 
-        for (const s of ALL_STATIONS) {
+        let activeCount = 0;
+        for (const s of FALLBACK_STATIONS) {
             if (
                 turf.booleanPointInPolygon(
                     turf.point([s.lng, s.lat]),
@@ -83,12 +103,24 @@ export const StationCountIndicator = () => {
                 bySystem[s.system] = (bySystem[s.system] ?? 0) + 1;
             }
         }
+        return { activeCount, total: FALLBACK_TOTAL, bySystem };
+    }, [$territory, hasLiveStations]);
 
-        return { activeCount, bySystem };
-    }, [$territory]);
+    const byOperator = useMemo(
+        () => (hasLiveStations ? countByOperator($trainStations) : {}),
+        [$trainStations, hasLiveStations],
+    );
 
-    const pct = activeCount / TOTAL;
-    const eliminated = TOTAL - activeCount;
+    const activeCount = hasLiveStations
+        ? liveCount
+        : (fallback?.activeCount ?? 0);
+    const total = hasLiveStations
+        ? Math.max($baseline ?? liveCount, liveCount)
+        : (fallback?.total ?? 0);
+    const breakdown = hasLiveStations ? byOperator : (fallback?.bySystem ?? {});
+
+    const pct = total > 0 ? activeCount / total : 0;
+    const eliminated = Math.max(total - activeCount, 0);
 
     const countColor =
         pct > 0.5
@@ -104,17 +136,18 @@ export const StationCountIndicator = () => {
               ? "bg-yellow-500"
               : "bg-red-500";
 
-    // Only show per-system rows that still have stations remaining
-    const activeSystems = Object.entries(bySystem)
+    // Only show rows that still have stations remaining, largest first.
+    const rows = Object.entries(breakdown)
         .filter(([, n]) => n > 0)
-        .sort(([, a], [, b]) => b - a);
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5);
 
     return (
         <div className="rounded-xl bg-black/80 px-3 py-2 shadow-lg backdrop-blur-sm select-none min-w-[200px]">
             {/* Header */}
             <div className="flex items-baseline justify-between gap-3 mb-1">
                 <span className="text-xs font-medium text-white/60 tracking-wide uppercase">
-                    Rail + Subway
+                    {hasLiveStations ? "Hiding stations" : "Rail + Subway"}
                 </span>
                 <span className="text-xs text-white/50">
                     −{eliminated.toLocaleString()} eliminated
@@ -132,7 +165,7 @@ export const StationCountIndicator = () => {
                     {activeCount.toLocaleString()}
                 </span>
                 <span className="text-sm text-white/60">
-                    / {TOTAL.toLocaleString()} stations
+                    / {total.toLocaleString()} stations
                 </span>
             </div>
 
@@ -152,26 +185,24 @@ export const StationCountIndicator = () => {
                 />
             </div>
 
-            {/* Live hiding-zone count — the green circles actually on the map */}
-            {$trainStations.length > 0 && (
-                <div className="mt-2 flex justify-between border-t border-white/10 pt-1.5 text-[11px] text-white/50">
-                    <span>Hiding zones on map</span>
-                    <span className="tabular-nums">
-                        {$trainStations.length.toLocaleString()}
-                    </span>
+            {!hasLiveStations && (
+                <div className="mt-2 border-t border-white/10 pt-1.5 text-[11px] text-white/40">
+                    Reference list — open hiding zones for the live count
                 </div>
             )}
 
-            {/* Per-system breakdown (only when narrowed down enough to be readable) */}
-            {activeSystems.length > 0 && activeSystems.length <= 6 && (
+            {/* Per-operator (live) or per-system (fallback) breakdown */}
+            {rows.length > 0 && (
                 <div className="mt-2 space-y-0.5 border-t border-white/10 pt-1.5">
-                    {activeSystems.map(([sys, n]) => (
+                    {rows.map(([key, n]) => (
                         <div
-                            key={sys}
-                            className="flex justify-between text-[11px] text-white/50"
+                            key={key}
+                            className="flex justify-between gap-3 text-[11px] text-white/50"
                         >
-                            <span>{SYSTEM_LABEL[sys] ?? sys}</span>
-                            <span className="tabular-nums">{n}</span>
+                            <span className="truncate">
+                                {SYSTEM_LABEL[key] ?? key}
+                            </span>
+                            <span className="tabular-nums shrink-0">{n}</span>
                         </div>
                     ))}
                 </div>

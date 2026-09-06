@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { BusStopWithLines } from "@/maps/api/overpass";
 import type { StationPlace } from "@/maps/api/types";
 import {
-    BUS_HUB_MIN_LINES,
     buildBusHubComplexes,
+    BUS_HUB_MIN_LINES,
 } from "@/maps/geo-utils/busHubs";
 
 // ~0.1 mi of latitude / ~0.25 mi of latitude in degrees.

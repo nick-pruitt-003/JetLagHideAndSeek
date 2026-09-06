@@ -41,6 +41,7 @@ import {
     polyGeoJSON,
     questions,
     startingLocation,
+    stationCountBaseline,
 } from "@/lib/context";
 import { GAME_SLOT, newGameUrl } from "@/lib/game-slot";
 import { withTask } from "@/lib/progress";
@@ -565,6 +566,8 @@ export const PlacePicker = ({
                             additionalMapGeoLocations.set([]);
                             hiderMode.set(false);
                             startingLocation.set(false);
+                            // The station gauge's denominator is per-game.
+                            stationCountBaseline.set(null);
                             clearCache(CacheType.ZONE_CACHE);
                         }}
                     >
