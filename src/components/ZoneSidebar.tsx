@@ -43,6 +43,7 @@ import {
     additionalMapGeoLocations,
     animateMapMovements,
     autoZoom,
+    baseTileLayer,
     customStations as customStationsAtom,
     disabledStations,
     displayHidingZones,
@@ -213,6 +214,16 @@ export const ZoneSidebar = () => {
 
         removeHidingZones();
 
+        // CARTO's dark basemaps swallow the default palette: #008000 circles
+        // and black station icons are nearly invisible against them. Read the
+        // basemap at draw time (rather than closing over a render-time value)
+        // so redrawing zones after a theme switch picks the right palette up.
+        const darkBasemap = baseTileLayer.get().startsWith("dark");
+        const reachableGreen = darkBasemap
+            ? { color: "#4ade80", fillColor: "#22c55e", fillOpacity: 0.25 } // green-400 / green-500
+            : { color: "green", fillColor: "green", fillOpacity: 0.2 };
+        const defaultTint = darkBasemap ? "text-green-300" : "text-black";
+
         const stationColor = (
             feature: any,
         ): {
@@ -224,11 +235,7 @@ export const ZoneSidebar = () => {
                 feature?.properties?.properties?.id;
             const info = statusLookup?.(osmId);
             if (!info) {
-                return {
-                    color: "green",
-                    fillColor: "green",
-                    fillOpacity: 0.2,
-                };
+                return reachableGreen;
             }
             // Overrides win visually too, so the user sees their own
             // decision reflected on the map.
@@ -248,11 +255,7 @@ export const ZoneSidebar = () => {
             }
             switch (info.status) {
                 case "reachable":
-                    return {
-                        color: "green",
-                        fillColor: "green",
-                        fillOpacity: 0.2,
-                    };
+                    return reachableGreen;
                 case "unknown":
                     return {
                         color: "#d97706", // amber-600
@@ -271,11 +274,7 @@ export const ZoneSidebar = () => {
         const geoJsonLayer = L.geoJSON(geoJSONData, {
             style: statusLookup
                 ? (feature) => stationColor(feature)
-                : {
-                      color: "green",
-                      fillColor: "green",
-                      fillOpacity: 0.2,
-                  },
+                : reachableGreen,
             onEachFeature: nonOverlappingStations
                 ? (feature, layer) => {
                       layer.on("click", async () => {
@@ -296,7 +295,7 @@ export const ZoneSidebar = () => {
                     ?.properties?.properties?.id;
                 const info = statusLookup?.(osmId);
                 const tint = !info
-                    ? "text-black"
+                    ? defaultTint
                     : info.override === "include"
                       ? "text-emerald-600"
                       : info.override === "exclude"
@@ -305,7 +304,7 @@ export const ZoneSidebar = () => {
                           ? "text-amber-500"
                           : info.status === "unreachable"
                             ? "text-red-500"
-                            : "text-black";
+                            : defaultTint;
 
                 const marker = L.marker(latlng, {
                     icon: L.divIcon({
