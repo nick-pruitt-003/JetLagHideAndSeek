@@ -2,6 +2,8 @@ import { useStore } from "@nanostores/react";
 import {
     ChevronsUpDown,
     Loader2,
+    LucideCircle,
+    LucideCircleDashed,
     LucideMinusSquare,
     LucidePencilRuler,
     LucidePlusSquare,
@@ -26,6 +28,12 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useTutorialStep } from "@/hooks/use-tutorial-step";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
@@ -266,121 +274,167 @@ export const PlacePicker = ({
                         $polyGeoJSON && "bg-muted text-muted-foreground",
                     )}
                 >
-                    {[
-                        { location: $mapGeoLocation, added: true, base: true },
-                        ...$additionalMapGeoLocations,
-                    ].map((location, index) => (
-                        <div
-                            className={cn(
-                                "flex justify-between items-center px-3 py-2",
-                                index % 2 === 1 && "bg-slate-100",
-                                !$polyGeoJSON &&
-                                    "transition-colors duration-200 hover:bg-slate-200",
-                            )}
-                            key={placeRowKey(location)}
-                        >
-                            <span className="w-[78%] text-ellipsis">
-                                {determineName(location.location)}
-                            </span>
+                    <TooltipProvider delayDuration={300}>
+                        {[
+                            {
+                                location: $mapGeoLocation,
+                                added: true,
+                                base: true,
+                            },
+                            ...$additionalMapGeoLocations,
+                        ].map((location, index) => (
                             <div
                                 className={cn(
-                                    "flex flex-row gap-2 *:stroke-[1.5]",
-                                    $polyGeoJSON && "hidden",
+                                    "flex justify-between items-center px-3 py-2",
+                                    index % 2 === 1 && "bg-slate-100",
+                                    !$polyGeoJSON &&
+                                        "transition-colors duration-200 hover:bg-slate-200",
                                 )}
+                                key={placeRowKey(location)}
                             >
-                                {!location.base &&
-                                    (location.added ? (
-                                        <LucidePlusSquare
-                                            className={cn(
-                                                "text-green-700 cursor-pointer",
-                                                $isLoading &&
-                                                    "text-muted-foreground cursor-not-allowed",
-                                            )}
-                                            onClick={() =>
-                                                setPlaceInPlay(location, false)
-                                            }
-                                        />
-                                    ) : (
-                                        <LucideMinusSquare
-                                            className={cn(
-                                                "text-red-700 cursor-pointer",
-                                                $isLoading &&
-                                                    "text-muted-foreground cursor-not-allowed",
-                                            )}
-                                            onClick={() =>
-                                                setPlaceInPlay(location, true)
-                                            }
-                                        />
-                                    ))}
-                                <LucideX
+                                <div className="flex w-[78%] min-w-0 items-center gap-2.5">
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            {/* Two overlapping discs: both solid
+                                            when the region is part of the
+                                            playable area, the trailing one
+                                            hollow when it has been cut out. */}
+                                            <span
+                                                className="relative h-5 w-8 shrink-0 text-slate-700"
+                                                aria-label={
+                                                    location.added
+                                                        ? "Included location"
+                                                        : "Excluded location"
+                                                }
+                                            >
+                                                <LucideCircle className="absolute size-5 fill-current" />
+                                                {location.added ? (
+                                                    <LucideCircle className="absolute left-2.5 size-5 fill-current" />
+                                                ) : (
+                                                    <LucideCircleDashed className="absolute left-2.5 size-5 rounded-full bg-white" />
+                                                )}
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            {location.added
+                                                ? "Included location"
+                                                : "Excluded location"}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <span className="truncate">
+                                        {determineName(location.location)}
+                                    </span>
+                                </div>
+                                <div
                                     className={cn(
-                                        "scale-[90%] text-gray-700 cursor-pointer hover:bg-slate-300 rounded-full transition-colors duration-200",
+                                        "flex flex-row gap-2 *:stroke-[1.5]",
+                                        $polyGeoJSON && "hidden",
                                     )}
-                                    onClick={() => {
-                                        if (location.base) {
-                                            const addedLocations =
-                                                $additionalMapGeoLocations.filter(
-                                                    (x) => x.added === true,
-                                                );
+                                >
+                                    {!location.base &&
+                                        (location.added ? (
+                                            <LucidePlusSquare
+                                                className={cn(
+                                                    "text-green-700 cursor-pointer",
+                                                    $isLoading &&
+                                                        "text-muted-foreground cursor-not-allowed",
+                                                )}
+                                                onClick={() =>
+                                                    setPlaceInPlay(
+                                                        location,
+                                                        false,
+                                                    )
+                                                }
+                                            />
+                                        ) : (
+                                            <LucideMinusSquare
+                                                className={cn(
+                                                    "text-red-700 cursor-pointer",
+                                                    $isLoading &&
+                                                        "text-muted-foreground cursor-not-allowed",
+                                                )}
+                                                onClick={() =>
+                                                    setPlaceInPlay(
+                                                        location,
+                                                        true,
+                                                    )
+                                                }
+                                            />
+                                        ))}
+                                    <LucideX
+                                        className={cn(
+                                            "scale-[90%] text-gray-700 cursor-pointer hover:bg-slate-300 rounded-full transition-colors duration-200",
+                                        )}
+                                        onClick={() => {
+                                            if (location.base) {
+                                                const addedLocations =
+                                                    $additionalMapGeoLocations.filter(
+                                                        (x) => x.added === true,
+                                                    );
 
-                                            if (addedLocations.length > 0) {
-                                                addedLocations[0].base = true;
-                                                additionalMapGeoLocations.set(
-                                                    additionalMapGeoLocations
-                                                        .get()
-                                                        .filter(
-                                                            (x) =>
-                                                                x.base !== true,
-                                                        ),
-                                                );
-                                                mapGeoLocation.set(
-                                                    addedLocations[0].location,
-                                                );
+                                                if (addedLocations.length > 0) {
+                                                    addedLocations[0].base = true;
+                                                    additionalMapGeoLocations.set(
+                                                        additionalMapGeoLocations
+                                                            .get()
+                                                            .filter(
+                                                                (x) =>
+                                                                    x.base !==
+                                                                    true,
+                                                            ),
+                                                    );
+                                                    mapGeoLocation.set(
+                                                        addedLocations[0]
+                                                            .location,
+                                                    );
+                                                } else {
+                                                    // Last region standing. The
+                                                    // store is non-nullable, so
+                                                    // "remove" means reset to the
+                                                    // default placeholder region —
+                                                    // which the search handler
+                                                    // treats as empty, so the next
+                                                    // place picked becomes the new
+                                                    // primary instead of stacking
+                                                    // onto the old one.
+                                                    mapGeoLocation.set(
+                                                        DEFAULT_MAP_GEO_LOCATION,
+                                                    );
+                                                    additionalMapGeoLocations.set(
+                                                        [],
+                                                    );
+                                                    toast.info(
+                                                        "Region cleared — search below to pick a new one.",
+                                                        {
+                                                            autoClose: 3000,
+                                                            toastId:
+                                                                "place-cleared",
+                                                        },
+                                                    );
+                                                }
                                             } else {
-                                                // Last region standing. The
-                                                // store is non-nullable, so
-                                                // "remove" means reset to the
-                                                // default placeholder region —
-                                                // which the search handler
-                                                // treats as empty, so the next
-                                                // place picked becomes the new
-                                                // primary instead of stacking
-                                                // onto the old one.
-                                                mapGeoLocation.set(
-                                                    DEFAULT_MAP_GEO_LOCATION,
-                                                );
                                                 additionalMapGeoLocations.set(
-                                                    [],
-                                                );
-                                                toast.info(
-                                                    "Region cleared — search below to pick a new one.",
-                                                    {
-                                                        autoClose: 3000,
-                                                        toastId:
-                                                            "place-cleared",
-                                                    },
+                                                    $additionalMapGeoLocations.filter(
+                                                        (x) =>
+                                                            osmRef(
+                                                                x.location,
+                                                            ) !==
+                                                            osmRef(
+                                                                location.location,
+                                                            ),
+                                                    ),
                                                 );
                                             }
-                                        } else {
-                                            additionalMapGeoLocations.set(
-                                                $additionalMapGeoLocations.filter(
-                                                    (x) =>
-                                                        osmRef(x.location) !==
-                                                        osmRef(
-                                                            location.location,
-                                                        ),
-                                                ),
-                                            );
-                                        }
 
-                                        mapGeoJSON.set(null);
-                                        polyGeoJSON.set(null);
-                                        questions.set([...questions.get()]);
-                                    }}
-                                />
+                                            mapGeoJSON.set(null);
+                                            polyGeoJSON.set(null);
+                                            questions.set([...questions.get()]);
+                                        }}
+                                    />
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                    </TooltipProvider>
                     {canUpgradeBoundary && (
                         <>
                             <Separator className="h-px shrink-0" />
