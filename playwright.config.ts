@@ -18,7 +18,12 @@ export default defineConfig({
     // width or hadn't hydrated yet. `astro preview` serves the built artifact
     // (real stylesheet, no on-demand compile), which is also what deploys.
     webServer: {
-        command: "pnpm build && pnpm preview --host 127.0.0.1",
+        // `astro preview` daemonizes (it writes .astro/preview.log and the
+        // foreground process returns immediately), which Playwright reports as
+        // "Process from config.webServer exited early". Run the Node adapter's
+        // entry directly so the server stays in the foreground.
+        command:
+            "pnpm build && cross-env HOST=127.0.0.1 PORT=4321 node ./dist/server/entry.mjs",
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
