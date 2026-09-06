@@ -23,7 +23,8 @@ import { PolygonDraw } from "@/components/PolygonDraw";
 import {
     cartoStyleUrl,
     type CartoVectorStyle,
-    OPENFREEMAP_STYLE_URL,
+    type OpenFreeMapStyle,
+    openFreeMapStyleUrl,
     thunderforestStyleUrl,
     type ThunderforestVectorStyle,
     VectorBasemap,
@@ -83,6 +84,13 @@ const THUNDERFOREST_VECTOR_BY_LAYER: Record<
 > = {
     "transport-vector": "transport",
     "transport-dark-vector": "transport-dark",
+    "atlas-vector": "atlas",
+};
+
+/** Basemap picker value -> OpenFreeMap GL style. Keyless. */
+const OPENFREEMAP_BY_LAYER: Record<string, OpenFreeMapStyle | undefined> = {
+    "openfreemap-liberty": "liberty",
+    "openfreemap-dark": "dark",
 };
 
 /**
@@ -190,10 +198,11 @@ const getTileLayer = (
     // OpenFreeMap needs no key at all. It is a basemap option in its own
     // right, not the no-key fallback: OSM_FALLBACK_TILE_LAYER stays raster so
     // the emergency path never depends on WebGL or on maplibre loading.
-    if (tileLayer === "openfreemap-liberty") {
+    const openFreeMapStyle = OPENFREEMAP_BY_LAYER[tileLayer];
+    if (openFreeMapStyle) {
         return (
             <VectorBasemap
-                styleUrl={OPENFREEMAP_STYLE_URL}
+                styleUrl={openFreeMapStyleUrl(openFreeMapStyle)}
                 apiKey=""
                 provider="openfreemap"
             />
@@ -256,6 +265,21 @@ const getTileLayer = (
                 return (
                     <TileLayer
                         url={`https://tile.thunderforest.com/transport/{z}/{x}/{y}.png?apikey=${thunderforestApiKey}`}
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="http://www.thunderforest.com/">Thunderforest</a>; Powered by Esri and Turf.js'
+                        maxZoom={22}
+                        minZoom={2}
+                        noWrap
+                    />
+                );
+            break;
+
+        case "pioneer":
+            // Raster only: https://api.thunderforest.com/styles/pioneer/
+            // style.json 404s, so there is no vector version to offer.
+            if (thunderforestApiKey)
+                return (
+                    <TileLayer
+                        url={`https://tile.thunderforest.com/pioneer/{z}/{x}/{y}.png?apikey=${thunderforestApiKey}`}
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="http://www.thunderforest.com/">Thunderforest</a>; Powered by Esri and Turf.js'
                         maxZoom={22}
                         minZoom={2}

@@ -44,8 +44,15 @@ const CARTO_ATTRIBUTION =
  * limit — the closest thing to a vector equivalent of the OSM standard raster
  * style, which has no official GL port.
  */
-export const OPENFREEMAP_STYLE_URL =
-    "https://tiles.openfreemap.org/styles/liberty";
+const OPENFREEMAP_STYLES = {
+    liberty: "liberty",
+    dark: "dark",
+} as const;
+
+export type OpenFreeMapStyle = keyof typeof OPENFREEMAP_STYLES;
+
+export const openFreeMapStyleUrl = (style: OpenFreeMapStyle) =>
+    `https://tiles.openfreemap.org/styles/${OPENFREEMAP_STYLES[style]}`;
 
 const OPENFREEMAP_ATTRIBUTION =
     '&copy; <a href="https://openfreemap.org/">OpenFreeMap</a>; &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a>; Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>; Powered by Esri and Turf.js';

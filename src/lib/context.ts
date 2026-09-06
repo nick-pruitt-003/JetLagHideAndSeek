@@ -661,8 +661,11 @@ export const baseTileLayer = persistentAtom<
     | "transport"
     | "transport-vector"
     | "transport-dark-vector"
+    | "atlas-vector"
+    | "pioneer"
     | "neighbourhood"
     | "openfreemap-liberty"
+    | "openfreemap-dark"
     | "osmcarto"
 >("baseTileLayer", "voyager-vector");
 export const thunderforestApiKey = persistentAtom<string>(

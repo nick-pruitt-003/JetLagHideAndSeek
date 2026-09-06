@@ -10,7 +10,9 @@ import {
 } from "@/lib/contrast";
 import {
     DARK_BASEMAP_GROUND,
+    DARK_BASEMAP_SAMPLES,
     LIGHT_BASEMAP_GROUND,
+    LIGHT_BASEMAP_SAMPLES,
     MAP_CONTRAST,
 } from "@/lib/map-contrast";
 
@@ -86,16 +88,77 @@ describe("elimination mask meets WCAG 1.4.11", () => {
     });
 });
 
-describe("map markers meet WCAG 1.4.11", () => {
-    it("draws hiding-zone circles at 3:1 or better", () => {
-        expect(
-            contrastRatio(MAP_CONTRAST.zoneStrokeDark, DARK_BASEMAP_GROUND),
-        ).toBeGreaterThanOrEqual(AA_NON_TEXT);
-        expect(
-            contrastRatio("#008000", LIGHT_BASEMAP_GROUND),
-        ).toBeGreaterThanOrEqual(AA_NON_TEXT);
+describe("overlays hold up on the colourful basemaps", () => {
+    // CARTO's styles are muted; Thunderforest and OpenFreeMap are not. Every
+    // overlay has to clear 3:1 against the loudest thing the basemap draws,
+    // not just against flat paper.
+    it("washes eliminated ground at 3:1 over every sampled light ground", () => {
+        for (const [name, ground] of Object.entries(LIGHT_BASEMAP_SAMPLES)) {
+            const measured = contrastRatio(
+                flatten(
+                    MAP_CONTRAST.lightWash,
+                    MAP_CONTRAST.lightWashOpacity,
+                    ground,
+                ),
+                ground,
+            );
+            expect(measured, name).toBeGreaterThanOrEqual(AA_NON_TEXT);
+        }
     });
 
+    it("washes eliminated ground at 3:1 over every sampled dark ground", () => {
+        for (const [name, ground] of Object.entries(DARK_BASEMAP_SAMPLES)) {
+            const measured = contrastRatio(
+                flatten(
+                    MAP_CONTRAST.darkWash,
+                    MAP_CONTRAST.darkWashOpacity,
+                    ground,
+                ),
+                ground,
+            );
+            expect(measured, name).toBeGreaterThanOrEqual(AA_NON_TEXT);
+        }
+    });
+
+    it("strokes hiding zones at 3:1 over every sampled ground", () => {
+        for (const [name, ground] of Object.entries(LIGHT_BASEMAP_SAMPLES)) {
+            expect(
+                contrastRatio(MAP_CONTRAST.zoneStrokeLight, ground),
+                name,
+            ).toBeGreaterThanOrEqual(AA_NON_TEXT);
+        }
+        for (const [name, ground] of Object.entries(DARK_BASEMAP_SAMPLES)) {
+            expect(
+                contrastRatio(MAP_CONTRAST.zoneStrokeDark, ground),
+                name,
+            ).toBeGreaterThanOrEqual(AA_NON_TEXT);
+        }
+    });
+
+    it("rejects the colours that failed on a salmon arterial", () => {
+        const salmon = LIGHT_BASEMAP_SAMPLES.salmonArterial;
+        // Plain green stroke, and the old navy wash.
+        expect(contrastRatio("#008000", salmon)).toBeLessThan(AA_NON_TEXT);
+        expect(
+            contrastRatio(flatten("#0f172a", 0.5, salmon), salmon),
+        ).toBeLessThan(AA_NON_TEXT);
+        // A black marker glyph on washed salmon — why markers carry a halo.
+        expect(
+            contrastRatio("#000000", flatten("#000000", 0.5, salmon)),
+        ).toBeLessThan(AA_NON_TEXT);
+    });
+
+    it("gives marker halos opposite lightness to their theme", () => {
+        expect(
+            contrastRatio(
+                MAP_CONTRAST.markerHaloLight,
+                MAP_CONTRAST.markerHaloDark,
+            ),
+        ).toBeGreaterThanOrEqual(AA_TEXT);
+    });
+});
+
+describe("map markers meet WCAG 1.4.11", () => {
     it("draws Citi Bike pins at 3:1 or better", () => {
         expect(
             contrastRatio(MAP_CONTRAST.citiBikePinDark, DARK_BASEMAP_GROUND),
