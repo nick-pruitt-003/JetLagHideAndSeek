@@ -51,6 +51,40 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
+const DAY = 24 * 60 * 60;
+
+/**
+ * Every runtime cache below wants the same two plugins: accept opaque (0) and
+ * 200 responses, and evict by least-recently-used with a hard entry cap. Only
+ * the cap and the TTL differ, so they are the only parameters here.
+ */
+const cachePlugins = (maxEntries: number, maxAgeSeconds: number) => [
+    new CacheableResponsePlugin({ statuses: [0, 200] }),
+    new ExpirationPlugin({
+        maxEntries,
+        maxAgeSeconds,
+        maxAgeFrom: "last-used",
+    }),
+];
+
+/** Serve from cache, refresh in the background. The default for tiles/APIs. */
+const swr = (cacheName: string, maxEntries: number, maxAgeSeconds: number) =>
+    new StaleWhileRevalidate({
+        cacheName,
+        plugins: cachePlugins(maxEntries, maxAgeSeconds),
+    });
+
+/** Serve from cache and never revalidate — for immutable, versioned URLs. */
+const cacheFirst = (
+    cacheName: string,
+    maxEntries: number,
+    maxAgeSeconds: number,
+) =>
+    new CacheFirst({
+        cacheName,
+        plugins: cachePlugins(maxEntries, maxAgeSeconds),
+    });
+
 const serwist = new Serwist({
     precacheEntries: self.__SW_MANIFEST,
     skipWaiting: false,
@@ -60,17 +94,7 @@ const serwist = new Serwist({
         {
             // Carto basemaps (light_all / dark_all / voyager).
             matcher: /^https:\/\/[a-d]\.basemaps\.cartocdn\.com\/.*/i,
-            handler: new StaleWhileRevalidate({
-                cacheName: "tiles-cartocdn",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 2000,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: swr("tiles-cartocdn", 2000, 30 * DAY),
         },
         {
             // CARTO vector basemaps — style JSON, the source TileJSON and the
@@ -83,17 +107,7 @@ const serwist = new Serwist({
                 (url.hostname === "tiles.basemaps.cartocdn.com" &&
                     (url.pathname.startsWith("/gl/") ||
                         url.pathname.startsWith("/vector/"))),
-            handler: new StaleWhileRevalidate({
-                cacheName: "carto-vector-style",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 30,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: swr("carto-vector-style", 30, 30 * DAY),
         },
         {
             // Glyph ranges (PBF fonts) for vector labels. Immutable per
@@ -103,17 +117,7 @@ const serwist = new Serwist({
             matcher: ({ url }: { url: URL }) =>
                 url.hostname === "tiles.basemaps.cartocdn.com" &&
                 url.pathname.startsWith("/fonts/"),
-            handler: new CacheFirst({
-                cacheName: "carto-vector-fonts",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 300,
-                        maxAgeSeconds: 365 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: cacheFirst("carto-vector-fonts", 300, 365 * DAY),
         },
         {
             // Vector tiles themselves (.mvt). CARTO's data maxzoom is 14 and
@@ -121,32 +125,12 @@ const serwist = new Serwist({
             // than the raster equivalent even though each one is larger.
             matcher:
                 /^https:\/\/tiles-[a-d]\.basemaps\.cartocdn\.com\/vectortiles\/.*/i,
-            handler: new StaleWhileRevalidate({
-                cacheName: "tiles-carto-vector",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 2000,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: swr("tiles-carto-vector", 2000, 30 * DAY),
         },
         {
             // Standard OSM tile server.
             matcher: /^https:\/\/tile\.openstreetmap\.org\/.*/i,
-            handler: new StaleWhileRevalidate({
-                cacheName: "tiles-osm",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 1500,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: swr("tiles-osm", 1500, 30 * DAY),
         },
         {
             // Thunderforest (Transport / Neighbourhood styles). API-keyed
@@ -154,17 +138,7 @@ const serwist = new Serwist({
             // cacheable — different keys naturally get different cache
             // entries.
             matcher: /^https:\/\/tile\.thunderforest\.com\/.*/i,
-            handler: new StaleWhileRevalidate({
-                cacheName: "tiles-thunderforest",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 1000,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: swr("tiles-thunderforest", 1000, 30 * DAY),
         },
         {
             // Thunderforest vector basemaps. Everything — style document,
@@ -174,17 +148,7 @@ const serwist = new Serwist({
             // URL by the style document.
             matcher: ({ url }: { url: URL }) =>
                 url.hostname === "api.thunderforest.com",
-            handler: new StaleWhileRevalidate({
-                cacheName: "thunderforest-vector",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 2000,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: swr("thunderforest-vector", 2000, 30 * DAY),
         },
         {
             // OpenFreeMap — style, planet TileJSON, glyphs, sprites, Natural
@@ -192,17 +156,7 @@ const serwist = new Serwist({
             // tiles.openfreemap.org, with no key anywhere.
             matcher: ({ url }: { url: URL }) =>
                 url.hostname === "tiles.openfreemap.org",
-            handler: new StaleWhileRevalidate({
-                cacheName: "tiles-openfreemap",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 2000,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: swr("tiles-openfreemap", 2000, 30 * DAY),
         },
         {
             // Photon geocoder — direct in dev, proxied in prod via /api/proxy-api.
@@ -212,17 +166,7 @@ const serwist = new Serwist({
                     (url.searchParams.get("url") ?? "").includes(
                         "photon.komoot.io",
                     )),
-            handler: new StaleWhileRevalidate({
-                cacheName: "geocoder-photon",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 200,
-                        maxAgeSeconds: 7 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: swr("geocoder-photon", 200, 7 * DAY),
         },
         {
             // Nominatim — boundary polygons + reverse geocoding. Cache
@@ -234,17 +178,7 @@ const serwist = new Serwist({
                     (url.searchParams.get("url") ?? "").includes(
                         "nominatim.openstreetmap.org",
                     )),
-            handler: new StaleWhileRevalidate({
-                cacheName: "boundaries-nominatim",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 200,
-                        maxAgeSeconds: 30 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: swr("boundaries-nominatim", 200, 30 * DAY),
         },
         {
             // Overpass — network-only (see comment below). Matches both
@@ -264,17 +198,7 @@ const serwist = new Serwist({
             // because these are versioned URLs — they either change path
             // on upgrade or don't change at all.
             matcher: /^https:\/\/(unpkg\.com|cdn\.jsdelivr\.net)\/.*/i,
-            handler: new CacheFirst({
-                cacheName: "vendor-assets",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 40,
-                        maxAgeSeconds: 365 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: cacheFirst("vendor-assets", 40, 365 * DAY),
         },
         {
             // MapLibre's chunks are deliberately excluded from the precache
@@ -284,17 +208,7 @@ const serwist = new Serwist({
             matcher: ({ url, sameOrigin }: { url: URL; sameOrigin: boolean }) =>
                 sameOrigin &&
                 /maplibre-gl\.[^/]+\.(js|css)$/i.test(url.pathname),
-            handler: new CacheFirst({
-                cacheName: "maplibre-assets",
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 10,
-                        maxAgeSeconds: 365 * 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
-            }),
+            handler: cacheFirst("maplibre-assets", 10, 365 * DAY),
         },
         {
             // Same-origin API routes (on Railway these are live node
@@ -307,14 +221,7 @@ const serwist = new Serwist({
             handler: new NetworkFirst({
                 cacheName: "api",
                 networkTimeoutSeconds: 10,
-                plugins: [
-                    new CacheableResponsePlugin({ statuses: [0, 200] }),
-                    new ExpirationPlugin({
-                        maxEntries: 50,
-                        maxAgeSeconds: 24 * 60 * 60,
-                        maxAgeFrom: "last-used",
-                    }),
-                ],
+                plugins: cachePlugins(50, DAY),
             }),
         },
     ],

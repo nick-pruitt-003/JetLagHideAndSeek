@@ -259,6 +259,22 @@ export async function listSystems(): Promise<TransitSystem[]> {
 }
 
 /**
+ * Every store that holds per-system rows. Both the bulk import and the bulk
+ * delete open a transaction over exactly this set, so it is declared once —
+ * adding a store to one path and forgetting the other would silently leave
+ * orphaned rows behind.
+ */
+const SYSTEM_STORES = [
+    "systems",
+    "stops",
+    "routes",
+    "trips",
+    "stopTimes",
+    "services",
+    "transfersGtfs",
+] as const;
+
+/**
  * Bulk-delete everything belonging to a system. Runs in a single transaction
  * so the UI never sees a half-deleted state.
  *
@@ -267,18 +283,7 @@ export async function listSystems(): Promise<TransitSystem[]> {
  */
 export async function deleteSystem(systemId: string): Promise<void> {
     const db = await openTransitDB();
-    const tx = db.transaction(
-        [
-            "systems",
-            "stops",
-            "routes",
-            "trips",
-            "stopTimes",
-            "services",
-            "transfersGtfs",
-        ],
-        "readwrite",
-    );
+    const tx = db.transaction(SYSTEM_STORES, "readwrite");
 
     await tx.objectStore("systems").delete(systemId);
     await deleteByIndex(tx.objectStore("stops").index("by-system"), systemId);
@@ -334,18 +339,7 @@ export async function writeSystemBulk(opts: {
     transfers: Footpath[];
 }): Promise<void> {
     const db = await openTransitDB();
-    const tx = db.transaction(
-        [
-            "systems",
-            "stops",
-            "routes",
-            "trips",
-            "stopTimes",
-            "services",
-            "transfersGtfs",
-        ],
-        "readwrite",
-    );
+    const tx = db.transaction(SYSTEM_STORES, "readwrite");
 
     const put = <T>(store: string, items: T[]) => {
         const os = (tx as any).objectStore(store);

@@ -39,6 +39,8 @@ import {
 } from "@/maps/questions/measuring";
 import {
     type AdminLevel,
+    FULL_FACILITY_TYPES,
+    HOME_GAME_FACILITY_TYPES,
     type MeasuringQuestion,
     measuringQuestionSchema,
     type MeasuringQuestionWithAdminZone,
@@ -171,6 +173,17 @@ export const MeasuringQuestionComponent = ({
         (data as any).geo.features = boundary ? boundary : [];
     };
 
+    // These two families are enumerated by the schema, so branch on the
+    // schema's own lists rather than restating every literal as a `case` —
+    // that is how measuring silently lost `hospital-nyc-full` before.
+    if (data.type === "city" || FULL_FACILITY_TYPES.includes(data.type)) {
+        questionSpecific = (
+            <FacilityOsmPlayToggles data={data} questionKey={questionKey} />
+        );
+    } else if (HOME_GAME_FACILITY_TYPES.includes(data.type)) {
+        questionSpecific = <HidingZoneClickNotice />;
+    }
+
     switch (data.type) {
         case "pick-type":
             questionSpecific = (
@@ -178,22 +191,6 @@ export const MeasuringQuestionComponent = ({
                     Choose a measuring type above. No coastline, airport, or
                     other fetch runs until you pick one.
                 </p>
-            );
-            break;
-        case "city":
-        case "aquarium-full":
-        case "zoo-full":
-        case "theme_park-full":
-        case "peak-full":
-        case "museum-full":
-        case "hospital-full":
-        case "cinema-full":
-        case "library-full":
-        case "golf_course-full":
-        case "consulate-full":
-        case "park-full":
-            questionSpecific = (
-                <FacilityOsmPlayToggles data={data} questionKey={questionKey} />
             );
             break;
         case "mcdonalds":
@@ -206,19 +203,6 @@ export const MeasuringQuestionComponent = ({
                     eliminated.
                 </span>
             );
-            break;
-        case "aquarium":
-        case "hospital":
-        case "peak":
-        case "museum":
-        case "theme_park":
-        case "zoo":
-        case "cinema":
-        case "library":
-        case "golf_course":
-        case "consulate":
-        case "park":
-            questionSpecific = <HidingZoneClickNotice />;
             break;
         case "admin-measure":
             questionSpecific = (

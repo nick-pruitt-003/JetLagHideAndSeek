@@ -51,7 +51,12 @@ import {
     listAirportMatchingCandidates,
     normalizeMatchingAirportIata,
 } from "@/maps/questions/matching";
-import { type MatchingQuestion, matchingQuestionSchema } from "@/maps/schema";
+import {
+    FULL_FACILITY_TYPES,
+    HOME_GAME_FACILITY_TYPES,
+    type MatchingQuestion,
+    matchingQuestionSchema,
+} from "@/maps/schema";
 
 function AirportPlayToggles({
     data,
@@ -362,6 +367,17 @@ export const MatchingQuestionComponent = ({
         // that should re-trigger the fetch.
     }, [data.type, nearestTrainStationId, data.lat, data.lng]);
 
+    // These two families are enumerated by the schema, so branch on the
+    // schema's own lists rather than restating every literal as a `case` —
+    // that is how measuring silently lost `hospital-nyc-full` before.
+    if (data.type === "major-city" || FULL_FACILITY_TYPES.includes(data.type)) {
+        questionSpecific = (
+            <FacilityOsmPlayToggles data={data} questionKey={questionKey} />
+        );
+    } else if (HOME_GAME_FACILITY_TYPES.includes(data.type)) {
+        questionSpecific = <HidingZoneClickNotice />;
+    }
+
     switch (data.type) {
         case "pick-type":
             questionSpecific = (
@@ -429,23 +445,6 @@ export const MatchingQuestionComponent = ({
                     data={data as MatchingQuestion & { type: "airport" }}
                     questionKey={questionKey}
                 />
-            );
-            break;
-        case "major-city":
-        case "aquarium-full":
-        case "zoo-full":
-        case "theme_park-full":
-        case "peak-full":
-        case "museum-full":
-        case "hospital-full":
-        case "hospital-nyc-full":
-        case "cinema-full":
-        case "library-full":
-        case "golf_course-full":
-        case "consulate-full":
-        case "park-full":
-            questionSpecific = (
-                <FacilityOsmPlayToggles data={data} questionKey={questionKey} />
             );
             break;
         case "same-train-line":
@@ -528,19 +527,6 @@ export const MatchingQuestionComponent = ({
                     </span>
                 </>
             );
-            break;
-        case "aquarium":
-        case "hospital":
-        case "peak":
-        case "museum":
-        case "theme_park":
-        case "zoo":
-        case "cinema":
-        case "library":
-        case "golf_course":
-        case "consulate":
-        case "park":
-            questionSpecific = <HidingZoneClickNotice />;
             break;
         case "custom-zone":
         case "custom-points":

@@ -16,6 +16,8 @@
 
 import type { APIRoute } from "astro";
 
+import { jsonError, resolveProxyTarget } from "@/lib/api-proxy";
+
 export const prerender = false;
 
 /**
@@ -44,30 +46,13 @@ const ALLOWED_HOSTS = [
 const MAX_BYTES = 200 * 1024 * 1024;
 
 export const GET: APIRoute = async ({ url }) => {
-    const target = url.searchParams.get("url");
-    if (!target) {
-        return jsonError(400, "Missing `url` query parameter.");
-    }
-
-    let targetUrl: URL;
-    try {
-        targetUrl = new URL(target);
-    } catch {
-        return jsonError(400, "Malformed `url` parameter.");
-    }
-
-    if (!isAllowedHost(targetUrl.hostname)) {
-        return jsonError(
-            403,
-            `Host not on allow-list: ${targetUrl.hostname}. ` +
-                `Edit src/pages/api/proxy-gtfs.ts ALLOWED_HOSTS to add it.`,
-        );
-    }
-
-    // Only allow http(s).
-    if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
-        return jsonError(400, `Unsupported protocol: ${targetUrl.protocol}`);
-    }
+    const resolved = resolveProxyTarget(
+        url,
+        isAllowedHost,
+        ". Edit src/pages/api/proxy-gtfs.ts ALLOWED_HOSTS to add it.",
+    );
+    if (!resolved.ok) return resolved.response;
+    const targetUrl = resolved.target;
 
     let upstream: Response;
     try {
@@ -155,14 +140,4 @@ function isAllowedHost(hostname: string): boolean {
     return ALLOWED_HOSTS.some(
         (host) => lower === host || lower.endsWith(`.${host}`),
     );
-}
-
-function jsonError(status: number, message: string): Response {
-    return new Response(JSON.stringify({ error: message }), {
-        status,
-        headers: {
-            "content-type": "application/json",
-            "access-control-allow-origin": "*",
-        },
-    });
 }

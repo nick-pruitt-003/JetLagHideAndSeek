@@ -248,6 +248,11 @@ export const HOME_GAME_FACILITY_TYPES: string[] = homeGameFacilityLiterals.map(
     (literal) => literal.value,
 );
 
+/** The whole-territory facility types as plain strings, for runtime checks. */
+export const FULL_FACILITY_TYPES: string[] = fullFacilityLiterals.map(
+    (literal) => literal.value,
+);
+
 const baseMatchingQuestionSchema = ordinaryBaseQuestionSchema.extend({
     same: z.boolean().default(true),
     lengthComparison: z

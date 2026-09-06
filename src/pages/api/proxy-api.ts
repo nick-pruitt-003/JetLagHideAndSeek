@@ -16,6 +16,8 @@
 
 import type { APIRoute } from "astro";
 
+import { jsonError, resolveProxyTarget } from "@/lib/api-proxy";
+
 export const prerender = false;
 
 const ALLOWED_HOSTS = [
@@ -96,23 +98,9 @@ function drainBody(resp: Response): void {
 }
 
 async function handleRequest(request: Request, url: URL): Promise<Response> {
-    const target = url.searchParams.get("url");
-    if (!target) return jsonError(400, "Missing `url` query parameter.");
-
-    let targetUrl: URL;
-    try {
-        targetUrl = new URL(target);
-    } catch {
-        return jsonError(400, "Malformed `url` parameter.");
-    }
-
-    if (!isAllowedHost(targetUrl.hostname)) {
-        return jsonError(403, `Host not on allow-list: ${targetUrl.hostname}`);
-    }
-
-    if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
-        return jsonError(400, `Unsupported protocol: ${targetUrl.protocol}`);
-    }
+    const resolved = resolveProxyTarget(url, isAllowedHost);
+    if (!resolved.ok) return resolved.response;
+    const targetUrl = resolved.target;
 
     // The app builds proxied URLs by appending its own query string to the
     // proxy base: `${proxyBase}?a=b&c=d` → `/api/proxy-api?url=<enc-base>?a=b&c=d`.
@@ -322,24 +310,4 @@ function isAllowedHost(hostname: string): boolean {
     // (e.g. an attacker-controlled `*.overpass-api.de`) for no functional gain.
     const lower = hostname.toLowerCase();
     return ALLOWED_HOSTS.includes(lower);
-}
-
-function jsonError(
-    status: number,
-    message: string,
-    extraHeaders?: Record<string, string>,
-): Response {
-    const headers: Record<string, string> = {
-        "content-type": "application/json",
-        "access-control-allow-origin": "*",
-        ...extraHeaders,
-    };
-    // Let the browser read retry-after cross-origin when we forward it.
-    if (extraHeaders?.["retry-after"]) {
-        headers["access-control-expose-headers"] = "retry-after";
-    }
-    return new Response(JSON.stringify({ error: message }), {
-        status,
-        headers,
-    });
 }
