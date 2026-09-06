@@ -511,27 +511,34 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                             <Label>Base map style</Label>
                             <Select
                                 trigger="Base map style"
-                                options={{
-                                    "voyager-vector": "CARTO Voyager",
-                                    "light-vector": "CARTO Light",
-                                    "dark-vector": "CARTO Dark",
-                                    voyager: "CARTO Voyager (raster)",
-                                    light: "CARTO Light (raster)",
-                                    dark: "CARTO Dark (raster)",
-                                    "transport-vector":
-                                        "Thunderforest Transport",
-                                    "transport-dark-vector":
-                                        "Thunderforest Transport Dark",
-                                    "atlas-vector": "Thunderforest Atlas",
-                                    transport:
-                                        "Thunderforest Transport (raster)",
-                                    neighbourhood:
-                                        "Thunderforest Neighbourhood (raster)",
-                                    pioneer: "Thunderforest Pioneer (raster)",
-                                    "openfreemap-liberty":
-                                        "OpenFreeMap Liberty",
-                                    "openfreemap-dark": "OpenFreeMap Dark",
-                                    osmcarto: "OpenStreetMap Carto (raster)",
+                                groups={{
+                                    // Grouped by provider, vector first within
+                                    // each: the list is long enough now that a
+                                    // flat one buries the raster/vector pairs.
+                                    CARTO: {
+                                        "voyager-vector": "Voyager",
+                                        "light-vector": "Light",
+                                        "dark-vector": "Dark",
+                                        voyager: "Voyager (raster)",
+                                        light: "Light (raster)",
+                                        dark: "Dark (raster)",
+                                    },
+                                    Thunderforest: {
+                                        "transport-vector": "Transport",
+                                        "transport-dark-vector":
+                                            "Transport Dark",
+                                        "atlas-vector": "Atlas",
+                                        transport: "Transport (raster)",
+                                        neighbourhood: "Neighbourhood (raster)",
+                                        pioneer: "Pioneer (raster)",
+                                    },
+                                    OpenFreeMap: {
+                                        "openfreemap-liberty": "Liberty",
+                                        "openfreemap-dark": "Dark",
+                                    },
+                                    OpenStreetMap: {
+                                        osmcarto: "Carto (raster)",
+                                    },
                                 }}
                                 value={$baseTileLayer}
                                 onValueChange={(v) =>
