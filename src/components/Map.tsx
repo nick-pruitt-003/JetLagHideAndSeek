@@ -798,6 +798,17 @@ export const Map = ({ className }: { className?: string }) => {
                 <PolygonDraw />
                 <ScaleControl position="bottomleft" />
                 <MapPrint
+                    // leaflet-easyprint reads its options once, when the
+                    // control is added, and MapContainer is reconciled rather
+                    // than remounted when the basemap changes — so without a
+                    // key that flips with the mode, switching raster->vector
+                    // mid-session would keep the old size list (and leave the
+                    // broken "Current" button on a vector basemap).
+                    key={
+                        VECTOR_STYLE_BY_LAYER[$baseTileLayer]
+                            ? "print-vector"
+                            : "print-raster"
+                    }
                     position="topright"
                     // "Current" is dropped for the vector basemaps:
                     // leaflet-easyprint captures that mode straight from the
