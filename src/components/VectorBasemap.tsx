@@ -66,8 +66,24 @@ export const VectorBasemap = ({
                 // module it requires, so both imports have to land before the
                 // layer is constructed.
                 await import("maplibre-gl/dist/maplibre-gl.css");
-                await import("maplibre-gl");
+                const maplibregl = await import("maplibre-gl");
                 await import("@maplibre/maplibre-gl-leaflet");
+
+                // MapLibre derives its worker URL by swapping the filename in
+                // its own `import.meta.url`, which resolves to a
+                // `_astro/maplibre-gl-worker.mjs` that Vite never emits — a 404
+                // that leaves the map with no tiles and no labels at all. Point
+                // it at the worker as a real bundled asset instead. Being
+                // same-origin also lets the service worker cache what the
+                // worker fetches (glyphs and .mvt tiles).
+                // `?worker&url` (not a bare `?url`) so Vite bundles the
+                // worker together with its relative `maplibre-gl-shared.mjs`
+                // import — emitting the bare file leaves that dependency
+                // unresolved and the worker dies on load.
+                const workerUrl = (
+                    await import("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url")
+                ).default;
+                maplibregl.setWorkerUrl(workerUrl);
 
                 // The style changed (or the map unmounted) while we were
                 // fetching the chunk — whatever we build now is stale.
