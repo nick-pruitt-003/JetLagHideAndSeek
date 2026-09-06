@@ -186,7 +186,7 @@ export const StationCountIndicator = () => {
             </div>
 
             {!hasLiveStations && (
-                <div className="mt-2 border-t border-white/10 pt-1.5 text-[11px] text-white/40">
+                <div className="mt-2 border-t border-white/10 pt-1.5 text-[11px] text-white/60">
                     Reference list — open hiding zones for the live count
                 </div>
             )}

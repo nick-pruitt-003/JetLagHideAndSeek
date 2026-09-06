@@ -50,6 +50,7 @@ import {
     thunderforestApiKey,
     triggerLocalRefresh,
 } from "@/lib/context";
+import { MAP_CONTRAST } from "@/lib/map-contrast";
 import { cn } from "@/lib/utils";
 import { applyQuestionsToMapGeoData, holedMask, safeUnion } from "@/maps";
 import { hiderifyQuestion } from "@/maps";
@@ -100,22 +101,41 @@ const OSM_FALLBACK_TILE_LAYER = (
  * Default Leaflet GeoJSON fill (#3388ff @ 0.2) reads as a milky haze on dark
  * basemaps and dulls markers / tiles; tune per basemap theme.
  */
+/**
+ * Styling for the elimination mask (a world rectangle with the playable area
+ * cut out), tuned to WCAG 2.1 AA.
+ *
+ * SC 1.4.11 Non-text Contrast asks for 3:1 between a meaningful graphical
+ * object and the colours next to it. Two things carry that here: the boundary
+ * stroke, and the wash over eliminated ground.
+ *
+ * The wash is why dark mode could not simply be "darker". Over CARTO's
+ * near-black ground (~#0e1013) no darkening reaches 3:1 — black at 82% opacity
+ * measures 1.08:1, i.e. invisible. Fogging the eliminated area *lighter*
+ * inverts the usual instinct but is the only way to clear the bar on a dark
+ * basemap. Ratios are asserted in tests/mapContrast.test.ts.
+ */
 function eliminationMaskPathOptions(theme: string): L.PathOptions {
-    // "dark" and "dark-vector" are the same cartography, so both need the
-    // dark-tuned mask fill.
+    // "dark" and "dark-vector" are the same cartography.
     if (theme.startsWith("dark")) {
         return {
             interactive: false,
-            stroke: false,
-            fillColor: "#030712",
-            fillOpacity: 0.52,
+            stroke: true,
+            color: MAP_CONTRAST.darkBoundary, // 13.2:1 on dark ground
+            weight: 2,
+            opacity: 0.85,
+            fillColor: MAP_CONTRAST.darkWash, // 3.4:1 at this opacity
+            fillOpacity: MAP_CONTRAST.darkWashOpacity,
         };
     }
     return {
         interactive: false,
-        stroke: false,
-        fillColor: "#64748b",
-        fillOpacity: 0.28,
+        stroke: true,
+        color: MAP_CONTRAST.lightBoundary, // 6.2:1 on light ground
+        weight: 2,
+        opacity: 0.7,
+        fillColor: MAP_CONTRAST.lightWash, // 3.3:1 at this opacity
+        fillOpacity: MAP_CONTRAST.lightWashOpacity,
     };
 }
 

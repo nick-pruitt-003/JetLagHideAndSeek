@@ -71,6 +71,7 @@ import {
     useBundledStations as useBundledStationsAtom,
     useCustomStations as useCustomStationsAtom,
 } from "@/lib/context";
+import { MAP_CONTRAST } from "@/lib/map-contrast";
 import { getAllStops } from "@/lib/transit/gtfs-store";
 import {
     buildStopIndex,
@@ -220,8 +221,16 @@ export const ZoneSidebar = () => {
         // so redrawing zones after a theme switch picks the right palette up.
         const darkBasemap = baseTileLayer.get().startsWith("dark");
         const reachableGreen = darkBasemap
-            ? { color: "#4ade80", fillColor: "#22c55e", fillOpacity: 0.25 } // green-400 / green-500
-            : { color: "green", fillColor: "green", fillOpacity: 0.2 };
+            ? {
+                  color: MAP_CONTRAST.zoneStrokeDark,
+                  fillColor: MAP_CONTRAST.zoneFillDark,
+                  fillOpacity: 0.25,
+              }
+            : {
+                  color: MAP_CONTRAST.zoneStrokeLight,
+                  fillColor: MAP_CONTRAST.zoneFillLight,
+                  fillOpacity: 0.2,
+              };
         const defaultTint = darkBasemap ? "text-green-300" : "text-black";
 
         const stationColor = (
@@ -412,11 +421,18 @@ export const ZoneSidebar = () => {
                 return;
             }
 
+            // #1d4ed8 only reaches 2.84:1 against CARTO's dark ground, under
+            // the 3:1 that WCAG 1.4.11 asks of a meaningful graphic; blue-500
+            // measures 5.18:1 there and stays legible on light.
+            const pinColor = baseTileLayer.get().startsWith("dark")
+                ? MAP_CONTRAST.citiBikePinDark
+                : MAP_CONTRAST.citiBikePinLight;
+
             const layer = L.layerGroup(
                 nearby.map((bike) =>
                     L.marker([bike.lat, bike.lon], {
                         icon: L.divIcon({
-                            html: `<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:#1d4ed8;border:1.5px solid white;font-size:12px;line-height:1;">🚲</div>`,
+                            html: `<div style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:${pinColor};border:1.5px solid white;font-size:12px;line-height:1;">🚲</div>`,
                             className: "",
                             iconSize: [20, 20],
                             iconAnchor: [10, 10],
