@@ -512,12 +512,12 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                             <Select
                                 trigger="Base map style"
                                 options={{
-                                    voyager: "CARTO Voyager",
-                                    light: "CARTO Light",
-                                    dark: "CARTO Dark",
-                                    "voyager-vector": "CARTO Voyager (vector)",
-                                    "light-vector": "CARTO Light (vector)",
-                                    "dark-vector": "CARTO Dark (vector)",
+                                    "voyager-vector": "CARTO Voyager",
+                                    "light-vector": "CARTO Light",
+                                    "dark-vector": "CARTO Dark",
+                                    voyager: "CARTO Voyager (raster)",
+                                    light: "CARTO Light (raster)",
+                                    dark: "CARTO Dark (raster)",
                                     transport: "Thunderforest Transport",
                                     neighbourhood:
                                         "Thunderforest Neighbourhood",

@@ -640,8 +640,16 @@ export const isLoading = atom<boolean>(false);
 
 /**
  * The `*-vector` styles are CARTO's MapLibre GL basemaps (see
- * `VectorBasemap.tsx`); the bare names are the raster tiles CARTO is
- * retiring. Raster stays the default until vector has been through a game.
+ * `VectorBasemap.tsx`); the bare names are the raster tiles CARTO is retiring.
+ *
+ * Vector is the default. CARTO recommends the move themselves — raster is
+ * watermarked without a key, and they are "considering stopping data updates
+ * to the raster basemaps", so raster cartography will drift out of date even
+ * before it is switched off.
+ *
+ * No migration is needed for existing players: nanostores never writes the
+ * default to localStorage, so anyone who has not explicitly chosen a style
+ * picks this up, and anyone who did keeps their choice.
  */
 export const baseTileLayer = persistentAtom<
     | "voyager"
@@ -653,7 +661,7 @@ export const baseTileLayer = persistentAtom<
     | "transport"
     | "neighbourhood"
     | "osmcarto"
->("baseTileLayer", "voyager");
+>("baseTileLayer", "voyager-vector");
 export const thunderforestApiKey = persistentAtom<string>(
     "thunderforestApiKey",
     "",

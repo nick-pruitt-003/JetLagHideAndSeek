@@ -97,10 +97,14 @@ games and self-hosted deployment:
   the repository; each player can also paste their own key in Options. Without a
   key the CARTO styles fall back to plain OpenStreetMap tiles rather than
   serving watermarked ones.
-- **CARTO vector basemaps (opt-in).** Voyager, Positron and Dark Matter are also
-  available as MapLibre GL vector styles — sharper at high zoom, and the
-  direction CARTO is moving as it retires raster. Raster remains the default;
-  `maplibre-gl` is loaded dynamically, so players on raster download none of it.
+- **CARTO vector basemaps (default).** Voyager, Positron and Dark Matter render
+  as MapLibre GL vector styles — sharper at any zoom and display density, and
+  the direction CARTO is moving as it retires raster (they are considering
+  stopping data updates to the raster tiles). The raster versions are still
+  selectable in Options; `maplibre-gl` is loaded dynamically, so choosing one
+  skips that download entirely. Printing at "Current" size is unavailable on a
+  vector basemap — see the note in `Map.tsx` — so the print control offers the
+  A4 sizes there.
 - **Accessible map overlays.** Overlay colours are held to WCAG 2.1 AA — 3:1 for
   graphics (SC 1.4.11), 4.5:1 for text (SC 1.4.3) — with the ratios asserted in
   tests. Notably the eliminated-territory wash lightens on dark basemaps, since
