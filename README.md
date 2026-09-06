@@ -67,10 +67,13 @@ games and self-hosted deployment:
 - **Multiple saved games.** Regions, questions, hider mode, and zone settings are
   scoped per game slot, so several independent games persist side by side instead
   of one global state.
-- **Rail + Subway station overlay.** A live map indicator counts how many curated
-  NYC Subway / commuter-rail (LIRR, Metro-North, NJ Transit, SEPTA, Amtrak,
-  Hartford Line) stations remain inside the current playable territory, updating
-  as questions are applied.
+- **Hiding-station counter.** A live map indicator counts how many stations a
+  hider could still be at inside the current playable territory, broken down by
+  network. It counts the same Overpass-derived stations that draw the hiding
+  zones — every station, not a curated shortlist — and measures elimination
+  against the field this game started with. Before zones load it falls back to a
+  bundled NYC/Northeast rail list (LIRR, Metro-North, NJ Transit, SEPTA, Amtrak,
+  Hartford Line) and labels itself as a reference.
 - **GTFS transit import.** Import an agency's GTFS feed (by URL or uploaded zip)
   to drive station/line data, with a three-tier fetch ladder (direct → self-hosted
   proxy → public proxy) that works around the varied CORS policies of transit
@@ -85,7 +88,26 @@ games and self-hosted deployment:
   Nominatim / Photon) and `/api/proxy-gtfs`, so the app keeps working behind
   ad blockers and CORS restrictions instead of relying on a public proxy.
 - **Installable PWA / offline support.** A Serwist service worker precaches the
-  app shell and surfaces an update prompt when a new version ships.
+  app shell, caches basemap tiles (raster and vector), Overpass/geocoder
+  responses and the MapLibre chunks, and surfaces an update prompt when a new
+  version ships.
+- **CARTO basemaps with a build-time API key.** CARTO now watermarks unkeyed
+  raster tiles, so the key is supplied through `PUBLIC_CARTO_API_KEY` (a Railway
+  service variable, passed into the Docker build as an `ARG`) and stays out of
+  the repository; each player can also paste their own key in Options. Without a
+  key the CARTO styles fall back to plain OpenStreetMap tiles rather than
+  serving watermarked ones.
+- **CARTO vector basemaps (opt-in).** Voyager, Positron and Dark Matter are also
+  available as MapLibre GL vector styles — sharper at high zoom, and the
+  direction CARTO is moving as it retires raster. Raster remains the default;
+  `maplibre-gl` is loaded dynamically, so players on raster download none of it.
+- **Accessible map overlays.** Overlay colours are held to WCAG 2.1 AA — 3:1 for
+  graphics (SC 1.4.11), 4.5:1 for text (SC 1.4.3) — with the ratios asserted in
+  tests. Notably the eliminated-territory wash lightens on dark basemaps, since
+  no amount of darkening reaches 3:1 against near-black ground.
+- **Draw a custom territory from the place picker.** The polygon tool is offered
+  where people look for it, next to the region search, rather than only in the
+  map toolbar.
 
 ## Contributing
 
@@ -108,8 +130,8 @@ React island UI, served either as a static site or — for the API proxy above �
 SSR via the [`@astrojs/node`](https://docs.astro.build/en/guides/integrations-guide/node/)
 adapter. You need [git](https://git-scm.com/downloads),
 [Node.js](https://nodejs.org/) 22 or newer (the project targets `>=22.22.2`; CI
-builds on Node 24), and [pnpm](https://pnpm.io/installation) 11 — pnpm is pinned
-to `11.9.0` via the `packageManager` field, so `corepack enable` will select the
+builds on Node 24), and [pnpm](https://pnpm.io/installation) 12 — pnpm is pinned
+to `12.3.4` via the `packageManager` field, so `corepack enable` will select the
 right version automatically. Start by cloning this fork and entering the
 directory:
 
@@ -143,6 +165,19 @@ pnpm test:e2e      # end-to-end browser tests (Playwright)
 Type-check with `pnpm typecheck:ts6`. Both suites also run in CI: unit tests gate
 the Docker image build (`.github/workflows/docker-image.yml`) and Playwright runs
 on pushes/PRs (`.github/workflows/playwright.yml`).
+
+## Environment Variables
+
+| Variable               | Where      | Purpose                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUBLIC_CARTO_API_KEY` | build time | CARTO Basemaps key. Astro inlines `PUBLIC_*` variables into the client bundle **during the build**, so a Dockerfile build only sees it if it is declared as an `ARG` (it is — see the build stage) _and_ set as a Railway service variable. Without it the CARTO styles fall back to OpenStreetMap tiles. Free keys: <https://carto.com/basemaps/apikey>. |
+| `PUBLIC_ENABLE_SW`     | build time | Set to `1` to register the service worker on `localhost`; it is skipped there by default so stale caches don't confuse local development.                                                                                                                                                                                                                 |
+
+For local development put them in `.env` (gitignored):
+
+```bash
+PUBLIC_CARTO_API_KEY=your_key_here
+```
 
 ## Railway Deploy Workflow Secrets
 
