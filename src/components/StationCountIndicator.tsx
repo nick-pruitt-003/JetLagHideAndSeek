@@ -136,11 +136,14 @@ export const StationCountIndicator = () => {
               ? "bg-yellow-500"
               : "bg-red-500";
 
-    // Only show rows that still have stations remaining, largest first.
-    const rows = Object.entries(breakdown)
+    // Only show rows that still have stations remaining, largest first. More
+    // than five networks would crowd the panel, so the tail is summed into one
+    // row — otherwise the breakdown silently fails to add up to the headline.
+    const allRows = Object.entries(breakdown)
         .filter(([, n]) => n > 0)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5);
+        .sort(([, a], [, b]) => b - a);
+    const rows = allRows.slice(0, 5);
+    const otherCount = allRows.slice(5).reduce((total, [, n]) => total + n, 0);
 
     return (
         <div className="rounded-xl bg-black/80 px-3 py-2 shadow-lg backdrop-blur-sm select-none min-w-[200px]">
@@ -192,7 +195,7 @@ export const StationCountIndicator = () => {
             )}
 
             {/* Per-operator (live) or per-system (fallback) breakdown */}
-            {rows.length > 0 && (
+            {(rows.length > 0 || otherCount > 0) && (
                 <div className="mt-2 space-y-0.5 border-t border-white/10 pt-1.5">
                     {rows.map(([key, n]) => (
                         <div
@@ -200,11 +203,30 @@ export const StationCountIndicator = () => {
                             className="flex justify-between gap-3 text-[11px] text-white/50"
                         >
                             <span className="truncate">
-                                {SYSTEM_LABEL[key] ?? key}
+                                {/* SYSTEM_LABEL describes the bundled list —
+                                    its "Subway" entry is the curated
+                                    major-stations set. Live keys are OSM
+                                    network tags and must not borrow those
+                                    labels, or an untagged-subway group would
+                                    be captioned "(major only)" when it is
+                                    nothing of the sort. */}
+                                {hasLiveStations
+                                    ? key
+                                    : (SYSTEM_LABEL[key] ?? key)}
                             </span>
                             <span className="tabular-nums shrink-0">{n}</span>
                         </div>
                     ))}
+                    {otherCount > 0 && (
+                        <div className="flex justify-between gap-3 text-[11px] text-white/50">
+                            <span className="truncate">
+                                Other networks ({allRows.length - rows.length})
+                            </span>
+                            <span className="tabular-nums shrink-0">
+                                {otherCount}
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

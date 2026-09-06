@@ -17,6 +17,16 @@ export const DARK_BASEMAP_GROUND = "#0e1013";
 /** CARTO Voyager / Positron ground colour. */
 export const LIGHT_BASEMAP_GROUND = "#f2efe9";
 
+/**
+ * Is this basemap a dark cartography?
+ *
+ * Covers both shapes the picker uses: "dark"/"dark-vector" (CARTO Dark Matter)
+ * and "transport-dark-vector" (Thunderforest). Shared so the map mask and the
+ * hiding-zone palette can never disagree about which theme is on screen.
+ */
+export const isDarkBasemap = (tileLayer: string) =>
+    tileLayer.startsWith("dark") || tileLayer.includes("-dark");
+
 export const MAP_CONTRAST = {
     /** Outline between in-play and eliminated ground. */
     darkBoundary: "#f8fafc",

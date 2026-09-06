@@ -536,7 +536,9 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                 }
                             />
                             <div className="flex flex-col items-center gap-2">
-                                <Label>CARTO API Key</Label>
+                                <Label htmlFor="cartoApiKey">
+                                    CARTO API Key
+                                </Label>
                                 <Input
                                     type="text"
                                     value={$cartoApiKey}
@@ -552,20 +554,23 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     tiles. The vector styles work either way,
                                     are sharper at high zoom, and are what CARTO
                                     is moving to; the same key covers both. Get
-                                    a free key{" "}
+                                    a free key from the{" "}
                                     <a
                                         href="https://carto.com/basemaps/apikey"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-blue-500 cursor-pointer"
                                     >
-                                        here.
+                                        CARTO Basemaps API key page
                                     </a>
+                                    .
                                 </p>
                             </div>
                             <Separator className="bg-slate-300 w-[280px]" />
                             <div className="flex flex-col items-center gap-2">
-                                <Label>Thunderforest API Key</Label>
+                                <Label htmlFor="thunderforestApiKey">
+                                    Thunderforest API Key
+                                </Label>
                                 <Input
                                     type="text"
                                     value={$thunderforestApiKey}
@@ -577,21 +582,23 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                 />
                                 <p className="text-xs text-gray-500">
                                     Needed for Thunderforest map styles. Create
-                                    a key{" "}
+                                    a key on the{" "}
                                     <a
                                         href="https://manage.thunderforest.com/users/sign_up?price=hobby-project-usd"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-blue-500 cursor-pointer"
                                     >
-                                        here.
-                                    </a>{" "}
-                                    Don&apos;t worry, it&apos;s free.
+                                        Thunderforest sign-up page
+                                    </a>
+                                    . Don&apos;t worry, it&apos;s free.
                                 </p>
                             </div>
                             <Separator className="bg-slate-300 w-[280px]" />
                             <div className="flex flex-col items-center gap-2">
-                                <Label>Pastebin API Key</Label>
+                                <Label htmlFor="pastebinApiKey">
+                                    Pastebin API Key
+                                </Label>
                                 <Input
                                     type="text"
                                     value={$pastebinApiKey}

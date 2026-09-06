@@ -72,10 +72,26 @@ export const thunderforestStyleUrl = (
  * back carry no key — so stamp the key onto every CARTO request ourselves
  * rather than betting on which ones will start requiring it.
  */
+const isCartoHost = (url: string) => {
+    let hostname: string;
+    try {
+        hostname = new URL(url).hostname;
+    } catch {
+        // Relative or data: URLs never belong to CARTO.
+        return false;
+    }
+    return (
+        hostname === "basemaps.cartocdn.com" ||
+        hostname.endsWith(".basemaps.cartocdn.com")
+    );
+};
+
 const cartoTransformRequest =
     (apiKey: string) =>
     (url: string): { url: string } => {
-        if (!apiKey || !url.includes(".basemaps.cartocdn.com")) return { url };
+        // Substring matching would both miss the apex host (the style document
+        // itself) and stamp the key onto any URL that merely mentions it.
+        if (!apiKey || !isCartoHost(url)) return { url };
         if (/[?&]key=/.test(url)) return { url };
 
         const separator = url.includes("?") ? "&" : "?";

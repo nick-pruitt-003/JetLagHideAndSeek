@@ -54,7 +54,7 @@ import {
     thunderforestApiKey,
     triggerLocalRefresh,
 } from "@/lib/context";
-import { MAP_CONTRAST } from "@/lib/map-contrast";
+import { isDarkBasemap, MAP_CONTRAST } from "@/lib/map-contrast";
 import { cn } from "@/lib/utils";
 import { applyQuestionsToMapGeoData, holedMask, safeUnion } from "@/maps";
 import { hiderifyQuestion } from "@/maps";
@@ -85,12 +85,21 @@ const THUNDERFOREST_VECTOR_BY_LAYER: Record<
     "transport-dark-vector": "transport-dark",
 };
 
-/** Every picker value that renders through MapLibre rather than tile images. */
-const VECTOR_STYLE_BY_LAYER: Record<string, string | undefined> = {
-    ...CARTO_VECTOR_BY_LAYER,
-    ...THUNDERFOREST_VECTOR_BY_LAYER,
-    "openfreemap-liberty": "liberty",
-};
+/**
+ * Does this picker value actually render through MapLibre?
+ *
+ * Key-dependent: Thunderforest bakes the key into its style document, so
+ * without one those styles fall through to raster tiles. Anything keying off
+ * "is this vector" — print sizes, the map's zoom/bounds constraints — has to
+ * ask the same question `getTileLayer` does, or a keyless Thunderforest
+ * selection ends up drawing raster while being treated as vector.
+ */
+const isVectorLayer = (tileLayer: string, thunderforestApiKey: string) =>
+    Boolean(
+        CARTO_VECTOR_BY_LAYER[tileLayer] ||
+        tileLayer === "openfreemap-liberty" ||
+        (THUNDERFOREST_VECTOR_BY_LAYER[tileLayer] && thunderforestApiKey),
+    );
 
 const CARTO_VOYAGER_RASTER =
     "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
@@ -138,7 +147,7 @@ const OSM_FALLBACK_TILE_LAYER = (
  */
 function eliminationMaskPathOptions(theme: string): L.PathOptions {
     // "dark" and "dark-vector" are the same cartography.
-    if (theme.startsWith("dark") || theme.includes("-dark")) {
+    if (isDarkBasemap(theme)) {
         return {
             interactive: false,
             stroke: true,
@@ -861,7 +870,7 @@ export const Map = ({ className }: { className?: string }) => {
                     // mid-session would keep the old size list (and leave the
                     // broken "Current" button on a vector basemap).
                     key={
-                        VECTOR_STYLE_BY_LAYER[$baseTileLayer]
+                        isVectorLayer($baseTileLayer, $thunderforestApiKey)
                             ? "print-vector"
                             : "print-raster"
                     }
@@ -874,7 +883,7 @@ export const Map = ({ className }: { className?: string }) => {
                     // The A4 modes resize the container first, which forces a
                     // fresh capture, and they do include the basemap.
                     sizeModes={
-                        VECTOR_STYLE_BY_LAYER[$baseTileLayer]
+                        isVectorLayer($baseTileLayer, $thunderforestApiKey)
                             ? ["A4Portrait", "A4Landscape"]
                             : ["Current", "A4Portrait", "A4Landscape"]
                     }
@@ -1010,7 +1019,7 @@ export const Map = ({ className }: { className?: string }) => {
     useEffect(() => {
         if (!map) return;
 
-        if (VECTOR_STYLE_BY_LAYER[$baseTileLayer]) {
+        if (isVectorLayer($baseTileLayer, $thunderforestApiKey)) {
             map.setMinZoom(2);
             map.setMaxZoom(20);
             map.options.maxBoundsViscosity = 1;
@@ -1025,7 +1034,7 @@ export const Map = ({ className }: { className?: string }) => {
             map.options.maxBoundsViscosity = 0;
             map.setMaxBounds(null as unknown as L.LatLngBounds);
         }
-    }, [map, $baseTileLayer]);
+    }, [map, $baseTileLayer, $thunderforestApiKey]);
 
     // Re-style the elimination mask when the user switches basemap theme
     // without triggering a full refreshQuestions cycle.

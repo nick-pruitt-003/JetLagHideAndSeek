@@ -71,7 +71,7 @@ import {
     useBundledStations as useBundledStationsAtom,
     useCustomStations as useCustomStationsAtom,
 } from "@/lib/context";
-import { MAP_CONTRAST } from "@/lib/map-contrast";
+import { isDarkBasemap, MAP_CONTRAST } from "@/lib/map-contrast";
 import { getAllStops } from "@/lib/transit/gtfs-store";
 import {
     buildStopIndex,
@@ -145,6 +145,10 @@ export const ZoneSidebar = () => {
     const excludeHeritageRailways = useStore(excludeHeritageRailwaysAtom);
     const $enableBusHubs = useStore(enableBusHubsAtom);
     const $showCitiBike = useStore(showCitiBikeStationsAtom);
+    // Zone circles and dock pins pick their palette from the basemap theme, so
+    // both drawing effects have to re-run when it changes — reading the atom at
+    // draw time alone would leave the old colours until the next redraw.
+    const $baseTileLayer = useStore(baseTileLayer);
     const $reachabilityResult = useStore(reachabilityResultAtom);
     const $reachabilityOverrides = useStore(reachabilityOverridesAtom);
     const leftSidebar = useStore(LeftSidebarContext);
@@ -219,7 +223,7 @@ export const ZoneSidebar = () => {
         // and black station icons are nearly invisible against them. Read the
         // basemap at draw time (rather than closing over a render-time value)
         // so redrawing zones after a theme switch picks the right palette up.
-        const darkBasemap = baseTileLayer.get().startsWith("dark");
+        const darkBasemap = isDarkBasemap(baseTileLayer.get());
         const reachableGreen = darkBasemap
             ? {
                   color: MAP_CONTRAST.zoneStrokeDark,
@@ -424,7 +428,7 @@ export const ZoneSidebar = () => {
             // #1d4ed8 only reaches 2.84:1 against CARTO's dark ground, under
             // the 3:1 that WCAG 1.4.11 asks of a meaningful graphic; blue-500
             // measures 5.18:1 there and stays legible on light.
-            const pinColor = baseTileLayer.get().startsWith("dark")
+            const pinColor = isDarkBasemap(baseTileLayer.get())
                 ? MAP_CONTRAST.citiBikePinDark
                 : MAP_CONTRAST.citiBikePinLight;
 
@@ -466,6 +470,7 @@ export const ZoneSidebar = () => {
         stations,
         $hidingRadius,
         $hidingRadiusUnits,
+        $baseTileLayer,
     ]);
 
     // ------------------------------------------------------------------
@@ -727,6 +732,7 @@ export const ZoneSidebar = () => {
         $polyGeoJSON,
         $mapGeoLocation,
         $additionalMapGeoLocations,
+        $baseTileLayer,
     ]);
 
     // ------------------------------------------------------------------

@@ -299,8 +299,9 @@ export const PlacePicker = ({
                                             when the region is part of the
                                             playable area, the trailing one
                                             hollow when it has been cut out. */}
-                                            <span
-                                                className="relative h-5 w-8 shrink-0 text-slate-700"
+                                            <button
+                                                type="button"
+                                                className="relative h-5 w-8 shrink-0 cursor-default text-slate-700"
                                                 aria-label={
                                                     location.added
                                                         ? "Included location"
@@ -313,7 +314,7 @@ export const PlacePicker = ({
                                                 ) : (
                                                     <LucideCircleDashed className="absolute left-2.5 size-5 rounded-full bg-white" />
                                                 )}
-                                            </span>
+                                            </button>
                                         </TooltipTrigger>
                                         <TooltipContent>
                                             {location.added
@@ -331,39 +332,47 @@ export const PlacePicker = ({
                                         $polyGeoJSON && "hidden",
                                     )}
                                 >
-                                    {!location.base &&
-                                        (location.added ? (
-                                            <LucidePlusSquare
-                                                className={cn(
-                                                    "text-green-700 cursor-pointer",
-                                                    $isLoading &&
-                                                        "text-muted-foreground cursor-not-allowed",
-                                                )}
-                                                onClick={() =>
-                                                    setPlaceInPlay(
-                                                        location,
-                                                        false,
-                                                    )
-                                                }
-                                            />
-                                        ) : (
-                                            <LucideMinusSquare
-                                                className={cn(
-                                                    "text-red-700 cursor-pointer",
-                                                    $isLoading &&
-                                                        "text-muted-foreground cursor-not-allowed",
-                                                )}
-                                                onClick={() =>
-                                                    setPlaceInPlay(
-                                                        location,
-                                                        true,
-                                                    )
-                                                }
-                                            />
-                                        ))}
-                                    <LucideX
+                                    {!location.base && (
+                                        <button
+                                            type="button"
+                                            disabled={$isLoading}
+                                            aria-label={
+                                                location.added
+                                                    ? `Exclude ${determineName(location.location)} from the game area`
+                                                    : `Include ${determineName(location.location)} in the game area`
+                                            }
+                                            onClick={() =>
+                                                setPlaceInPlay(
+                                                    location,
+                                                    !location.added,
+                                                )
+                                            }
+                                            className="cursor-pointer disabled:cursor-not-allowed"
+                                        >
+                                            {location.added ? (
+                                                <LucidePlusSquare
+                                                    className={cn(
+                                                        "text-green-700",
+                                                        $isLoading &&
+                                                            "text-muted-foreground",
+                                                    )}
+                                                />
+                                            ) : (
+                                                <LucideMinusSquare
+                                                    className={cn(
+                                                        "text-red-700",
+                                                        $isLoading &&
+                                                            "text-muted-foreground",
+                                                    )}
+                                                />
+                                            )}
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        aria-label={`Remove ${determineName(location.location)}`}
                                         className={cn(
-                                            "scale-[90%] text-gray-700 cursor-pointer hover:bg-slate-300 rounded-full transition-colors duration-200",
+                                            "scale-[90%] cursor-pointer rounded-full text-gray-700 transition-colors duration-200 hover:bg-slate-300",
                                         )}
                                         onClick={() => {
                                             if (location.base) {
@@ -430,7 +439,9 @@ export const PlacePicker = ({
                                             polyGeoJSON.set(null);
                                             questions.set([...questions.get()]);
                                         }}
-                                    />
+                                    >
+                                        <LucideX />
+                                    </button>
                                 </div>
                             </div>
                         ))}
