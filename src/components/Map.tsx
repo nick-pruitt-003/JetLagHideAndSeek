@@ -779,7 +779,18 @@ export const Map = ({ className }: { className?: string }) => {
                 <ScaleControl position="bottomleft" />
                 <MapPrint
                     position="topright"
-                    sizeModes={["Current", "A4Portrait", "A4Landscape"]}
+                    // "Current" is dropped for the vector basemaps:
+                    // leaflet-easyprint captures that mode straight from the
+                    // live container with no resize, and the resulting PNG
+                    // comes back without the WebGL canvas (and stale — a
+                    // deliberately injected element never showed up in it).
+                    // The A4 modes resize the container first, which forces a
+                    // fresh capture, and they do include the basemap.
+                    sizeModes={
+                        VECTOR_STYLE_BY_LAYER[$baseTileLayer]
+                            ? ["A4Portrait", "A4Landscape"]
+                            : ["Current", "A4Portrait", "A4Landscape"]
+                    }
                     hideControlContainer={false}
                     hideClasses={[
                         "leaflet-full-screen-specific-name",
