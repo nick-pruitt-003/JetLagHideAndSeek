@@ -38,7 +38,13 @@ export const stationOperatorLabel = (station: StationLike): string => {
     return raw.split(";")[0].trim() || "Other";
 };
 
-/** Count stations per network label, largest group first. */
+/**
+ * Count stations per network label, largest group first.
+ *
+ * Ties keep the order the labels were first seen: string keys iterate in
+ * insertion order and `Array.prototype.sort` is stable, so the same input
+ * always yields the same order.
+ */
 export const countByOperator = (
     stations: StationLike[],
 ): Record<string, number> => {
@@ -47,5 +53,7 @@ export const countByOperator = (
         const key = stationOperatorLabel(station);
         counts[key] = (counts[key] ?? 0) + 1;
     }
-    return counts;
+    return Object.fromEntries(
+        Object.entries(counts).sort(([, left], [, right]) => right - left),
+    );
 };

@@ -83,4 +83,31 @@ describe("countByOperator", () => {
     it("returns nothing for an empty field", () => {
         expect(countByOperator([])).toEqual({});
     });
+
+    it("orders networks by size, largest first", () => {
+        const counts = countByOperator([
+            station({ network: "SEPTA" }),
+            station({ network: "MTA New York City Subway" }),
+            station({ network: "MTA New York City Subway" }),
+            station({ network: "MTA New York City Subway" }),
+            station({ network: "LIRR" }),
+            station({ network: "LIRR" }),
+        ]);
+
+        expect(Object.keys(counts)).toEqual([
+            "MTA New York City Subway",
+            "LIRR",
+            "SEPTA",
+        ]);
+    });
+
+    it("breaks ties by first appearance, so the order is stable", () => {
+        const counts = countByOperator([
+            station({ network: "PATH" }),
+            station({ network: "Amtrak" }),
+            station({ network: "NJ Transit" }),
+        ]);
+
+        expect(Object.keys(counts)).toEqual(["PATH", "Amtrak", "NJ Transit"]);
+    });
 });
