@@ -39,6 +39,17 @@ export type ThunderforestVectorStyle = keyof typeof THUNDERFOREST_VECTOR_STYLES;
 const CARTO_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="https://carto.com/attributions">CARTO</a>; Powered by Esri and Turf.js';
 
+/**
+ * OpenFreeMap serves OpenMapTiles-schema vector tiles with no key and no rate
+ * limit — the closest thing to a vector equivalent of the OSM standard raster
+ * style, which has no official GL port.
+ */
+export const OPENFREEMAP_STYLE_URL =
+    "https://tiles.openfreemap.org/styles/liberty";
+
+const OPENFREEMAP_ATTRIBUTION =
+    '&copy; <a href="https://openfreemap.org/">OpenFreeMap</a>; &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a>; Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>; Powered by Esri and Turf.js';
+
 const THUNDERFOREST_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors; &copy; <a href="http://www.thunderforest.com/">Thunderforest</a>; Powered by Esri and Turf.js';
 
@@ -77,8 +88,9 @@ export const VectorBasemap = ({
     provider = "carto",
 }: {
     styleUrl: string;
+    /** Unused by keyless providers; kept so the effect re-runs on key changes. */
     apiKey: string;
-    provider?: "carto" | "thunderforest";
+    provider?: "carto" | "thunderforest" | "openfreemap";
 }) => {
     const map = useMap() as LeafletMap;
 
@@ -87,6 +99,13 @@ export const VectorBasemap = ({
         let layer: L.Layer | null = null;
 
         (async () => {
+            const attribution =
+                provider === "thunderforest"
+                    ? THUNDERFOREST_ATTRIBUTION
+                    : provider === "openfreemap"
+                      ? OPENFREEMAP_ATTRIBUTION
+                      : CARTO_ATTRIBUTION;
+
             try {
                 // The Leaflet bridge reads the global `maplibregl` off the
                 // module it requires, so both imports have to land before the
@@ -117,13 +136,17 @@ export const VectorBasemap = ({
 
                 layer = L.maplibreGL({
                     style: styleUrl,
-                    // The bridge builds the GL map with `attributionControl:
-                    // false`, so CARTO's required attribution has to ride on
-                    // the Leaflet layer instead.
-                    attribution:
-                        provider === "thunderforest"
-                            ? THUNDERFOREST_ATTRIBUTION
-                            : CARTO_ATTRIBUTION,
+                    // Attribution is a licence requirement for every provider
+                    // here (OSM data, plus CARTO/Thunderforest/OpenMapTiles
+                    // terms), and it needs `attributionControl`, NOT the usual
+                    // Leaflet `attribution` option: the bridge overrides
+                    // getAttribution() to read
+                    // `options.attributionControl.customAttribution`, falling
+                    // back to whatever the GL style's sources happen to
+                    // declare. CARTO's style declares its own, so `attribution`
+                    // appeared to work; OpenFreeMap's does not, and the credit
+                    // silently vanished.
+                    attributionControl: { customAttribution: attribution },
                     // `pointer-events: none` on the canvas — every click still
                     // reaches Leaflet, so contextmenu, draw and pick mode are
                     // unaffected.

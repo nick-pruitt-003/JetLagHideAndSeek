@@ -104,7 +104,12 @@ games and self-hosted deployment:
   selectable in Options; `maplibre-gl` is loaded dynamically, so choosing one
   skips that download entirely. Printing at "Current" size is unavailable on a
   vector basemap — see the note in `Map.tsx` — so the print control offers the
-  A4 sizes there.
+  A4 sizes there. Thunderforest Transport and Transport Dark render as vector
+  too (Neighbourhood has no vector version), and **OpenFreeMap Liberty** is
+  available as a keyless vector style — the closest thing to a vector
+  equivalent of the OSM standard raster style, which has no official GL port.
+  The no-key fallback stays raster on purpose, so the emergency path never
+  depends on WebGL.
 - **Accessible map overlays.** Overlay colours are held to WCAG 2.1 AA — 3:1 for
   graphics (SC 1.4.11), 4.5:1 for text (SC 1.4.3) — with the ratios asserted in
   tests. Notably the eliminated-territory wash lightens on dark basemaps, since

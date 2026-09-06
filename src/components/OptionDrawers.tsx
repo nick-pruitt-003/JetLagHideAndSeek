@@ -526,7 +526,9 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                         "Thunderforest Transport (raster)",
                                     neighbourhood:
                                         "Thunderforest Neighbourhood (raster)",
-                                    osmcarto: "OpenStreetMap Carto",
+                                    "openfreemap-liberty":
+                                        "OpenFreeMap Liberty",
+                                    osmcarto: "OpenStreetMap Carto (raster)",
                                 }}
                                 value={$baseTileLayer}
                                 onValueChange={(v) =>

@@ -187,6 +187,24 @@ const serwist = new Serwist({
             }),
         },
         {
+            // OpenFreeMap — style, planet TileJSON, glyphs, sprites, Natural
+            // Earth raster and the vector tiles themselves all live on
+            // tiles.openfreemap.org, with no key anywhere.
+            matcher: ({ url }: { url: URL }) =>
+                url.hostname === "tiles.openfreemap.org",
+            handler: new StaleWhileRevalidate({
+                cacheName: "tiles-openfreemap",
+                plugins: [
+                    new CacheableResponsePlugin({ statuses: [0, 200] }),
+                    new ExpirationPlugin({
+                        maxEntries: 2000,
+                        maxAgeSeconds: 30 * 24 * 60 * 60,
+                        maxAgeFrom: "last-used",
+                    }),
+                ],
+            }),
+        },
+        {
             // Photon geocoder — direct in dev, proxied in prod via /api/proxy-api.
             matcher: ({ url }: { url: URL }) =>
                 url.hostname === "photon.komoot.io" ||

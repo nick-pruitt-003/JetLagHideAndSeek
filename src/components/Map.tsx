@@ -23,6 +23,7 @@ import { PolygonDraw } from "@/components/PolygonDraw";
 import {
     cartoStyleUrl,
     type CartoVectorStyle,
+    OPENFREEMAP_STYLE_URL,
     thunderforestStyleUrl,
     type ThunderforestVectorStyle,
     VectorBasemap,
@@ -88,6 +89,7 @@ const THUNDERFOREST_VECTOR_BY_LAYER: Record<
 const VECTOR_STYLE_BY_LAYER: Record<string, string | undefined> = {
     ...CARTO_VECTOR_BY_LAYER,
     ...THUNDERFOREST_VECTOR_BY_LAYER,
+    "openfreemap-liberty": "liberty",
 };
 
 const CARTO_VOYAGER_RASTER =
@@ -172,6 +174,19 @@ const getTileLayer = (
             <VectorBasemap
                 styleUrl={cartoStyleUrl(cartoVectorStyle, cartoApiKey)}
                 apiKey={cartoApiKey}
+            />
+        );
+    }
+
+    // OpenFreeMap needs no key at all. It is a basemap option in its own
+    // right, not the no-key fallback: OSM_FALLBACK_TILE_LAYER stays raster so
+    // the emergency path never depends on WebGL or on maplibre loading.
+    if (tileLayer === "openfreemap-liberty") {
+        return (
+            <VectorBasemap
+                styleUrl={OPENFREEMAP_STYLE_URL}
+                apiKey=""
+                provider="openfreemap"
             />
         );
     }
