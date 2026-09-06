@@ -18,7 +18,7 @@
         "test:e2e:install": "playwright install chromium",
         "knip": "knip"
     },
-    "packageManager": "pnpm@11.24.0",
+    "packageManager": "pnpm@12.3.4",
     "dependencies": {
         "@astrojs/check": "^0.9.10",
         "@astrojs/node": "^11.1.5",
@@ -78,7 +78,7 @@
         "@dword-design/eslint-plugin-import-alias": "^8.1.8",
         "@eslint-react/eslint-plugin": "^5.18.10",
         "@eslint/js": "^10.0.1",
-        "@playwright/test": "^1.62.1",
+        "@playwright/test": "^1.63.0",
         "@serwist/build": "^9.5.12",
         "@tailwindcss/vite": "^4.3.3",
         "@types/d3-geo": "^3.1.1",

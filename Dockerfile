@@ -1,6 +1,6 @@
 FROM node:24-slim AS base
 # Activate the exact pnpm version declared in package.json.
-RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
+RUN corepack enable && corepack prepare pnpm@12.3.4 --activate
 
 # ── Install ───────────────────────────────────────────────────────────────────
 # Separate stage so the node_modules layer is only invalidated when
