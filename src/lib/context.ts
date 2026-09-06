@@ -39,25 +39,36 @@ import {
 // Internal-only: the default region's OSM id, referenced when building
 // DEFAULT_MAP_GEO_LOCATION below. Not exported — consumers compare via osmRef
 // against DEFAULT_MAP_GEO_LOCATION itself rather than the bare id.
-const DEFAULT_MAP_GEO_LOCATION_OSM_ID = 382313;
+const DEFAULT_MAP_GEO_LOCATION_OSM_ID = 175905;
 
-/** Default primary region (Japan). Exported so "New Game" can reset to it. */
+/**
+ * Default primary region (New York City). Exported so "New Game" can reset to
+ * it, and used as the "no region chosen yet" sentinel by the place picker.
+ *
+ * Upstream ships Japan, which is where the show's first season was set. This
+ * fork is built around NYC-metro games — bundled NYC/Northeast station data,
+ * Citi Bike docks, NYC hospitals — so opening on Tokyo left every new player a
+ * region to change before anything useful loaded.
+ */
 export const DEFAULT_MAP_GEO_LOCATION: OpenStreetMap = {
+    // NOTE: [lat, lng], not GeoJSON's [lng, lat] — this feeds Leaflet's
+    // `center` prop directly, and the rest of the app reads it the same way.
     geometry: {
-        coordinates: [36.5748441, 139.2394179],
+        coordinates: [40.7127281, -74.0060152],
         type: "Point",
     },
     type: "Feature",
     properties: {
         osm_type: "R",
         osm_id: DEFAULT_MAP_GEO_LOCATION_OSM_ID,
-        extent: [45.7112046, 122.7141754, 20.2145811, 154.205541],
-        country: "Japan",
+        extent: [40.91763, -74.258843, 40.476578, -73.700233],
+        country: "United States",
         osm_key: "place",
-        countrycode: "JP",
-        osm_value: "country",
-        name: "Japan",
-        type: "country",
+        countrycode: "US",
+        osm_value: "city",
+        state: "New York",
+        name: "New York",
+        type: "city",
     },
 };
 
