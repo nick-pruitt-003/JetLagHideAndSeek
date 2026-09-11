@@ -65,7 +65,7 @@ export const QuestionSidebar = () => {
                     <QuestionCardFor key={question.key} question={question} />
                 ))}
             </SidebarContent>
-            <SidebarGroup>
+            <SidebarGroup className="in-data-[keyboard-open=true]:hidden">
                 <SidebarGroupContent>
                     <SidebarMenu data-tutorial-id="add-questions-buttons">
                         <SidebarMenuItem>

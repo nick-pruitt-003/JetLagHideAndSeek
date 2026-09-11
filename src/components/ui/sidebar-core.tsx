@@ -71,6 +71,24 @@ const useIsLandscape = () =>
         () => false,
     );
 
+/**
+ * Whether an on-screen keyboard is taking up the screen. Browsers shrink the
+ * visual viewport for it but not the layout viewport, so a gap between the two
+ * that's bigger than any toolbar means a keyboard.
+ */
+const useIsKeyboardOpen = () =>
+    React.useSyncExternalStore(
+        (onChange) => {
+            window.visualViewport?.addEventListener("resize", onChange);
+            return () =>
+                window.visualViewport?.removeEventListener("resize", onChange);
+        },
+        () =>
+            !!window.visualViewport &&
+            window.innerHeight - window.visualViewport.height > 150,
+        () => false,
+    );
+
 const MobileSheet = ({
     side,
     open,
@@ -85,12 +103,16 @@ const MobileSheet = ({
 }) => {
     const [expanded, setExpanded] = React.useState(false);
     const isLandscape = useIsLandscape();
+    const isKeyboardOpen = useIsKeyboardOpen();
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange} modal={false} {...props}>
             <SheetContent
                 data-sidebar="sidebar"
                 data-mobile="true"
+                // Lets fixed rows like the Questions footer step aside while
+                // typing, when the sheet has only a sliver of screen left.
+                data-keyboard-open={isKeyboardOpen}
                 side={isLandscape ? side : "bottom"}
                 aria-describedby={undefined}
                 // Popovers and dialogs opened from the sheet portal to <body>,
