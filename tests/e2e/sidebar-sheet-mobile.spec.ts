@@ -60,7 +60,9 @@ test("questions open as a bottom sheet with the map usable above it", async ({
     await expect(sheet).toBeHidden();
 });
 
-test("number fields ask for the short number pad", async ({ page }) => {
+test("typing a number gets the number pad and hides the footer", async ({
+    page,
+}) => {
     await page
         .locator("[data-tutorial-id=left-sidebar-trigger] button")
         .click();
@@ -71,4 +73,15 @@ test("number fields ask for the short number pad", async ({ page }) => {
         .locator("[data-mobile=true] input[type=number]")
         .first();
     await expect(radius).toHaveAttribute("inputmode", "decimal");
+
+    // While typing, the fixed footer steps aside so the keyboard doesn't
+    // squeeze the question to a sliver.
+    const footerButton = page
+        .locator("[data-mobile=true]")
+        .getByRole("button", { name: "Open Hiding Zones" });
+    await expect(footerButton).toBeVisible();
+    await radius.focus();
+    await expect(footerButton).toBeHidden();
+    await radius.blur();
+    await expect(footerButton).toBeVisible();
 });

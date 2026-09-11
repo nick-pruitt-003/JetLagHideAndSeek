@@ -71,21 +71,44 @@ const useIsLandscape = () =>
         () => false,
     );
 
+// Input types that never raise an on-screen keyboard.
+const NON_TEXT_INPUT_TYPES = new Set([
+    "button",
+    "checkbox",
+    "color",
+    "file",
+    "hidden",
+    "image",
+    "radio",
+    "range",
+    "reset",
+    "submit",
+]);
+
+const isTextEntry = (element: Element | null) =>
+    element instanceof HTMLTextAreaElement ||
+    (element instanceof HTMLElement && element.isContentEditable) ||
+    (element instanceof HTMLInputElement &&
+        !NON_TEXT_INPUT_TYPES.has(element.type));
+
 /**
- * Whether an on-screen keyboard is taking up the screen. Browsers shrink the
- * visual viewport for it but not the layout viewport, so a gap between the two
- * that's bigger than any toolbar means a keyboard.
+ * Whether a text field has focus, which on a phone means the keyboard is up.
+ *
+ * Measuring the viewport instead (visual viewport shorter than the window)
+ * never fired on iOS Safari, so the footer stayed put under the keyboard.
+ * Focus is the same signal on every browser.
  */
-const useIsKeyboardOpen = () =>
+const useIsTyping = () =>
     React.useSyncExternalStore(
         (onChange) => {
-            window.visualViewport?.addEventListener("resize", onChange);
-            return () =>
-                window.visualViewport?.removeEventListener("resize", onChange);
+            document.addEventListener("focusin", onChange);
+            document.addEventListener("focusout", onChange);
+            return () => {
+                document.removeEventListener("focusin", onChange);
+                document.removeEventListener("focusout", onChange);
+            };
         },
-        () =>
-            !!window.visualViewport &&
-            window.innerHeight - window.visualViewport.height > 150,
+        () => isTextEntry(document.activeElement),
         () => false,
     );
 
@@ -103,7 +126,7 @@ const MobileSheet = ({
 }) => {
     const [expanded, setExpanded] = React.useState(false);
     const isLandscape = useIsLandscape();
-    const isKeyboardOpen = useIsKeyboardOpen();
+    const isTyping = useIsTyping();
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange} modal={false} {...props}>
@@ -112,7 +135,7 @@ const MobileSheet = ({
                 data-mobile="true"
                 // Lets fixed rows like the Questions footer step aside while
                 // typing, when the sheet has only a sliver of screen left.
-                data-keyboard-open={isKeyboardOpen}
+                data-keyboard-open={isTyping}
                 side={isLandscape ? side : "bottom"}
                 aria-describedby={undefined}
                 // Popovers and dialogs opened from the sheet portal to <body>,
