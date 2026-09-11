@@ -14,10 +14,11 @@
 
 import { useStore } from "@nanostores/react";
 import * as turf from "@turf/turf";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { METRO_AREA_RAIL_STATIONS } from "@/data/metro-area-rail-stations";
 import { NYC_MAJOR_SUBWAY_STATIONS } from "@/data/nyc-subway-major-stations";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
     playableTerritoryUnion,
     stationCountBaseline,
@@ -62,6 +63,11 @@ export const StationCountIndicator = () => {
     const $territory = useStore(playableTerritoryUnion);
     const $trainStations = useStore(trainStations);
     const $baseline = useStore(stationCountBaseline);
+    // On a phone the full panel was ~220px tall and sat on top of the Share
+    // and Tutorial buttons. Show just the count there; tap for the breakdown.
+    const isMobile = useIsMobile();
+    const [expanded, setExpanded] = useState(false);
+    const showDetails = !isMobile || expanded;
 
     const liveCount = $trainStations.length;
     const hasLiveStations = liveCount > 0;
@@ -145,15 +151,32 @@ export const StationCountIndicator = () => {
     const rows = allRows.slice(0, 5);
     const otherCount = allRows.slice(5).reduce((total, [, n]) => total + n, 0);
 
+    const Panel = isMobile ? "button" : "div";
+
     return (
-        <div className="rounded-xl bg-black/80 px-3 py-2 shadow-lg backdrop-blur-sm select-none min-w-[200px]">
+        <Panel
+            {...(isMobile && {
+                type: "button" as const,
+                onClick: () => setExpanded((open) => !open),
+                "aria-expanded": expanded,
+                "aria-label": `${activeCount} of ${total} stations remaining. ${expanded ? "Hide" : "Show"} breakdown`,
+            })}
+            className={cn(
+                "block rounded-xl bg-black/80 px-3 py-2 text-left shadow-lg backdrop-blur-sm select-none",
+                // The wrapper ignores pointer events so the map stays
+                // draggable around the panel; only the tappable version opts
+                // back in.
+                isMobile ? "pointer-events-auto min-w-[168px]" : "min-w-[200px]",
+            )}
+        >
             {/* Header */}
             <div className="flex items-baseline justify-between gap-3 mb-1">
-                <span className="text-xs font-medium text-white/60 tracking-wide uppercase">
+                <span className="text-xs font-medium text-white/60 tracking-wide uppercase whitespace-nowrap">
                     {hasLiveStations ? "Hiding stations" : "Rail + Subway"}
                 </span>
-                <span className="text-xs text-white/50">
-                    −{eliminated.toLocaleString()} eliminated
+                <span className="text-xs text-white/50 whitespace-nowrap">
+                    −{eliminated.toLocaleString()}
+                    {isMobile ? "" : " eliminated"}
                 </span>
             </div>
 
@@ -188,14 +211,14 @@ export const StationCountIndicator = () => {
                 />
             </div>
 
-            {!hasLiveStations && (
+            {showDetails && !hasLiveStations && (
                 <div className="mt-2 border-t border-white/10 pt-1.5 text-[11px] text-white/60">
                     Reference list — open hiding zones for the live count
                 </div>
             )}
 
             {/* Per-operator (live) or per-system (fallback) breakdown */}
-            {(rows.length > 0 || otherCount > 0) && (
+            {showDetails && (rows.length > 0 || otherCount > 0) && (
                 <div className="mt-2 space-y-0.5 border-t border-white/10 pt-1.5">
                     {rows.map(([key, n]) => (
                         <div
@@ -229,6 +252,6 @@ export const StationCountIndicator = () => {
                     )}
                 </div>
             )}
-        </div>
+        </Panel>
     );
 };

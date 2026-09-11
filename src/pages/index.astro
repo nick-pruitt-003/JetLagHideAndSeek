@@ -54,9 +54,11 @@ import Layout from "@/layouts/Layout.astro";
                         >
                             <OptionDrawers client:load />
                         </div>
+                        <!-- Clears the Share/Tutorial/Options row, which spans
+                             most of a phone's width. -->
                         <div
                             class="left-1/2 -translate-x-1/2 absolute z-[1030] group-[.fullscreen]:hidden pointer-events-none"
-                            style="bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px))"
+                            style="bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px))"
                         >
                             <StationCountIndicator client:only="react" />
                         </div>
