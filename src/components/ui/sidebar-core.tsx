@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils";
 const SIDEBAR_COOKIE_NAME = "sidebar:state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
-const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
@@ -50,6 +49,85 @@ type UseDisplayState = (displayState: {
 }) => { state: SidebarContextType["state"]; openMobile: boolean };
 
 const useIdentityDisplayState: UseDisplayState = (displayState) => displayState;
+
+/**
+ * Phone layout for both sidebars: a bottom sheet over the lower part of the
+ * screen instead of a full-screen panel, so the map stays visible (and
+ * draggable) while questions are edited. The handle toggles a taller size for
+ * long forms like the hiding-zone settings. Held sideways, half of a ~390px
+ * height is too little, so landscape gets a half-width side panel instead.
+ *
+ * Non-modal on purpose. A modal sheet would dim and block the map, and treat a
+ * pan above it as "click outside" and close it — the exact problem this fixes.
+ */
+const useIsLandscape = () =>
+    React.useSyncExternalStore(
+        (onChange) => {
+            const mql = window.matchMedia("(orientation: landscape)");
+            mql.addEventListener("change", onChange);
+            return () => mql.removeEventListener("change", onChange);
+        },
+        () => window.matchMedia("(orientation: landscape)").matches,
+        () => false,
+    );
+
+const MobileSheet = ({
+    side,
+    open,
+    onOpenChange,
+    children,
+    ...props
+}: {
+    side: "left" | "right";
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    children: React.ReactNode;
+}) => {
+    const [expanded, setExpanded] = React.useState(false);
+    const isLandscape = useIsLandscape();
+
+    return (
+        <Sheet open={open} onOpenChange={onOpenChange} modal={false} {...props}>
+            <SheetContent
+                data-sidebar="sidebar"
+                data-mobile="true"
+                side={isLandscape ? side : "bottom"}
+                aria-describedby={undefined}
+                // Popovers and dialogs opened from the sheet portal to <body>,
+                // so they count as "outside" too. The header's close button
+                // and Escape are the ways out.
+                onInteractOutside={(event) => event.preventDefault()}
+                // Don't jump focus into the first field and pop the keyboard
+                // over the half of the screen that is still map.
+                onOpenAutoFocus={(event) => event.preventDefault()}
+                className={cn(
+                    "z-1035 bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden",
+                    isLandscape
+                        ? "w-[min(26rem,55vw)] max-w-none sm:max-w-none"
+                        : cn(
+                              "rounded-t-xl transition-[height] duration-200",
+                              expanded ? "h-[88svh]" : "h-[55svh]",
+                          ),
+                )}
+                style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+            >
+                <div className="flex h-full w-full flex-col">
+                    <button
+                        type="button"
+                        hidden={isLandscape}
+                        onClick={() => setExpanded((value) => !value)}
+                        aria-label={expanded ? "Shrink panel" : "Expand panel"}
+                        aria-expanded={expanded}
+                        className="flex w-full shrink-0 justify-center pt-2 pb-1"
+                    >
+                        <span className="h-1.5 w-12 rounded-full bg-muted-foreground/40" />
+                    </button>
+                    {children}
+                </div>
+            </SheetContent>
+        </Sheet>
+    );
+};
 
 /**
  * Builds the sidebar components that need a context atom. Call this once per
@@ -225,27 +303,14 @@ export const createSidebarComponents = (
 
             if (isMobile) {
                 return (
-                    <Sheet
+                    <MobileSheet
+                        side={side}
                         open={openMobile}
                         onOpenChange={setOpenMobile}
                         {...props}
                     >
-                        <SheetContent
-                            data-sidebar="sidebar"
-                            data-mobile="true"
-                            className="w-full bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden z-1035"
-                            style={
-                                {
-                                    "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-                                } as React.CSSProperties
-                            }
-                            side={side}
-                        >
-                            <div className="flex h-full w-full flex-col">
-                                {children}
-                            </div>
-                        </SheetContent>
-                    </Sheet>
+                        {children}
+                    </MobileSheet>
                 );
             }
 

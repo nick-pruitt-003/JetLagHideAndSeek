@@ -5,7 +5,7 @@ import * as L from "leaflet";
 import find from "lodash/find";
 import isEqual from "lodash/isEqual";
 import minBy from "lodash/minBy";
-import { Loader2, SidebarCloseIcon } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 
@@ -1082,13 +1082,26 @@ export const ZoneSidebar = () => {
                     reachabilityBundle ? "ready" : "none"
                 }
             >
-                <h2 className="ml-4 mt-4 font-poppins text-2xl">Hiding Zone</h2>
-                <SidebarCloseIcon
-                    className="mr-2 visible md:hidden scale-x-[-1]"
-                    onClick={() => {
-                        rightSidebar.setOpenMobile(false);
-                    }}
-                />
+                <h2
+                    className={cn(
+                        "ml-4 font-poppins text-2xl",
+                        rightSidebar.isMobile ? "mt-1" : "mt-4",
+                    )}
+                >
+                    Hiding Zone
+                </h2>
+                {rightSidebar.isMobile && (
+                    <button
+                        type="button"
+                        aria-label="Close hiding zone"
+                        className="mr-2 mt-1 rounded-md p-2"
+                        onClick={() => {
+                            rightSidebar.setOpenMobile(false);
+                        }}
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                )}
             </div>
             <SidebarContent ref={sidebarRef}>
                 <ScrollToTop element={sidebarRef} minHeight={500} />

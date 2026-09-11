@@ -1,5 +1,5 @@
 import { useStore } from "@nanostores/react";
-import { SidebarCloseIcon } from "lucide-react";
+import { X } from "lucide-react";
 
 import { AddQuestionDialog } from "@/components/AddQuestionDialog";
 import { QuestionCardFor } from "@/components/QuestionCards";
@@ -22,6 +22,7 @@ import {
     save,
     triggerLocalRefresh,
 } from "@/lib/context";
+import { cn } from "@/lib/utils";
 
 export const QuestionSidebar = () => {
     useStore(triggerLocalRefresh);
@@ -34,13 +35,30 @@ export const QuestionSidebar = () => {
     return (
         <Sidebar>
             <div className="flex items-center justify-between">
-                <h2 className="ml-4 mt-4 font-poppins text-2xl">Questions</h2>
-                <SidebarCloseIcon
-                    className="mr-2 visible md:hidden"
-                    onClick={() => {
-                        leftSidebar.setOpenMobile(false);
-                    }}
-                />
+                <h2
+                    className={cn(
+                        "ml-4 font-poppins text-2xl",
+                        // The sheet's drag handle already pads the top.
+                        leftSidebar.isMobile ? "mt-1" : "mt-4",
+                    )}
+                >
+                    Questions
+                </h2>
+                {/* Phones only: on desktop the map's sidebar trigger does
+                    this. Tied to isMobile, not `md:`, so a phone held
+                    sideways still gets a way to close the sheet. */}
+                {leftSidebar.isMobile && (
+                    <button
+                        type="button"
+                        aria-label="Close questions"
+                        className="mr-2 mt-1 rounded-md p-2"
+                        onClick={() => {
+                            leftSidebar.setOpenMobile(false);
+                        }}
+                    >
+                        <X className="h-5 w-5" />
+                    </button>
+                )}
             </div>
             <SidebarContent>
                 {$questions.map((question) => (
@@ -81,17 +99,21 @@ export const QuestionSidebar = () => {
                                 </SidebarMenuButton>
                             </SubwayStartDialog>
                         </SidebarMenuItem>
-                        <SidebarMenuItem>
-                            <a
-                                href="https://github.com/taibeled/JetLagHideAndSeek"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                <SidebarMenuButton className="bg-emerald-600 transition-colors">
-                                    Star this on GitHub! It&apos;s free :)
-                                </SidebarMenuButton>
-                            </a>
-                        </SidebarMenuItem>
+                        {/* On a phone the footer is fixed under a half-height
+                            sheet, so every row costs question space. */}
+                        {!leftSidebar.isMobile && (
+                            <SidebarMenuItem>
+                                <a
+                                    href="https://github.com/taibeled/JetLagHideAndSeek"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <SidebarMenuButton className="bg-emerald-600 transition-colors">
+                                        Star this on GitHub! It&apos;s free :)
+                                    </SidebarMenuButton>
+                                </a>
+                            </SidebarMenuItem>
+                        )}
                         {!$autoSave && (
                             <SidebarMenuItem>
                                 <SidebarMenuButton
