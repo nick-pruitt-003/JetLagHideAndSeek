@@ -12,19 +12,19 @@ Guided workflow to eliminate copy-paste duplication in source code. Use after ru
 First, run jscpd to identify duplications:
 
 ```bash
-npx jscpd --reporters ai <path>
+npx jscpd@5.2.0 --reporters ai <path>
 ```
 
 In codebases that mix related formats (e.g. JavaScript and TypeScript), add `--cross-formats` so clones spanning both are detected too:
 
 ```bash
-npx jscpd --reporters ai --cross-formats "js-ts" <path>
+npx jscpd@5.2.0 --reporters ai --cross-formats "js-ts" <path>
 ```
 
 On larger codebases, add `--summary` to get a refactoring-hotspot overview alongside the clone list — top files and folders with a `dup%` column showing how much of each file is duplicated:
 
 ```bash
-npx jscpd --reporters ai --summary <path>
+npx jscpd@5.2.0 --reporters ai --summary <path>
 ```
 
 See the **[jscpd](../jscpd/SKILL.md)** skill for full option reference, including cross-format group syntax and how to read the summary.

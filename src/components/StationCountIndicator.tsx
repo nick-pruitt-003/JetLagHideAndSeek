@@ -151,6 +151,8 @@ export const StationCountIndicator = () => {
     const rows = allRows.slice(0, 5);
     const otherCount = allRows.slice(5).reduce((total, [, n]) => total + n, 0);
 
+    // On mobile the panel is a native <button>, which may only hold phrasing
+    // content — hence spans (with `block`/`flex`) rather than divs inside.
     const Panel = isMobile ? "button" : "div";
 
     return (
@@ -166,11 +168,13 @@ export const StationCountIndicator = () => {
                 // The wrapper ignores pointer events so the map stays
                 // draggable around the panel; only the tappable version opts
                 // back in.
-                isMobile ? "pointer-events-auto min-w-[168px]" : "min-w-[200px]",
+                isMobile
+                    ? "pointer-events-auto min-w-[168px]"
+                    : "min-w-[200px]",
             )}
         >
             {/* Header */}
-            <div className="flex items-baseline justify-between gap-3 mb-1">
+            <span className="flex items-baseline justify-between gap-3 mb-1">
                 <span className="text-xs font-medium text-white/60 tracking-wide uppercase whitespace-nowrap">
                     {hasLiveStations ? "Hiding stations" : "Rail + Subway"}
                 </span>
@@ -178,10 +182,10 @@ export const StationCountIndicator = () => {
                     −{eliminated.toLocaleString()}
                     {isMobile ? "" : " eliminated"}
                 </span>
-            </div>
+            </span>
 
             {/* Big count */}
-            <div className="flex items-baseline gap-1.5">
+            <span className="flex items-baseline gap-1.5">
                 <span
                     className={cn(
                         "text-2xl font-bold tabular-nums leading-none",
@@ -193,13 +197,13 @@ export const StationCountIndicator = () => {
                 <span className="text-sm text-white/60">
                     / {total.toLocaleString()} stations
                 </span>
-            </div>
+            </span>
 
             {/* Progress bar */}
-            <div className="mt-2 h-1.5 w-full rounded-full bg-white/10">
-                <div
+            <span className="mt-2 block h-1.5 w-full rounded-full bg-white/10">
+                <span
                     className={cn(
-                        "h-full rounded-full transition-all duration-500",
+                        "block h-full rounded-full transition-all duration-500",
                         barColor,
                     )}
                     style={{
@@ -209,19 +213,19 @@ export const StationCountIndicator = () => {
                                 : `${Math.max(pct * 100, 1)}%`,
                     }}
                 />
-            </div>
+            </span>
 
             {showDetails && !hasLiveStations && (
-                <div className="mt-2 border-t border-white/10 pt-1.5 text-[11px] text-white/60">
+                <span className="mt-2 block border-t border-white/10 pt-1.5 text-[11px] text-white/60">
                     Reference list — open hiding zones for the live count
-                </div>
+                </span>
             )}
 
             {/* Per-operator (live) or per-system (fallback) breakdown */}
             {showDetails && (rows.length > 0 || otherCount > 0) && (
-                <div className="mt-2 space-y-0.5 border-t border-white/10 pt-1.5">
+                <span className="mt-2 block space-y-0.5 border-t border-white/10 pt-1.5">
                     {rows.map(([key, n]) => (
-                        <div
+                        <span
                             key={key}
                             className="flex justify-between gap-3 text-[11px] text-white/50"
                         >
@@ -238,19 +242,19 @@ export const StationCountIndicator = () => {
                                     : (SYSTEM_LABEL[key] ?? key)}
                             </span>
                             <span className="tabular-nums shrink-0">{n}</span>
-                        </div>
+                        </span>
                     ))}
                     {otherCount > 0 && (
-                        <div className="flex justify-between gap-3 text-[11px] text-white/50">
+                        <span className="flex justify-between gap-3 text-[11px] text-white/50">
                             <span className="truncate">
                                 Other networks ({allRows.length - rows.length})
                             </span>
                             <span className="tabular-nums shrink-0">
                                 {otherCount}
                             </span>
-                        </div>
+                        </span>
                     )}
-                </div>
+                </span>
             )}
         </Panel>
     );

@@ -116,10 +116,12 @@ const MobileSheet = ({
     side,
     open,
     onOpenChange,
+    contentRef,
     children,
     ...props
 }: {
     side: "left" | "right";
+    contentRef?: React.Ref<HTMLDivElement>;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     children: React.ReactNode;
@@ -131,6 +133,7 @@ const MobileSheet = ({
     return (
         <Sheet open={open} onOpenChange={onOpenChange} modal={false} {...props}>
             <SheetContent
+                ref={contentRef}
                 data-sidebar="sidebar"
                 data-mobile="true"
                 // Lets fixed rows like the Questions footer step aside while
@@ -142,11 +145,18 @@ const MobileSheet = ({
                 // so they count as "outside" too. The header's close button
                 // and Escape are the ways out.
                 onInteractOutside={(event) => event.preventDefault()}
-                // Don't jump focus into the first field and pop the keyboard
-                // over the half of the screen that is still map.
-                onOpenAutoFocus={(event) => event.preventDefault()}
+                // Radix would focus the first field and pop the keyboard over
+                // the half of the screen that is still map. Focus the sheet
+                // itself instead, so keyboard and screen-reader users still
+                // land inside it.
+                onOpenAutoFocus={(event) => {
+                    event.preventDefault();
+                    (event.currentTarget as HTMLElement | null)?.focus({
+                        preventScroll: true,
+                    });
+                }}
                 className={cn(
-                    "z-1035 bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden",
+                    "z-1035 bg-sidebar p-0 text-sidebar-foreground outline-none [&>button]:hidden",
                     isLandscape
                         ? "w-[min(26rem,55vw)] max-w-none sm:max-w-none"
                         : cn(
@@ -350,6 +360,7 @@ export const createSidebarComponents = (
                 return (
                     <MobileSheet
                         side={side}
+                        contentRef={ref}
                         open={openMobile}
                         onOpenChange={setOpenMobile}
                         {...props}
