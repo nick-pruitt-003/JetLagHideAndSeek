@@ -452,7 +452,7 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                 Options
                             </DrawerTitle>
                         </DrawerHeader>
-                        <div className="overflow-y-scroll max-h-[40vh] flex flex-col items-center gap-4 max-w-[1000px] px-12">
+                        <div className="overflow-y-scroll max-h-[40vh] max-md:max-h-[65vh] flex flex-col items-center gap-4 max-w-[1000px] px-12">
                             <div className="flex flex-row max-[330px]:flex-col gap-4">
                                 <Button
                                     onClick={() => {

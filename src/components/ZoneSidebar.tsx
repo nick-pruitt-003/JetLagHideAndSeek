@@ -1223,14 +1223,20 @@ export const ZoneSidebar = () => {
                                     "text-xs text-muted-foreground leading-4 -mt-1",
                                 )}
                             >
-                                Filters out disused / suspended stops and
-                                lifecycle-tagged stations (
-                                <span className="font-mono text-[0.85em]">
-                                    disused:railway
-                                </span>
-                                , etc.). Turn off to match raw OSM (e.g. if a
-                                closed stop is still tagged like an active
-                                station).
+                                {/* One <p>, because menu items are flex rows:
+                                    bare text around the <span> became three
+                                    side-by-side columns with the tag cut to
+                                    "dis…". */}
+                                <p>
+                                    Filters out disused / suspended stops and
+                                    lifecycle-tagged stations (
+                                    <span className="font-mono text-[0.85em]">
+                                        disused:railway
+                                    </span>
+                                    , etc.). Turn off to match raw OSM (e.g. if
+                                    a closed stop is still tagged like an active
+                                    station).
+                                </p>
                             </SidebarMenuItem>
                             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                                 <div className="flex flex-row items-center justify-between w-full">
