@@ -36,6 +36,6 @@ describe("nearestPointFinder", () => {
             turf.point([10, 10], { id: "far" }),
             turf.point([0.1, 0.1], { id: "near" }),
         ]);
-        expect(nearestPointFinder(fc)([0, 0]).properties.id).toBe("near");
+        expect(nearestPointFinder(fc)([0, 0]).properties?.id).toBe("near");
     });
 });
