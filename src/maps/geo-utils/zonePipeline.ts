@@ -219,8 +219,10 @@ function maskRings(mask: Feature): MaskRing[] {
  * Infinity once every ring is further than `limitKm` away.
  *
  * Uses a local flat projection around the point (the same 111.32 km/degree
- * scaling as {@link cheapCircleBbox}). At hiding-radius scale that is well
- * under 1% off, and callers only trust it outside a margin wider than that.
+ * scaling as {@link cheapCircleBbox}). That is a linear map of the degree
+ * space `booleanWithin` works in, so it keeps which side of an edge things
+ * are on; the only error is how far the circle's vertices drift from
+ * `radiusKm` under it, which {@link projectedRadiusError} bounds.
  */
 function distanceToMaskEdgeKm(
     lng: number,
@@ -256,6 +258,23 @@ function distanceToMaskEdgeKm(
 }
 
 /**
+ * Relative error bound on a geodesic circle's vertex distances in the
+ * projection {@link distanceToMaskEdgeKm} uses. Two parts: turf.circle's
+ * 6371 km sphere against our 111.32 km/degree (~0.11%), and the east-west
+ * scale changing across the circle, which grows with tan(latitude) × the
+ * radius in radians. Measured drift is about a fifth of that second term
+ * (0.5% at 70°N for an 80 km radius); the bound allows half, so it holds
+ * with room to spare.
+ */
+function projectedRadiusError(lat: number, radiusKm: number): number {
+    const tanLat = Math.abs(Math.tan((lat * Math.PI) / 180));
+    return 0.002 + 0.5 * tanLat * (radiusKm / 6371);
+}
+
+/** Past this, skip the shortcut and use the exact test. */
+const MAX_TRUSTED_RADIUS_ERROR = 0.05;
+
+/**
  * Keep only circles that have *some* part inside the playable region.
  *
  * The existing logic was `!turf.booleanWithin(circle, holedMask)` — a
@@ -274,8 +293,11 @@ function distanceToMaskEdgeKm(
  *      nearly every station, since stations are fetched for the territory.
  *   3. centre in the mask: the circle leaves the mask iff some mask edge
  *      is within the radius. Clearly further → drop; clearly nearer →
- *      keep. Only a circle whose edge is within 2% of the boundary falls
- *      through to the exact `booleanWithin`.
+ *      keep. "Clearly" is derived per circle: vertices drift by at most
+ *      {@link projectedRadiusError}, and the polygon's edges cut inside its
+ *      vertices by cos(π / vertex count). Anything between those bounds,
+ *      or near the poles where the bound blows up, uses the exact
+ *      `booleanWithin`.
  */
 export function cullCirclesAgainstZone(
     circles: StationCircle[],
@@ -296,16 +318,30 @@ export function cullCirclesAgainstZone(
             continue;
         }
 
-        const edgeKm = distanceToMaskEdgeKm(
-            center[0],
-            center[1],
-            rings,
-            radiusKm * 1.02,
-        );
-        if (edgeKm > radiusKm * 1.02) continue;
-        if (edgeKm < radiusKm * 0.98) {
-            out.push(circle);
-            continue;
+        const err = projectedRadiusError(center[1], radiusKm);
+        if (err <= MAX_TRUSTED_RADIUS_ERROR) {
+            const vertices = Math.max(
+                circle.geometry.coordinates[0].length - 1,
+                3,
+            );
+            // Every point of the polygon lies between these two radii.
+            const outerKm = radiusKm * (1 + err);
+            const innerKm = radiusKm * (1 - err) * Math.cos(Math.PI / vertices);
+            const edgeKm = distanceToMaskEdgeKm(
+                center[0],
+                center[1],
+                rings,
+                outerKm,
+            );
+            // No mask edge reaches the polygon: it's all on the centre's
+            // side, inside the mask.
+            if (edgeKm > outerKm) continue;
+            // A mask edge passes inside the polygon, and the far side of
+            // every mask edge is playable.
+            if (edgeKm < innerKm) {
+                out.push(circle);
+                continue;
+            }
         }
         if (!turf.booleanWithin(circle, unionizedMask)) {
             out.push(circle);

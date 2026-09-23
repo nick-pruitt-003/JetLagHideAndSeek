@@ -271,6 +271,58 @@ describe("cullCirclesAgainstZone", () => {
         // The reference booleanWithin run is the slow part, by design.
     }, 60_000);
 
+    it("agrees with booleanWithin far north, with big radii and coarse circles", () => {
+        // Where the flat-projection shortcut is least accurate: ~69°N,
+        // radii up to 40 miles, and 8-sided circles whose edges cut well
+        // inside their vertices.
+        let seed = 29;
+        const rand = () => {
+            seed = (seed * 16807) % 2147483647;
+            return seed / 2147483647;
+        };
+        const discs = Array.from({ length: 6 }, () =>
+            turf.circle(
+                [18 + rand() * 4, 69 + rand() * 1.2],
+                10 + rand() * 25,
+                {
+                    units: "miles",
+                    steps: 24,
+                },
+            ),
+        );
+        const holed = turf.mask(
+            turf.union(turf.featureCollection(discs))!,
+        ) as Feature;
+        const playableBbox = playableBboxFromHoledMask(
+            turf.featureCollection([holed]),
+        );
+        const places = Array.from({ length: 60 }, (_, i) =>
+            mkPlace(`n${i}`, 16 + rand() * 8, 68.2 + rand() * 2.8),
+        );
+        for (const [radiusMiles, steps] of [
+            [5, 8],
+            [20, 32],
+            [40, 8],
+        ] as const) {
+            const circles = buildCirclesFromPlaces(places, {
+                radius: radiusMiles,
+                units: "miles",
+                steps,
+            });
+            const kept = cullCirclesAgainstZone(circles, {
+                playableBbox,
+                unionizedMask: holed,
+                radiusKm: radiusMiles * 1.609344,
+            });
+            const expected = circles.filter(
+                (c) => !turf.booleanWithin(c, holed),
+            );
+            const ids = (cs: StationCircle[]) =>
+                cs.map((c) => c.properties.properties.id);
+            expect(ids(kept)).toEqual(ids(expected));
+        }
+    }, 60_000);
+
     it("returns empty when no playable region is provided", () => {
         const circles = buildCirclesFromPlaces([mkPlace("anywhere", 0, 0)], {
             radius: 1,
