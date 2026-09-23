@@ -1,6 +1,6 @@
 import * as turf from "@turf/turf";
 import type { Feature, FeatureCollection, Point } from "geojson";
-import { around } from "geokdbush";
+import { around, distance } from "geokdbush";
 import KDBush from "kdbush";
 
 /**
@@ -11,6 +11,10 @@ import KDBush from "kdbush";
  * zone filters do exactly that for airports and McDonald's / 7-Eleven. This
  * indexes the points once (a k-d tree searched by great-circle distance), so
  * each lookup only visits the few points near the query.
+ *
+ * Ties go to the earliest feature, as in `turf.nearestPoint`, so two points
+ * at the same spot (an airport mapped twice, say) resolve the same way for
+ * the seeker and every station.
  *
  * Returns the original feature, like `turf.nearestPoint` minus the
  * `featureIndex` / `distanceToPoint` properties it adds, which no caller of
@@ -40,6 +44,17 @@ export function nearestPointFinder<P>(
     return (point) => {
         const [lng, lat] = turf.getCoord(point as Feature<Point>);
         const [nearest] = around(index, lng, lat, 1);
-        return features[nearest];
+        // around() orders equal distances arbitrarily. Collect everything at
+        // that distance (to within a micrometre of float noise) and take the
+        // lowest index — kdbush ids are insertion order, i.e. input order.
+        const best = features[nearest].geometry.coordinates;
+        const tied = around(
+            index,
+            lng,
+            lat,
+            Infinity,
+            distance(lng, lat, best[0], best[1]) + 1e-9,
+        );
+        return features[Math.min(...tied)];
     };
 }
