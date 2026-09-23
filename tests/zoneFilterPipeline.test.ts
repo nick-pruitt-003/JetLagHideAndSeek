@@ -224,6 +224,53 @@ describe("cullCirclesAgainstZone", () => {
         expect(kept).toHaveLength(0);
     });
 
+    it("agrees with a plain booleanWithin check on an irregular, multi-hole mask", () => {
+        // The fast paths must not change which stations survive. Build a
+        // lumpy playable area (overlapping discs, so the holes have many
+        // edges and concave bits) and scatter stations across and around it,
+        // including right along its edges.
+        let seed = 7;
+        const rand = () => {
+            seed = (seed * 16807) % 2147483647;
+            return seed / 2147483647;
+        };
+        const discs = Array.from({ length: 12 }, () =>
+            turf.circle(
+                [-74.05 + rand() * 0.25, 40.65 + rand() * 0.2],
+                0.5 + rand() * 2,
+                { units: "miles", steps: 24 },
+            ),
+        );
+        const playable = turf.union(turf.featureCollection(discs))!;
+        const holed = turf.mask(playable) as Feature;
+        const holedFc = turf.featureCollection([holed]);
+
+        const places = Array.from({ length: 200 }, (_, i) =>
+            mkPlace(`s${i}`, -74.15 + rand() * 0.45, 40.58 + rand() * 0.35),
+        );
+        for (const radiusMiles of [0.1, 0.5, 1.5]) {
+            const circles = buildCirclesFromPlaces(places, {
+                radius: radiusMiles,
+                units: "miles",
+            });
+            const kept = cullCirclesAgainstZone(circles, {
+                playableBbox: playableBboxFromHoledMask(holedFc),
+                unionizedMask: holed,
+                radiusKm: radiusMiles * 1.609344,
+            });
+            const expected = circles.filter(
+                (c) => !turf.booleanWithin(c, holed),
+            );
+            const ids = (cs: StationCircle[]) =>
+                cs.map((c) => c.properties.properties.id);
+            expect(ids(kept)).toEqual(ids(expected));
+            // Guard against a vacuous pass: both outcomes must occur.
+            expect(kept.length).toBeGreaterThan(0);
+            expect(kept.length).toBeLessThan(circles.length);
+        }
+        // The reference booleanWithin run is the slow part, by design.
+    }, 60_000);
+
     it("returns empty when no playable region is provided", () => {
         const circles = buildCirclesFromPlaces([mkPlace("anywhere", 0, 0)], {
             radius: 1,

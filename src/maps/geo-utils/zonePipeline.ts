@@ -185,6 +185,75 @@ export interface CullOptions {
     radiusKm: number;
 }
 
+/** One mask ring, flattened for tight loops, with its bbox for skipping. */
+interface MaskRing {
+    coords: number[][];
+    bbox: BBox;
+}
+
+function maskRings(mask: Feature): MaskRing[] {
+    const rings: MaskRing[] = [];
+    const add = (ring: number[][]) => {
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        for (const [x, y] of ring) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+        rings.push({ coords: ring, bbox: [minX, minY, maxX, maxY] });
+    };
+    const geom = mask.geometry;
+    if (geom?.type === "Polygon") geom.coordinates.forEach(add);
+    else if (geom?.type === "MultiPolygon")
+        for (const poly of geom.coordinates) poly.forEach(add);
+    return rings;
+}
+
+/**
+ * Shortest distance in km from a point to any edge of the mask, or
+ * Infinity once every ring is further than `limitKm` away.
+ *
+ * Uses a local flat projection around the point (the same 111.32 km/degree
+ * scaling as {@link cheapCircleBbox}). At hiding-radius scale that is well
+ * under 1% off, and callers only trust it outside a margin wider than that.
+ */
+function distanceToMaskEdgeKm(
+    lng: number,
+    lat: number,
+    rings: MaskRing[],
+    limitKm: number,
+): number {
+    const kx = 111.32 * Math.max(Math.cos((lat * Math.PI) / 180), 1e-6);
+    const ky = 111.32;
+    const reach = cheapCircleBbox(lng, lat, limitKm);
+    let best = Infinity;
+    for (const ring of rings) {
+        if (bboxesDisjoint(ring.bbox, reach)) continue;
+        const c = ring.coords;
+        for (let i = 1; i < c.length; i++) {
+            const ax = (c[i - 1][0] - lng) * kx;
+            const ay = (c[i - 1][1] - lat) * ky;
+            const dx = (c[i][0] - lng) * kx - ax;
+            const dy = (c[i][1] - lat) * ky - ay;
+            const len2 = dx * dx + dy * dy;
+            // Closest point on the segment to the origin (our point).
+            const t =
+                len2 > 0
+                    ? Math.min(1, Math.max(0, -(ax * dx + ay * dy) / len2))
+                    : 0;
+            const px = ax + t * dx;
+            const py = ay + t * dy;
+            const d2 = px * px + py * py;
+            if (d2 < best) best = d2;
+        }
+    }
+    return Math.sqrt(best);
+}
+
 /**
  * Keep only circles that have *some* part inside the playable region.
  *
@@ -194,25 +263,49 @@ export interface CullOptions {
  * with any playable region. So `!booleanWithin` keeps circles that
  * overlap at least partially with a playable region.
  *
- * We short-circuit with a bbox disjoint check against the bbox of the
- * playable region (the holes). A circle whose bbox doesn't touch the
- * playable bbox definitely lies entirely in the mask and is dropped
- * without invoking booleanWithin.
+ * `booleanWithin` compares every circle edge with every mask edge, and the
+ * mask gains edges with every answered question: ~1,500 NYC circles against
+ * a ~10k-vertex mask took over 30s in a benchmark, on every question edit.
+ * So most circles are settled without it:
+ *
+ *   1. bbox disjoint from the playable bbox → wholly in the mask, drop.
+ *   2. centre not in the mask → the centre is playable, keep. This is
+ *      nearly every station, since stations are fetched for the territory.
+ *   3. centre in the mask: the circle leaves the mask iff some mask edge
+ *      is within the radius. Clearly further → drop; clearly nearer →
+ *      keep. Only a circle whose edge is within 2% of the boundary falls
+ *      through to the exact `booleanWithin`.
  */
 export function cullCirclesAgainstZone(
     circles: StationCircle[],
     { playableBbox, unionizedMask, radiusKm }: CullOptions,
 ): StationCircle[] {
+    // No playable region at all: keep nothing.
+    if (!playableBbox) return [];
+
+    const rings = maskRings(unionizedMask);
     const out: StationCircle[] = [];
     for (const circle of circles) {
-        // Cheap prefilter: if there's no playable region at all, keep
-        // nothing. (Defensive — typically playableBbox is non-null.)
-        if (!playableBbox) continue;
-
         const center = turf.getCoord(circle.properties);
         const cBbox = cheapCircleBbox(center[0], center[1], radiusKm);
         if (bboxesDisjoint(cBbox, playableBbox)) continue;
 
+        if (!turf.booleanPointInPolygon(center, unionizedMask as any)) {
+            out.push(circle);
+            continue;
+        }
+
+        const edgeKm = distanceToMaskEdgeKm(
+            center[0],
+            center[1],
+            rings,
+            radiusKm * 1.02,
+        );
+        if (edgeKm > radiusKm * 1.02) continue;
+        if (edgeKm < radiusKm * 0.98) {
+            out.push(circle);
+            continue;
+        }
         if (!turf.booleanWithin(circle, unionizedMask)) {
             out.push(circle);
         }
