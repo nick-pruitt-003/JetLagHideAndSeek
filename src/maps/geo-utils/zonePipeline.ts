@@ -41,6 +41,7 @@ import {
     type StationPlace,
     trainLineNodeFinder,
 } from "@/maps/api";
+import { nearestPointFinder } from "@/maps/geo-utils/nearest";
 import { safeUnion } from "@/maps/geo-utils/operators";
 import { extractStationName } from "@/maps/geo-utils/special";
 import { geoSpatialVoronoi } from "@/maps/geo-utils/voronoi";
@@ -799,10 +800,10 @@ export async function applyQuestionFilters({
 
             const wantSame = question.data.same === true;
             if (question.data.type === "airport") {
-                const seekerNearest = turf.nearestPoint(
-                    seekerPoint,
-                    airportFc as any,
-                );
+                // One index for the seeker and every station, so ties break
+                // the same way for both.
+                const nearestAirport = nearestPointFinder(airportFc);
+                const seekerNearest = nearestAirport(seekerPoint);
                 const seekerIata = String(
                     (seekerNearest.properties as { iata?: string } | null)
                         ?.iata ?? "",
@@ -821,10 +822,7 @@ export async function applyQuestionFilters({
                     const stationPoint = turf.point(
                         turf.getCoord(circle.properties as Feature<Point>),
                     );
-                    const nearestForStation = turf.nearestPoint(
-                        stationPoint,
-                        airportFc as any,
-                    );
+                    const nearestForStation = nearestAirport(stationPoint);
                     const stationIata = String(
                         (
                             nearestForStation.properties as {
@@ -1170,7 +1168,10 @@ export async function applyQuestionFilters({
                 question.data.lng,
                 question.data.lat,
             ]);
-            const seekerNearest = turf.nearestPoint(seekerPoint, points as any);
+            const nearestPoi = nearestPointFinder(
+                points as FeatureCollection<Point>,
+            );
+            const seekerNearest = nearestPoi(seekerPoint);
             const seekerDistance = turf.distance(
                 seekerPoint,
                 seekerNearest as any,
@@ -1179,8 +1180,8 @@ export async function applyQuestionFilters({
 
             current = current.filter((circle) => {
                 const point = turf.point(turf.getCoord(circle.properties));
-                const nearest = turf.nearestPoint(point, points as any);
-                const d = turf.distance(point, nearest as any, {
+                const nearest = nearestPoi(point);
+                const d = turf.distance(point, nearest, {
                     units: "miles",
                 });
                 return question.data.hiderCloser

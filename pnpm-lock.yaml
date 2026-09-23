@@ -272,6 +272,9 @@ importers:
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
+      geokdbush:
+        specifier: ^2.1.0
+        version: 2.1.0
       idb:
         specifier: ^8.0.3
         version: 8.0.3
@@ -3574,6 +3577,9 @@ packages:
 
   geojson-polygon-self-intersections@1.2.2:
     resolution: {integrity: sha512-6XRNF4CsRHYmR9z5YuIk5f/aOototnDf0dgMqYGcS7y1l57ttt6MAIAxl3rXyas6lq1HEbTuLMh4PgvO+OV42w==}
+
+  geokdbush@2.1.0:
+    resolution: {integrity: sha512-bMc7mu+SeUxtHwRpVvZ36qnZa/x8YAGuaPNeGDxd9bxp/jYuJ5GrUirUPz6UNiT+nn/79IQ4gCNan0y4alEUxw==}
 
   get-caller-file@2.0.5:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
@@ -8978,6 +8984,10 @@ snapshots:
   geojson-polygon-self-intersections@1.2.2:
     dependencies:
       rbush: 2.0.2
+
+  geokdbush@2.1.0:
+    dependencies:
+      tinyqueue: 3.0.0
 
   get-caller-file@2.0.5: {}
 
