@@ -171,7 +171,11 @@ pnpm test          # unit tests (Vitest)
 pnpm test:e2e      # end-to-end browser tests (Playwright)
 ```
 
-Type-check with `pnpm typecheck:ts6`. Both suites also run in CI: unit tests gate
+Type-check with `pnpm typecheck:ts7` (TypeScript 7, the fast Go compiler) or
+`pnpm typecheck:ts6`. TS 6 stays installed as `typescript` because
+typescript-eslint and `@astrojs/check` need its JS API; TS 7 is aliased as
+`typescript7`. Both packages ship a `tsc` binary, so a bare `pnpm exec tsc` may
+run either — use the scripts. Both suites also run in CI: unit tests gate
 the Docker image build (`.github/workflows/docker-image.yml`) and Playwright runs
 on pushes/PRs (`.github/workflows/playwright.yml`).
 
