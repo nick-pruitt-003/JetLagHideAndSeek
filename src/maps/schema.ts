@@ -324,7 +324,9 @@ const zoneMatchingQuestionsSchema = baseMatchingQuestionSchema.extend({
     ]),
     cat: z
         .object({ adminLevel: adminLevelSchema })
-        .default(() => ({ adminLevel: 3 }) as { adminLevel: 3 }),
+        // L6 is the NYC borough / county level. Upstream defaulted to L3,
+        // which the US doesn't use, so a new zone question found no boundary.
+        .default(() => ({ adminLevel: 6 }) as { adminLevel: 6 }),
 });
 
 const homeGameMatchingQuestionsSchema = baseMatchingQuestionSchema.extend({

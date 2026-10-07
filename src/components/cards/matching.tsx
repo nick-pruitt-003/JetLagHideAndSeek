@@ -241,7 +241,7 @@ export const MatchingQuestionComponent = ({
     // The category should be defined such that no error is thrown if this is a zone question.
     const ensureZoneCategory = () => {
         if (!(data as any).cat) {
-            (data as any).cat = { adminLevel: 3 };
+            (data as any).cat = { adminLevel: 6 };
         }
     };
 

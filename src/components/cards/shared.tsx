@@ -123,19 +123,23 @@ export const questionCardControls = (data: {
 });
 
 /**
- * OSM admin-level labels for the zone/border pickers. Level meanings vary by
- * country, hence the "in some areas" hedging.
+ * OSM admin-level labels for the zone/border pickers, NYC-metro meaning
+ * first since that is where this fork is played. Checked against OSM on
+ * 2026-10-07: NYC is L5; each borough is both a county (L6, "Kings County")
+ * and a borough (L7, "Brooklyn") with the same outline; NJ/NY counties and
+ * CT planning regions are L6; NY towns are L7; Newark and Stamford are L8.
+ * The US doesn't use L3. Other countries use the levels differently.
  */
 export const ADMIN_LEVEL_OPTIONS: Record<string, string> = {
     2: "Admin L2 (country)",
-    3: "Admin L3 (region/borough in some areas)",
-    4: "Admin L4 (state/province/county in some areas)",
-    5: "Admin L5 (county/city in some areas)",
-    6: "Admin L6 (NYC boroughs / county district in some areas)",
-    7: "Admin L7 (district/borough in some areas)",
-    8: "Admin L8 (city/town in many areas)",
-    9: "Admin L9 (city subdivision/neighborhood)",
-    10: "Admin L10 (small local subdivision)",
+    3: "Admin L3 (not used in the US)",
+    4: "Admin L4 (state)",
+    5: "Admin L5 (New York City as a whole)",
+    6: "Admin L6 (county — NYC borough, NJ/NY county, CT region)",
+    7: "Admin L7 (NYC borough — same as L6 — or NY town)",
+    8: "Admin L8 (city/town, e.g. Newark, Stamford)",
+    9: "Admin L9 (city subdivision; rarely mapped)",
+    10: "Admin L10 (neighborhood; rarely mapped)",
 };
 
 /** Writes back whichever of the two coordinates the picker changed. */
