@@ -231,34 +231,39 @@
     }
 }
 
-@keyframes tutorialPulse {
+/*
+  Tutorial highlight ring. Only opacity animates, which the compositor
+  handles; the old pulse animated the 9999px-spread dimming box-shadow,
+  repainting the whole screen every frame for as long as the tutorial was
+  open and making every other movement stutter on phones.
+*/
+@keyframes tutorialRingPulse {
     0%,
     100% {
-        border-color: rgba(59, 130, 246, 0.8);
-        box-shadow:
-            0 0 0 4px rgba(59, 130, 246, 0.8),
-            0 0 0 8px rgba(59, 130, 246, 0.4),
-            0 0 0 9999px rgba(0, 0, 0, 0.6),
-            0 0 20px rgba(59, 130, 246, 0.6);
+        opacity: 0.35;
     }
     50% {
-        border-color: rgba(59, 130, 246, 1);
-        box-shadow:
-            0 0 0 6px rgba(59, 130, 246, 1),
-            0 0 0 12px rgba(59, 130, 246, 0.6),
-            0 0 0 9999px rgba(0, 0, 0, 0.6),
-            0 0 40px rgba(59, 130, 246, 0.8);
+        opacity: 1;
     }
 }
 
-/* Add pulsing class */
-.tutorial-highlight-pulse {
-    animation: tutorialPulse 2s infinite ease-in-out;
+.tutorial-highlight-breathe {
+    animation: breathe 3s infinite ease-in-out;
 }
 
-/* Smooth transitions for tutorial dialog positioning */
-.tutorial-dialog {
-    transition: all 0.3s ease-out;
+.tutorial-highlight-ring {
+    animation: tutorialRingPulse 2s infinite ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tutorial-highlight-ring,
+    .tutorial-highlight-breathe {
+        animation: none;
+    }
+    .tutorial-dialog,
+    .tutorial-highlight {
+        transition: none !important;
+    }
 }
 
 /* Override default dialog positioning when tutorial is active */

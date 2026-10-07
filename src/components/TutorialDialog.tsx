@@ -1,7 +1,13 @@
 import { useStore } from "@nanostores/react";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+    type ReactNode,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+} from "react";
 
 import {
     MatchingQuestionComponent,
@@ -819,6 +825,33 @@ const tutorialSteps: TutorialStep[] = [
     },
 ];
 
+/** Shared by the highlight and the dialog so the two move as one. */
+const TUTORIAL_MOVE = "250ms cubic-bezier(0.2, 0, 0, 1)";
+
+/**
+ * Re-run `measure` now (before paint, so a new step never flashes in the old
+ * spot), once more after the 300ms sidebar/drawer animations a step can
+ * trigger have settled, and whenever the viewport changes.
+ */
+const useTutorialLayout = (measure: () => void, deps: unknown[]) => {
+    useLayoutEffect(() => {
+        measure();
+        const settle = setTimeout(measure, 320);
+        const viewport = window.visualViewport;
+        window.addEventListener("resize", measure);
+        window.addEventListener("orientationchange", measure);
+        viewport?.addEventListener("resize", measure);
+        viewport?.addEventListener("scroll", measure);
+        return () => {
+            clearTimeout(settle);
+            window.removeEventListener("resize", measure);
+            window.removeEventListener("orientationchange", measure);
+            viewport?.removeEventListener("resize", measure);
+            viewport?.removeEventListener("scroll", measure);
+        };
+    }, deps);
+};
+
 const TutorialOverlay = ({
     targetSelector,
     isVisible,
@@ -826,60 +859,46 @@ const TutorialOverlay = ({
     targetSelector?: string;
     isVisible: boolean;
 }) => {
-    const [highlightedElement, setHighlightedElement] =
-        useState<Element | null>(null);
+    const [rect, setRect] = useState<DOMRect | null>(null);
 
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            if (!isVisible || !targetSelector) {
-                setHighlightedElement(null);
-                return;
-            }
-
-            setHighlightedElement(
-                document.querySelector(targetSelector) || null,
-            );
-        }, 300);
-        return () => clearTimeout(timeoutId);
+    useTutorialLayout(() => {
+        const target =
+            isVisible && targetSelector
+                ? document.querySelector(targetSelector)
+                : null;
+        setRect(target ? target.getBoundingClientRect() : null);
     }, [targetSelector, isVisible]);
 
     if (!isVisible) {
         return null;
     }
 
-    const rect = highlightedElement?.getBoundingClientRect();
     const padding = 12;
 
     return (
         <div className="fixed inset-0 z-[9999] pointer-events-none">
-            {highlightedElement && rect ? (
-                <div>
-                    <div
-                        className="absolute transition-all duration-500 ease-out tutorial-highlight-pulse"
-                        style={{
-                            left: rect.left - padding,
-                            top: rect.top - padding,
-                            width: rect.width + padding * 2,
-                            height: rect.height + padding * 2,
-                            boxShadow: `
-                                    0 0 0 4px rgba(59, 130, 246, 0.8),
-                                    0 0 0 8px rgba(59, 130, 246, 0.4),
-                                    0 0 0 9999px rgba(0, 0, 0, 0.6),
-                                    0 0 30px rgba(59, 130, 246, 0.6)
-                                `,
-                            borderRadius: "12px",
-                            border: "3px solid rgb(59, 130, 246)",
-                            background: "transparent",
-                            zIndex: 10000,
-                        }}
-                    >
-                        <div
-                            className="absolute inset-0 rounded-lg bg-linear-to-r from-blue-400/20 to-purple-400/20"
-                            style={{
-                                animation: "breathe 3s infinite ease-in-out",
-                            }}
-                        />
-                    </div>
+            {rect ? (
+                <div
+                    className="tutorial-highlight absolute"
+                    style={{
+                        left: rect.left - padding,
+                        top: rect.top - padding,
+                        width: rect.width + padding * 2,
+                        height: rect.height + padding * 2,
+                        // Static: the dimming lives in this shadow, so it must
+                        // not animate (see .tutorial-highlight-ring).
+                        boxShadow:
+                            "0 0 0 4px rgba(59, 130, 246, 0.8), 0 0 0 9999px rgba(0, 0, 0, 0.6)",
+                        borderRadius: "12px",
+                        border: "3px solid rgb(59, 130, 246)",
+                        transition: ["left", "top", "width", "height"]
+                            .map((prop) => `${prop} ${TUTORIAL_MOVE}`)
+                            .join(", "),
+                        zIndex: 10000,
+                    }}
+                >
+                    <div className="tutorial-highlight-ring absolute -inset-3 rounded-[18px] border-4 border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.6)]" />
+                    <div className="tutorial-highlight-breathe absolute inset-0 rounded-lg bg-linear-to-r from-blue-400/20 to-purple-400/20" />
                 </div>
             ) : (
                 <div className="absolute inset-0 bg-black/60 transition-opacity duration-300" />
@@ -910,7 +929,7 @@ export const TutorialDialog = () => {
 
     const currentTutorialStep = tutorialSteps[$tutorialStep];
 
-    useEffect(() => {
+    useTutorialLayout(() => {
         const getViewportBounds = () => {
             const visualViewport = window.visualViewport;
 
@@ -920,8 +939,14 @@ export const TutorialDialog = () => {
             };
         };
 
+        let portalRetries = 0;
         const positionDialog = () => {
-            if (!$showTutorial || !dialogRef.current) return;
+            if (!$showTutorial) return;
+            if (!dialogRef.current) {
+                // The portal can mount a frame after this effect runs.
+                if (portalRetries++ < 10) requestAnimationFrame(positionDialog);
+                return;
+            }
 
             const dialogElement = dialogRef.current;
             const viewport = getViewportBounds();
@@ -939,13 +964,31 @@ export const TutorialDialog = () => {
             dialogElement.style.width = `${maxWidth}px`;
             dialogElement.style.height = "auto";
 
-            if (!currentTutorialStep.targetSelector) {
+            // Every step is placed with plain left/top pixels. Centred steps
+            // used `left: 50%` + `translate(-50%, -50%)` instead, so moving
+            // between a centred and a targeted step animated left/top and
+            // transform at once and the box swooped diagonally.
+            const place = (x: number, y: number) => {
                 dialogElement.style.position = "fixed";
-                dialogElement.style.left = `${viewport.width / 2}px`;
-                dialogElement.style.top = `${viewport.height / 2}px`;
-                dialogElement.style.transform = "translate(-50%, -50%)";
+                dialogElement.style.transform = "none";
+                dialogElement.style.left = `${Math.round(x)}px`;
+                dialogElement.style.top = `${Math.round(y)}px`;
                 dialogElement.style.right = "auto";
                 dialogElement.style.bottom = "auto";
+            };
+            const centre = () => {
+                const box = dialogElement.getBoundingClientRect();
+                place(
+                    (viewport.width - box.width) / 2,
+                    Math.max(
+                        viewportPadding,
+                        (viewport.height - box.height) / 2,
+                    ),
+                );
+            };
+
+            if (!currentTutorialStep.targetSelector) {
+                centre();
                 return;
             }
 
@@ -954,13 +997,7 @@ export const TutorialDialog = () => {
             ) as HTMLElement;
 
             if (!targetElement) {
-                // If target element not found, center the dialog
-                dialogElement.style.position = "fixed";
-                dialogElement.style.left = `${viewport.width / 2}px`;
-                dialogElement.style.top = `${viewport.height / 2}px`;
-                dialogElement.style.transform = "translate(-50%, -50%)";
-                dialogElement.style.right = "auto";
-                dialogElement.style.bottom = "auto";
+                centre();
                 return;
             }
 
@@ -1075,46 +1112,15 @@ export const TutorialDialog = () => {
                         break;
                     }
                     default:
-                        // Center
-                        dialogElement.style.left = `${viewport.width / 2}px`;
-                        dialogElement.style.top = `${viewport.height / 2}px`;
-                        dialogElement.style.transform = "translate(-50%, -50%)";
-                        dialogElement.style.right = "auto";
-                        dialogElement.style.bottom = "auto";
+                        centre();
                         return;
                 }
             }
 
-            // Apply positioning smoothly
-            dialogElement.style.transform = "none";
-            dialogElement.style.left = `${finalX}px`;
-            dialogElement.style.top = `${finalY}px`;
-            dialogElement.style.right = "auto";
-            dialogElement.style.bottom = "auto";
+            place(finalX, finalY);
         };
 
-        const timeoutId = setTimeout(positionDialog, 300);
-        window.addEventListener("resize", positionDialog);
-        window.addEventListener("orientationchange", positionDialog);
-        window.visualViewport?.addEventListener("resize", positionDialog);
-        window.visualViewport?.addEventListener("scroll", positionDialog);
-
-        return () => {
-            clearTimeout(timeoutId);
-            window.removeEventListener("resize", positionDialog);
-            window.removeEventListener("orientationchange", positionDialog);
-            window.visualViewport?.removeEventListener(
-                "resize",
-                positionDialog,
-            );
-            window.visualViewport?.removeEventListener(
-                "scroll",
-                positionDialog,
-            );
-        };
-        // `currentTutorialStep` is derived from `$tutorialStep` and
-        // read inside the timeout callback, so keying the effect on the
-        // step index + visibility is sufficient.
+        positionDialog();
     }, [$tutorialStep, $showTutorial]);
 
     useEffect(() => {
@@ -1173,7 +1179,7 @@ export const TutorialDialog = () => {
                         "tutorial-dialog",
                         currentTutorialStep.targetSelector
                             ? "max-h-[70vh]"
-                            : "max-h-[85vh] left-[50%] top-[50%]",
+                            : "max-h-[85vh]",
                     )}
                     style={{
                         // Explicit width (not `auto`) — iOS Safari
@@ -1187,8 +1193,10 @@ export const TutorialDialog = () => {
                         // normal laptop).
                         width: "min(760px, calc(100vw - 2rem))",
                         maxWidth: "min(760px, calc(100vw - 2rem))",
-                        transition:
-                            "left 0.3s ease-out, top 0.3s ease-out, transform 0.3s ease-out",
+                        // Position only, at the highlight's pace, so the two
+                        // move together; size changes snap instead of
+                        // stretching.
+                        transition: `left ${TUTORIAL_MOVE}, top ${TUTORIAL_MOVE}`,
                     }}
                     data-tutorial-active={$showTutorial}
                 >

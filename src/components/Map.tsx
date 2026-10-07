@@ -6,6 +6,7 @@ import { useStore } from "@nanostores/react";
 import * as turf from "@turf/turf";
 import type { Feature, MultiPolygon, Polygon } from "geojson";
 import * as L from "leaflet";
+import { LocateFixed } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import {
     MapContainer,
@@ -437,6 +438,28 @@ export const Map = ({ className }: { className?: string }) => {
         () => ({ current: null as number | null }),
         [],
     );
+    // Follow Me extras: the latest fix (for "centre on me"), the circle that
+    // shows how far off that fix may be, and a pending centre request made
+    // before the first fix arrived.
+    const lastFixRef = useRef<L.LatLng | null>(null);
+    const accuracyCircleRef = useRef<L.Circle | null>(null);
+    const centreOnNextFixRef = useRef(false);
+
+    const centreOnMe = () => {
+        if (!map) return;
+        if ($followMe && lastFixRef.current) {
+            map.flyTo(lastFixRef.current, Math.max(map.getZoom(), 15));
+            return;
+        }
+        if (!("geolocation" in navigator)) {
+            toast.error("This browser can't share your location.");
+            return;
+        }
+        // Turning Follow Me on starts the GPS watch; the first fix centres.
+        centreOnNextFixRef.current = true;
+        toast.info("Finding your location…", { toastId: "centre-on-me" });
+        followMe.set(true);
+    };
     const refreshGenRef = useRef(0);
     const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const eliminationLayerRef = useRef<L.GeoJSON | null>(null);
@@ -882,6 +905,18 @@ export const Map = ({ className }: { className?: string }) => {
                 <div className="leaflet-top leaflet-right">
                     <div className="leaflet-control flex-col flex gap-2">
                         <LeafletFullScreenButton />
+                        <button
+                            type="button"
+                            onClick={centreOnMe}
+                            title="Centre the map on my location"
+                            aria-label="Centre the map on my location"
+                            className="bg-white hover:bg-[#f4f4f4] w-[30px] h-[30px] rounded-sm flex items-center justify-center border-2 border-black/30 cursor-pointer text-black"
+                        >
+                            <LocateFixed
+                                className="w-5 h-5"
+                                aria-hidden="true"
+                            />
+                        </button>
                     </div>
                 </div>
                 <PolygonDraw />
@@ -995,6 +1030,11 @@ export const Map = ({ className }: { className?: string }) => {
                 map.removeLayer(followMeMarkerRef.current);
                 followMeMarkerRef.current = null;
             }
+            if (accuracyCircleRef.current) {
+                map.removeLayer(accuracyCircleRef.current);
+                accuracyCircleRef.current = null;
+            }
+            lastFixRef.current = null;
             if (geoWatchIdRef.current !== null) {
                 navigator.geolocation.clearWatch(geoWatchIdRef.current);
                 geoWatchIdRef.current = null;
@@ -1010,6 +1050,29 @@ export const Map = ({ className }: { className?: string }) => {
             (pos) => {
                 const lat = pos.coords.latitude;
                 const lng = pos.coords.longitude;
+                lastFixRef.current = L.latLng(lat, lng);
+
+                // A 10 m fix and a 500 m one look identical as a dot; the
+                // circle shows how far off this one may be.
+                if (accuracyCircleRef.current) {
+                    accuracyCircleRef.current
+                        .setLatLng([lat, lng])
+                        .setRadius(pos.coords.accuracy);
+                } else {
+                    accuracyCircleRef.current = L.circle([lat, lng], {
+                        radius: pos.coords.accuracy,
+                        color: "#2A81CB",
+                        weight: 1,
+                        fillOpacity: 0.12,
+                        interactive: false,
+                    }).addTo(map);
+                }
+
+                if (centreOnNextFixRef.current) {
+                    centreOnNextFixRef.current = false;
+                    toast.dismiss("centre-on-me");
+                    map.flyTo([lat, lng], Math.max(map.getZoom(), 15));
+                }
                 if (followMeMarkerRef.current) {
                     followMeMarkerRef.current.setLatLng([lat, lng]);
                 } else {
@@ -1025,6 +1088,8 @@ export const Map = ({ className }: { className?: string }) => {
                 }
             },
             () => {
+                centreOnNextFixRef.current = false;
+                toast.dismiss("centre-on-me");
                 toast.error("Unable to access your location.");
                 followMe.set(false);
             },
