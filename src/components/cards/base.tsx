@@ -75,7 +75,10 @@ export const QuestionCard = ({
             <SidebarGroup className={className}>
                 <div className="relative">
                     <button
+                        type="button"
                         onClick={toggleCollapse}
+                        aria-expanded={!isCollapsed}
+                        aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${label ?? "question"}`}
                         className={cn(
                             "absolute top-2 left-2 text-white border rounded-md transition-all duration-500",
                             isCollapsed && "-rotate-90",

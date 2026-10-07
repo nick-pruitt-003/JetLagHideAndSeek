@@ -4,7 +4,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme {
+/*
+  `inline`: the tokens below wrap runtime variables (`hsl(var(--background))`).
+  Without it Tailwind declares them on :root, where `var(--background)` is
+  resolved once with the *light* value and inherited as-is, so nothing inside
+  `body.dark` ever got the dark palette. Dialogs, inputs and outline buttons
+  rendered light with the inherited white text: blank white boxes.
+*/
+@theme inline {
     --color-jetlag: #1f2f3f;
     --color-background: hsl(var(--background));
     --color-foreground: hsl(var(--foreground));
@@ -156,7 +163,10 @@
         --destructive: 0 62.8% 30.6%;
         --destructive-foreground: 210 40% 98%;
         --border: 217.2 32.6% 17.5%;
-        --input: 217.2 32.6% 17.5%;
+        /* Input and outline-button outlines. 17.5% measured 1.2-1.4:1 on
+           the page and sidebar, under WCAG 1.4.11's 3:1 for control
+           boundaries; 44% gives 3.75:1 and 3.33:1. */
+        --input: 215 20.2% 44%;
         --ring: 212.7 26.8% 83.9%;
         --chart-1: 220 70% 50%;
         --chart-2: 160 60% 45%;

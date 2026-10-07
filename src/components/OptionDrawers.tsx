@@ -558,7 +558,7 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     }
                                     placeholder="Enter your CARTO API key"
                                 />
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted-foreground">
                                     Needed for the CARTO raster styles — without
                                     it they fall back to plain OpenStreetMap
                                     tiles. The vector styles work either way,
@@ -590,7 +590,7 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     }
                                     placeholder="Enter your Thunderforest API key"
                                 />
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted-foreground">
                                     Needed for Thunderforest map styles. Create
                                     a key on the{" "}
                                     <a
@@ -618,7 +618,7 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     }
                                     placeholder="Enter your Pastebin API key"
                                 />
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted-foreground">
                                     Needed for sharing large game data. Create a
                                     key{" "}
                                     <a

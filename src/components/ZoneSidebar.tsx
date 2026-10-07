@@ -1375,7 +1375,7 @@ export const ZoneSidebar = () => {
                                                     disabled={$isLoading}
                                                 />
                                                 <button
-                                                    className="bg-blue-600 text-white px-3 rounded-md"
+                                                    className="bg-blue-600 text-white px-3 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                                                     disabled={$isLoading}
                                                     onClick={async () => {
                                                         if (!importUrl) return;
@@ -1967,12 +1967,14 @@ function StationReachabilityControl({
         reachabilityOverridesAtom.set(next);
     };
 
+    // White glyphs need 4.5:1: the 600 shades (and amber-500) measured
+    // 2.2-3.8:1, and the old /80 fills let the dark panel bleed through.
     let glyph: string;
     let color: string;
     let title: string;
     if (override === "include") {
         glyph = "★";
-        color = "bg-emerald-600 text-white";
+        color = "bg-emerald-700 text-white";
         title = "Forced include (click to exclude)";
     } else if (override === "exclude") {
         glyph = "⊘";
@@ -1980,16 +1982,16 @@ function StationReachabilityControl({
         title = "Forced exclude (click to reset)";
     } else if (status === "reachable") {
         glyph = "✓";
-        color = "bg-green-600/80 text-white";
+        color = "bg-green-700 text-white";
         title = "Reachable (click to force include)";
     } else if (status === "unreachable") {
         glyph = "✗";
-        color = "bg-red-600/80 text-white";
+        color = "bg-red-700 text-white";
         title =
             "Unreachable — shown because it was included manually (click to force include)";
     } else {
         glyph = "?";
-        color = "bg-amber-500 text-white";
+        color = "bg-amber-700 text-white";
         title =
             "Unknown — no GTFS match. Click to force include; click again to exclude.";
     }
