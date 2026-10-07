@@ -351,6 +351,73 @@ export function cullCirclesAgainstZone(
 }
 
 // ---------------------------------------------------------------------------
+// Per-hiding-zone facility questions ("Zoo — per hiding zone", …)
+// ---------------------------------------------------------------------------
+
+export interface FacilitiesNearStation {
+    /** The facility nearest the seeker, from `turf.nearestPoint`, so it
+     *  carries `distanceToPoint` (km) for the measuring circles. */
+    seekerFacility: Feature<Point, { distanceToPoint: number } & any>;
+    /** Facilities that could be nearest to some point of this station's
+     *  hiding zone: within two hiding radii of the station's closest one. */
+    nearbyFacilities: Feature<Point>[];
+}
+
+/**
+ * Shared first step of the per-hiding-zone facility questions, run when a
+ * station is tapped in the Hiding Zone panel. Unnamed OSM entries are not
+ * valid locations, so they are dropped for the seeker's pick as well as the
+ * station's — otherwise an unnamed nearest facility has no Voronoi cell and
+ * "Same" eliminates every station. Returns null when there is nothing named.
+ */
+export function facilitiesNearStation(
+    facilities: Feature<Point>[],
+    seeker: [number, number],
+    station: Feature<Point>,
+    hidingRadiusMiles: number,
+): FacilitiesNearStation | null {
+    const named = facilities.filter(
+        (f) => (f.properties as { name?: string } | null)?.name,
+    );
+    if (named.length === 0) return null;
+
+    const seekerFacility = turf.nearestPoint(
+        turf.point(seeker),
+        turf.featureCollection(named),
+    ) as FacilitiesNearStation["seekerFacility"];
+
+    const distances = named.map((f) =>
+        turf.distance(f, station, { units: "miles" }),
+    );
+    const closest = Math.min(...distances);
+    const nearbyFacilities = named.filter(
+        (_, i) => distances[i] < closest + hidingRadiusMiles * 2,
+    );
+    return { seekerFacility, nearbyFacilities };
+}
+
+/**
+ * The Voronoi cell (among the nearby facilities) that belongs to the
+ * seeker's facility, or undefined when the seeker's facility isn't one of
+ * them. Matched by position, not name: two facilities can share a name.
+ */
+export function seekerFacilityCell(
+    nearbyFacilities: Feature<Point>[],
+    seekerFacility: Feature<Point>,
+): Feature<Polygon | MultiPolygon> | undefined {
+    const [qx, qy] = turf.getCoord(seekerFacility);
+    return geoSpatialVoronoi(
+        turf.featureCollection(nearbyFacilities),
+    ).features.find((cell) => {
+        const site = (cell.properties as { site?: Feature<Point> } | null)
+            ?.site;
+        if (!site) return false;
+        const [sx, sy] = turf.getCoord(site);
+        return sx === qx && sy === qy;
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Phase B: question-driven filters
 // ---------------------------------------------------------------------------
 

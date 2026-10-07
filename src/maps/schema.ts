@@ -204,43 +204,61 @@ const adminLevelSchema = z.union([
 const fullFacilityLiterals = [
     z
         .literal("aquarium-full")
-        .describe("Aquarium Question (Small+Medium Games)"),
-    z.literal("zoo-full").describe("Zoo Question (Small+Medium Games)"),
+        .describe("Aquarium — whole map (small/medium games)"),
+    z.literal("zoo-full").describe("Zoo — whole map (small/medium games)"),
     z
         .literal("theme_park-full")
-        .describe("Theme Park Question (Small+Medium Games)"),
-    z.literal("peak-full").describe("Mountain Question (Small+Medium Games)"),
-    z.literal("museum-full").describe("Museum Question (Small+Medium Games)"),
+        .describe("Theme Park — whole map (small/medium games)"),
+    z
+        .literal("peak-full")
+        .describe("Mountain — whole map (small/medium games)"),
+    z
+        .literal("museum-full")
+        .describe("Museum — whole map (small/medium games)"),
     z
         .literal("hospital-full")
-        .describe("Hospital Question (Small+Medium Games)"),
+        .describe("Hospital — whole map (small/medium games)"),
     z
         .literal("hospital-nyc-full")
-        .describe("Hospital Question — NYC Curated List (Small+Medium Games)"),
-    z.literal("cinema-full").describe("Cinema Question (Small+Medium Games)"),
-    z.literal("library-full").describe("Library Question (Small+Medium Games)"),
+        .describe("Hospital — NYC curated list, whole map"),
+    z
+        .literal("cinema-full")
+        .describe("Cinema — whole map (small/medium games)"),
+    z
+        .literal("library-full")
+        .describe("Library — whole map (small/medium games)"),
     z
         .literal("golf_course-full")
-        .describe("Golf Course Question (Small+Medium Games)"),
+        .describe("Golf Course — whole map (small/medium games)"),
     z
         .literal("consulate-full")
-        .describe("Foreign Consulate Question (Small+Medium Games)"),
-    z.literal("park-full").describe("Park Question (Small+Medium Games)"),
+        .describe("Foreign Consulate — whole map (small/medium games)"),
+    z.literal("park-full").describe("Park — whole map (small/medium games)"),
 ] as const;
 
 /** The hiding-zone (home game) facility variants, shared the same way. */
 const homeGameFacilityLiterals = [
-    z.literal("aquarium").describe("Aquarium Question"),
-    z.literal("zoo").describe("Zoo Question"),
-    z.literal("theme_park").describe("Theme Park Question"),
-    z.literal("peak").describe("Mountain Question"),
-    z.literal("museum").describe("Museum Question"),
-    z.literal("hospital").describe("Hospital Question"),
-    z.literal("cinema").describe("Cinema Question"),
-    z.literal("library").describe("Library Question"),
-    z.literal("golf_course").describe("Golf Course Question"),
-    z.literal("consulate").describe("Foreign Consulate Question"),
-    z.literal("park").describe("Park Question"),
+    z
+        .literal("aquarium")
+        .describe("Aquarium — per hiding zone (tap a station)"),
+    z.literal("zoo").describe("Zoo — per hiding zone (tap a station)"),
+    z
+        .literal("theme_park")
+        .describe("Theme Park — per hiding zone (tap a station)"),
+    z.literal("peak").describe("Mountain — per hiding zone (tap a station)"),
+    z.literal("museum").describe("Museum — per hiding zone (tap a station)"),
+    z
+        .literal("hospital")
+        .describe("Hospital — per hiding zone (tap a station)"),
+    z.literal("cinema").describe("Cinema — per hiding zone (tap a station)"),
+    z.literal("library").describe("Library — per hiding zone (tap a station)"),
+    z
+        .literal("golf_course")
+        .describe("Golf Course — per hiding zone (tap a station)"),
+    z
+        .literal("consulate")
+        .describe("Foreign Consulate — per hiding zone (tap a station)"),
+    z.literal("park").describe("Park — per hiding zone (tap a station)"),
 ] as const;
 
 /** The hiding-zone facility types as plain strings, for runtime checks. */
@@ -294,10 +312,12 @@ const ordinaryMatchingQuestionSchema = baseMatchingQuestionSchema.extend({
 
 const zoneMatchingQuestionsSchema = baseMatchingQuestionSchema.extend({
     type: z.union([
-        z.literal("zone").describe("Zone Question"),
+        z
+            .literal("zone")
+            .describe("Same Admin Zone (City/County/State/Borough)"),
         z
             .literal("same-admin-zone")
-            .describe("Same Admin Unit (City/County/State/Borough)"),
+            .describe("Same Admin Zone (older duplicate, same as above)"),
         z
             .literal("letter-zone")
             .describe("Zone Starts With Same Letter Question"),

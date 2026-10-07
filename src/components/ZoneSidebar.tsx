@@ -4,7 +4,6 @@ import type { Feature, FeatureCollection, Point } from "geojson";
 import * as L from "leaflet";
 import find from "lodash/find";
 import isEqual from "lodash/isEqual";
-import minBy from "lodash/minBy";
 import { Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
@@ -117,7 +116,11 @@ import {
     safeUnion,
     stationsSignature,
 } from "@/maps/geo-utils";
-import { filterCirclesByReachability } from "@/maps/geo-utils/zonePipeline";
+import {
+    facilitiesNearStation,
+    filterCirclesByReachability,
+    seekerFacilityCell,
+} from "@/maps/geo-utils/zonePipeline";
 import { findMatchingPlaces } from "@/maps/questions/matching";
 
 function _previewText(count: number) {
@@ -2192,55 +2195,23 @@ async function selectionProcess(
                 continue;
             }
 
-            const seekerPoint = turf.point([
-                question.data.lng,
-                question.data.lat,
-            ]);
-            const nearestQuestion = turf.nearestPoint(
-                seekerPoint,
-                points as any,
+            const nearby = facilitiesNearStation(
+                points.features as Feature<Point>[],
+                [question.data.lng, question.data.lat],
+                station.properties,
+                $hidingRadius,
             );
-
-            const distances: any[] = points.features.map((x: any) => {
-                return {
-                    distance: turf.distance(
-                        turf.point(turf.getCoord(x)),
-                        station.properties,
-                        {
-                            units: "miles",
-                        },
-                    ),
-                    point: x,
-                };
-            });
-            const minimumPoint = minBy(distances, "distance");
-            if (!minimumPoint) {
+            if (!nearby) {
                 continue;
             }
-
-            const nearestPoints = distances
-                .filter(
-                    (x) =>
-                        x.distance <
-                            minimumPoint.distance + $hidingRadius * 2 &&
-                        x.point.properties.name, // If it doesn't have a name, it's not a valid location
-                )
-                .map((x) => x.point);
-            if (nearestPoints.length === 0) {
-                continue;
-            }
+            const { seekerFacility: nearestQuestion, nearbyFacilities } =
+                nearby;
 
             if (question.id === "matching") {
-                const voronoi = geoSpatialVoronoi(
-                    turf.featureCollection(nearestPoints),
+                const correctPolygon = seekerFacilityCell(
+                    nearbyFacilities,
+                    nearestQuestion,
                 );
-
-                const correctPolygon = voronoi.features.find((feature: any) => {
-                    return (
-                        feature.properties.site.properties.name ===
-                        nearestQuestion.properties.name
-                    );
-                });
 
                 if (!correctPolygon) {
                     if (question.data.same) {
@@ -2266,7 +2237,7 @@ async function selectionProcess(
                     );
                 }
             } else {
-                const circles = nearestPoints.map((x) =>
+                const circles = nearbyFacilities.map((x) =>
                     turf.circle(
                         turf.getCoord(x),
                         nearestQuestion.properties.distanceToPoint,

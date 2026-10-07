@@ -153,8 +153,9 @@ export const applyLatLng =
 
 export const HidingZoneClickNotice = () => (
     <span className="px-2 text-center text-orange-500">
-        This question will only influence the map when you click on a hiding
-        zone in the hiding zone sidebar.
+        Answering this won&apos;t shade the map. Open the Hiding Zone panel and
+        tap a station to see what it rules out there. To shade the whole map,
+        pick the &ldquo;whole map&rdquo; version of this question instead.
     </span>
 );
 

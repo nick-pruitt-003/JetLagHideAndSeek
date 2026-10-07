@@ -455,9 +455,10 @@ const tutorialSteps: TutorialStep[] = [
             <>
                 <strong>Full Game Variations (Small/Medium Games):</strong>
                 <br />
-                These require the game area to be relatively small (alternatives
-                also exist that function with Hiding Zone Mode for larger
-                games):
+                Labelled &ldquo;whole map&rdquo; in the menu. These shade the
+                whole map and need a relatively small game area. Each also has a
+                &ldquo;per hiding zone&rdquo; version for larger games, which
+                only applies when you tap a station in the Hiding Zone panel:
                 <br />• Aquariums, Zoos, Theme Parks
                 <br />• Mountains, Museums, Hospitals, Cinemas
                 <br />• Libraries, Golf Courses, Foreign Consulates, Parks

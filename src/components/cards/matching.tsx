@@ -145,6 +145,20 @@ function AirportPlayToggles({
     );
 }
 
+/**
+ * "same-admin-zone" runs exactly the same code as "zone", so offering both
+ * read as a duplicate. Keep it in the schema so saved and shared games still
+ * load, but only list it for a question that already uses it.
+ */
+const matchingTypeMenuOptions = (current: string) => {
+    const options = ungroupedTypeOptions(
+        matchingQuestionSchema.options,
+        "type",
+    );
+    if (current !== "same-admin-zone") delete options["same-admin-zone"];
+    return options;
+};
+
 export const MatchingQuestionComponent = ({
     data,
     questionKey,
@@ -566,10 +580,7 @@ export const MatchingQuestionComponent = ({
             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                 <Select
                     trigger="Matching Type"
-                    options={ungroupedTypeOptions(
-                        matchingQuestionSchema.options,
-                        "type",
-                    )}
+                    options={matchingTypeMenuOptions(data.type)}
                     groups={groupedTypeOptions(
                         matchingQuestionSchema.options,
                         "type",
