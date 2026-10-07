@@ -45,11 +45,6 @@ export const GEOCODER_API = proxy("https://photon.komoot.io/api/");
 // the game-territory outline because Overpass regularly 504s on cold
 // loads for country-level relations.
 export const NOMINATIM_API = proxy("https://nominatim.openstreetmap.org");
-export const PASTEBIN_API_POST_URL =
-    "https://cors-anywhere.com/https://pastebin.com/api/api_post.php";
-export const PASTEBIN_API_RAW_URL = "https://pastebin.com/raw/";
-export const PASTEBIN_API_RAW_URL_PROXIED =
-    "https://cors-anywhere.com/https://pastebin.com/raw/";
 
 /**
  * Pin / sidebar tints. Keys that appear in {@link LEAFLET_COLOR_MARKER_SLUGS}

@@ -39,9 +39,8 @@ export const TentacleQuestionComponent = ({
     sub,
     className,
 }: QuestionCardComponentProps<TentacleQuestion>) => {
-    // With autoSave off, questionModified only bumps triggerLocalRefresh, so
-    // without this the radius/unit and location-type controls render stale
-    // values. The other four cards already subscribe.
+    // Controls that mutate data in place and bump triggerLocalRefresh need
+    // this to re-render. The other four cards already subscribe.
     useStore(triggerLocalRefresh);
     const $isLoading = useStore(isLoading);
     const label = useQuestionLabel("tentacles", questionKey);

@@ -245,10 +245,6 @@ const tutorialSteps: TutorialStep[] = [
                 <br />
                 <strong>&ldquo;Paste Question&rdquo;:</strong> Feature to import
                 questions from clipboard (JSON format)
-                <br />
-                <br />
-                <strong>&ldquo;Save&rdquo; button:</strong> Appears when
-                auto-save is disabled, allowing manual saves
             </>
         ),
         position: "center",
@@ -525,7 +521,7 @@ const tutorialSteps: TutorialStep[] = [
                 <br />• <strong>Major Cities:</strong> Distance to cities with
                 1M+ population
                 <br />• <strong>High-Speed Rail:</strong> Distance to high-speed
-                rail lines (like Shinkansen)
+                rail lines (like Amtrak&apos;s Acela)
                 <br />
                 <br />
                 <strong>Full Game Variations:</strong>
@@ -586,9 +582,7 @@ const tutorialSteps: TutorialStep[] = [
                 <br />• <strong>Direct Links:</strong> Embed entire game state
                 in URL
                 <br />• <strong>Compressed Links:</strong> Smaller URLs for
-                complex games
-                <br />• <strong>Pastebin Integration:</strong> For very large
-                game states
+                complex games, however large the game
                 <br />
                 <br />
                 <strong>What Gets Shared:</strong>
@@ -663,13 +657,6 @@ const tutorialSteps: TutorialStep[] = [
                 <br />
                 <br />
                 <strong>Automation:</strong>
-                <br />• <strong>Auto-save:</strong> Continuous saving vs manual
-                save control. When disabled, you&apos;ll see &ldquo;Save&rdquo;
-                buttons appear on question cards for manual control.{" "}
-                <strong>
-                    I highly recommend disabling this as I find that it makes
-                    changing data easier.
-                </strong>
                 <br />• <strong>Planning Mode:</strong> Preview question effects
                 before finalizing.{" "}
                 <strong>
@@ -682,12 +669,6 @@ const tutorialSteps: TutorialStep[] = [
                 <strong>API Integration:</strong>
                 <br />• <strong>Thunderforest API Key:</strong> Enhanced map
                 tiles
-                <br />• <strong>Pastebin API Key:</strong> Improved sharing for
-                large games
-                <br />• <strong>Always Use Pastebin:</strong> Force external
-                hosting for all shares. This is also useful if you want to
-                generate a QR code containing the link, as this makes the QR
-                code much less convoluted.
             </>
         ),
         targetSelector: '[data-tutorial-id="option-questions-button"]',
@@ -722,8 +703,7 @@ const tutorialSteps: TutorialStep[] = [
                 <br />• Train stations: Good coverage in developed regions
                 <br />• Commercial airports: IATA aerodromes; helipads,
                 heliport-tagged, and balloonport sites excluded
-                <br />• High-speed rail: Covers major systems (Shinkansen, TGV,
-                etc.)
+                <br />• High-speed rail: Only lines tagged high-speed in OSM
                 <br />• Business data (McDonald&apos;s, 7-Eleven) depends on
                 local mapping
                 <br />

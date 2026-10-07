@@ -15,19 +15,12 @@ import {
 } from "@/components/ui/sidebar-l";
 import { SidebarContext as LeftSidebarContext } from "@/components/ui/sidebar-l-context";
 import { SidebarContext as RightSidebarContext } from "@/components/ui/sidebar-r";
-import {
-    autoSave,
-    isLoading,
-    questions,
-    save,
-    triggerLocalRefresh,
-} from "@/lib/context";
+import { isLoading, questions, triggerLocalRefresh } from "@/lib/context";
 import { cn } from "@/lib/utils";
 
 export const QuestionSidebar = () => {
     useStore(triggerLocalRefresh);
     const $questions = useStore(questions);
-    const $autoSave = useStore(autoSave);
     const $isLoading = useStore(isLoading);
     const leftSidebar = useStore(LeftSidebarContext);
     const rightSidebar = useStore(RightSidebarContext);
@@ -112,17 +105,6 @@ export const QuestionSidebar = () => {
                                         Star this on GitHub! It&apos;s free :)
                                     </SidebarMenuButton>
                                 </a>
-                            </SidebarMenuItem>
-                        )}
-                        {!$autoSave && (
-                            <SidebarMenuItem>
-                                <SidebarMenuButton
-                                    className="bg-blue-600 p-2 rounded-md font-semibold font-poppins transition-shadow duration-500"
-                                    onClick={save}
-                                    disabled={$isLoading}
-                                >
-                                    Save
-                                </SidebarMenuButton>
                             </SidebarMenuItem>
                         )}
                     </SidebarMenu>

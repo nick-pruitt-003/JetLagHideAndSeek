@@ -10,11 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SidebarMenu } from "@/components/ui/sidebar-l";
 import {
-    autoSave,
     hiderMode,
     questionModified,
     questions,
-    save,
     startingLocation,
     triggerLocalRefresh,
 } from "@/lib/context";
@@ -70,7 +68,6 @@ const ColoredMarker = ({
     const $questions = useStore(questions);
     const $hiderMode = useStore(hiderMode);
     const $startingLocation = useStore(startingLocation);
-    const $autoSave = useStore(autoSave);
     const [open, setOpen] = useState(false);
 
     // The starting-location and hider markers edit a store instead of a
@@ -159,14 +156,6 @@ const ColoredMarker = ({
                         Disable
                     </Button>
                 )}
-                {!$autoSave && (
-                    <button
-                        onClick={save}
-                        className="bg-blue-600 p-2 rounded-md font-semibold font-poppins transition-shadow duration-500"
-                    >
-                        Save
-                    </button>
-                )}
             </DialogContent>
         </Dialog>
     );
@@ -196,11 +185,7 @@ export const DraggableMarkers = () => {
                             e.target.getLatLng().lng ??
                             $startingLocation.longitude;
 
-                        if (autoSave.get()) {
-                            startingLocation.set({ ...$startingLocation });
-                        } else {
-                            triggerLocalRefresh.set(Math.random());
-                        }
+                        startingLocation.set({ ...$startingLocation });
                     }}
                 />
             )}
@@ -218,13 +203,9 @@ export const DraggableMarkers = () => {
                         $hiderMode.longitude =
                             e.target.getLatLng().lng ?? $hiderMode.longitude;
 
-                        if (autoSave.get()) {
-                            hiderMode.set({
-                                ...$hiderMode,
-                            });
-                        } else {
-                            triggerLocalRefresh.set(Math.random());
-                        }
+                        hiderMode.set({
+                            ...$hiderMode,
+                        });
                     }}
                 />
             )}

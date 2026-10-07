@@ -177,11 +177,7 @@ export const addQuestion = (question: DeepPartial<Question>) =>
     questionModified(questions.get().push(questionSchema.parse(question)));
 
 export const questionModified = (..._: any[]) => {
-    if (autoSave.get()) {
-        questions.set([...questions.get()]);
-    } else {
-        triggerLocalRefresh.set(Math.random());
-    }
+    questions.set([...questions.get()]);
 };
 
 export const leafletMapContext = atom<Map | null>(null);
@@ -463,18 +459,6 @@ export const disabledStations = persistentAtom<string[]>(
         decode: JSON.parse,
     },
 );
-export const autoSave = persistentAtom<boolean>("autoSave", true, {
-    encode: JSON.stringify,
-    decode: JSON.parse,
-});
-export const save = () => {
-    questions.set([...questions.get()]);
-    const $hiderMode = hiderMode.get();
-
-    if ($hiderMode !== false) {
-        hiderMode.set({ ...$hiderMode });
-    }
-};
 
 /* Presets for custom questions (savable / sharable / editable) */
 export type CustomPreset = {
@@ -714,34 +698,16 @@ export const defaultCustomQuestions = persistentAtom<boolean>(
     },
 );
 
-export const pastebinApiKey = persistentAtom<string>("pastebinApiKey", "");
-export const alwaysUsePastebin = persistentAtom<boolean>(
-    "alwaysUsePastebin",
-    false,
-    {
-        encode: JSON.stringify,
-        decode: JSON.parse,
-    },
-);
+export const tutorialStep = atom<number>(0);
 
 export const showTutorial = persistentAtom<boolean>("showTutorials", true, {
     encode: JSON.stringify,
     decode: JSON.parse,
 });
-export const tutorialStep = atom<number>(0);
 
 export const customInitPreference = persistentAtom<"ask" | "blank" | "prefill">(
     "customInitPreference",
     "ask",
-    {
-        encode: JSON.stringify,
-        decode: JSON.parse,
-    },
-);
-
-export const allowGooglePlusCodes = persistentAtom<boolean>(
-    "allowGooglePlusCodes",
-    false,
     {
         encode: JSON.stringify,
         decode: JSON.parse,

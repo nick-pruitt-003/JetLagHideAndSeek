@@ -16,18 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import {
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-} from "@/components/ui/sidebar-l";
+import { SidebarMenu } from "@/components/ui/sidebar-l";
 import { UnitSelect } from "@/components/UnitSelect";
 import {
     additionalMapGeoLocations,
-    allowGooglePlusCodes,
-    alwaysUsePastebin,
     animateMapMovements,
-    autoSave,
     autoZoom,
     baseTileLayer,
     cartoApiKey,
@@ -48,7 +41,6 @@ import {
     leafletMapContext,
     mapGeoJSON,
     mapGeoLocation,
-    pastebinApiKey,
     permanentOverlay,
     planningModeEnabled,
     polyGeoJSON,
@@ -60,7 +52,6 @@ import {
     reachabilityOverrides,
     reachabilitySelectedSystemIds,
     reachabilityWalkSpeedMph,
-    save,
     showTutorial,
     startingLocation,
     thunderforestApiKey,
@@ -68,37 +59,35 @@ import {
     useCustomStations,
 } from "@/lib/context";
 import { parseReachabilityPayload } from "@/lib/share/reachability-payload";
-import {
-    cn,
-    compress,
-    decompress,
-    fetchFromPastebin,
-    shareOrFallback,
-    uploadToPastebin,
-} from "@/lib/utils";
+import { cn, compress, decompress, shareOrFallback } from "@/lib/utils";
 import { questionsSchema } from "@/maps/schema";
 
 const HIDING_ZONE_URL_PARAM = "hz";
 const HIDING_ZONE_COMPRESSED_URL_PARAM = "hzc";
+/** Retired Pastebin share links; recognised only to explain they no longer work. */
 const PASTEBIN_URL_PARAM = "pb";
+/**
+ * Above this, share data goes after `#` instead of `?`. The query string is
+ * sent to the server, and Node rejects request headers over ~16 KB, so a big
+ * hand-drawn territory would 431 on load; the fragment never leaves the
+ * browser. Short links keep `?` so players on an older cached build can still
+ * open them.
+ */
+const MAX_QUERY_SHARE_URL = 2000;
 
 export const OptionDrawers = ({ className }: { className?: string }) => {
     useStore(triggerLocalRefresh);
     const $defaultCustomQuestions = useStore(defaultCustomQuestions);
-    const $allowGooglePlusCodes = useStore(allowGooglePlusCodes);
     const $defaultUnit = useStore(defaultUnit);
     const $animateMapMovements = useStore(animateMapMovements);
     const $autoZoom = useStore(autoZoom);
     const $hiderMode = useStore(hiderMode);
     const $startingLocation = useStore(startingLocation);
-    const $autoSave = useStore(autoSave);
     const $hidingZone = useStore(hidingZone);
     const $planningMode = useStore(planningModeEnabled);
     const $baseTileLayer = useStore(baseTileLayer);
     const $thunderforestApiKey = useStore(thunderforestApiKey);
     const $cartoApiKey = useStore(cartoApiKey);
-    const $pastebinApiKey = useStore(pastebinApiKey);
-    const $alwaysUsePastebin = useStore(alwaysUsePastebin);
     const $followMe = useStore(followMe);
     const $customInitPref = useStore(customInitPreference);
     const lastDefaultUnitRef = useRef($defaultUnit);
@@ -122,10 +111,11 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
 
     useEffect(() => {
         const params = new URL(window.location.toString()).searchParams;
+        const fragment = new URLSearchParams(window.location.hash.slice(1));
         const hidingZoneOld = params.get(HIDING_ZONE_URL_PARAM);
-        const hidingZoneCompressed = params.get(
-            HIDING_ZONE_COMPRESSED_URL_PARAM,
-        );
+        const hidingZoneCompressed =
+            params.get(HIDING_ZONE_COMPRESSED_URL_PARAM) ??
+            fragment.get(HIDING_ZONE_COMPRESSED_URL_PARAM);
         const pastebinId = params.get(PASTEBIN_URL_PARAM);
 
         if (hidingZoneOld !== null) {
@@ -153,29 +143,10 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                 }
             });
         } else if (pastebinId !== null) {
-            fetchFromPastebin(pastebinId)
-                .then((data) => {
-                    try {
-                        loadHidingZone(data);
-                        // Remove pb parameter after initial load
-                        window.history.replaceState(
-                            {},
-                            "",
-                            window.location.pathname,
-                        );
-                        toast.success(
-                            "Successfully loaded data from Pastebin link!",
-                        );
-                    } catch (e) {
-                        toast.error(`Invalid data from Pastebin: ${e}`);
-                    }
-                })
-                .catch((error) => {
-                    console.error("Failed to fetch from Pastebin:", error);
-                    toast.error(
-                        `Failed to load from Pastebin: ${error.message}`,
-                    );
-                });
+            toast.error(
+                "Pastebin share links are no longer supported. Ask for a new share link.",
+            );
+            window.history.replaceState({}, "", window.location.pathname);
         }
     }, []);
 
@@ -373,34 +344,8 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
 
                     const baseUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
                     let shareUrl = `${baseUrl}?${HIDING_ZONE_COMPRESSED_URL_PARAM}=${compressedData}`;
-
-                    if ($alwaysUsePastebin || shareUrl.length > 2000) {
-                        if (!$pastebinApiKey) {
-                            toast.error(
-                                "Data is too large for a URL or Pastebin is forced. Please enter a Pastebin API key in Options to share via Pastebin.",
-                            );
-                            return;
-                        }
-                        try {
-                            toast.info("Data is being shared via Pastebin...");
-                            const pastebinUrl = await uploadToPastebin(
-                                $pastebinApiKey,
-                                hidingZoneString,
-                            );
-                            const pasteId = pastebinUrl.substring(
-                                pastebinUrl.lastIndexOf("/") + 1,
-                            );
-                            shareUrl = `${baseUrl}?${PASTEBIN_URL_PARAM}=${pasteId}`;
-                            toast.success(
-                                "Successfully uploaded to Pastebin! URL is ready to be shared.",
-                            );
-                        } catch (error) {
-                            console.error("Pastebin upload failed:", error);
-                            toast.error(
-                                `Pastebin upload failed. Please check your API key and try again.`,
-                            );
-                            return;
-                        }
+                    if (shareUrl.length > MAX_QUERY_SHARE_URL) {
+                        shareUrl = `${baseUrl}#${HIDING_ZONE_COMPRESSED_URL_PARAM}=${compressedData}`;
                     }
 
                     // Show platform native share sheet if possible
@@ -605,33 +550,6 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                 </p>
                             </div>
                             <Separator className="bg-slate-300 w-[280px]" />
-                            <div className="flex flex-col items-center gap-2">
-                                <Label htmlFor="pastebinApiKey">
-                                    Pastebin API Key
-                                </Label>
-                                <Input
-                                    type="text"
-                                    value={$pastebinApiKey}
-                                    id="pastebinApiKey"
-                                    onChange={(e) =>
-                                        pastebinApiKey.set(e.target.value)
-                                    }
-                                    placeholder="Enter your Pastebin API key"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                    Needed for sharing large game data. Create a
-                                    key{" "}
-                                    <a
-                                        href="https://pastebin.com/doc_api"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-500 cursor-pointer"
-                                    >
-                                        here
-                                    </a>
-                                    .
-                                </p>
-                            </div>
                             <Separator className="bg-slate-300 w-[280px]" />
                             <Label>Permanent Map Overlay</Label>
                             <div className="flex flex-row max-[330px]:flex-col gap-4">
@@ -676,17 +594,6 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                 />
                             </label>
                             <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
-                                Force Pastebin for sharing?
-                                <Checkbox
-                                    checked={$alwaysUsePastebin}
-                                    onCheckedChange={() =>
-                                        alwaysUsePastebin.set(
-                                            !$alwaysUsePastebin,
-                                        )
-                                    }
-                                />
-                            </label>
-                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
                                 Enable planning mode?
                                 <Checkbox
                                     checked={$planningMode}
@@ -710,15 +617,6 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
 
                                         planningModeEnabled.set(!$planningMode);
                                     }}
-                                />
-                            </label>
-                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
-                                Auto save?
-                                <Checkbox
-                                    checked={$autoSave}
-                                    onCheckedChange={() =>
-                                        autoSave.set(!$autoSave)
-                                    }
                                 />
                             </label>
                             <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
@@ -746,17 +644,6 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     onCheckedChange={() =>
                                         defaultCustomQuestions.set(
                                             !$defaultCustomQuestions,
-                                        )
-                                    }
-                                />
-                            </label>
-                            <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
-                                Allow Google Plus codes?
-                                <Checkbox
-                                    checked={$allowGooglePlusCodes}
-                                    onCheckedChange={() =>
-                                        allowGooglePlusCodes.set(
-                                            !$allowGooglePlusCodes,
                                         )
                                     }
                                 />
@@ -802,28 +689,12 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                                 longitude ??
                                                 $hiderMode.longitude;
 
-                                            if ($autoSave) {
-                                                hiderMode.set({
-                                                    ...$hiderMode,
-                                                });
-                                            } else {
-                                                triggerLocalRefresh.set(
-                                                    Math.random(),
-                                                );
-                                            }
+                                            hiderMode.set({
+                                                ...$hiderMode,
+                                            });
                                         }}
                                         label="Hider Location"
                                     />
-                                    {!autoSave && (
-                                        <SidebarMenuItem>
-                                            <SidebarMenuButton
-                                                className="bg-blue-600 p-2 rounded-md font-semibold font-poppins transition-shadow duration-500 mt-2"
-                                                onClick={save}
-                                            >
-                                                Save
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    )}
                                 </SidebarMenu>
                             )}
                             <label className="flex flex-row items-center gap-2 cursor-pointer text-2xl font-semibold font-poppins">
@@ -868,28 +739,12 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                                 longitude ??
                                                 $startingLocation.longitude;
 
-                                            if ($autoSave) {
-                                                startingLocation.set({
-                                                    ...$startingLocation,
-                                                });
-                                            } else {
-                                                triggerLocalRefresh.set(
-                                                    Math.random(),
-                                                );
-                                            }
+                                            startingLocation.set({
+                                                ...$startingLocation,
+                                            });
                                         }}
                                         label="Starting Location"
                                     />
-                                    {!autoSave && (
-                                        <SidebarMenuItem>
-                                            <SidebarMenuButton
-                                                className="bg-blue-600 p-2 rounded-md font-semibold font-poppins transition-shadow duration-500 mt-2"
-                                                onClick={save}
-                                            >
-                                                Save
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    )}
                                 </SidebarMenu>
                             )}
                         </div>

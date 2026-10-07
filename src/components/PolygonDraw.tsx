@@ -18,19 +18,13 @@ import { EditControl } from "react-leaflet-draw";
 import { LatitudeLongitude } from "@/components/LatLngPicker";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { SidebarMenu } from "@/components/ui/sidebar-l";
 import {
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-} from "@/components/ui/sidebar-l";
-import {
-    autoSave,
     drawingQuestionKey,
     mapGeoJSON,
     polyGeoJSON,
     questionModified,
     questions,
-    save,
 } from "@/lib/context";
 import { CacheType, clearCache } from "@/maps/api";
 import { lngLatToText } from "@/maps/geo-utils";
@@ -108,7 +102,6 @@ const EditablePointMarker = ({
         | CustomMeasuringQuestion["geo"]["features"][number];
     editableName?: boolean;
 }) => {
-    const $autoSave = useStore(autoSave);
     const [open, setOpen] = useState(false);
 
     return (
@@ -158,16 +151,6 @@ const EditablePointMarker = ({
                                 questionModified();
                             }}
                         />
-                        {!$autoSave && (
-                            <SidebarMenuItem>
-                                <SidebarMenuButton
-                                    className="bg-blue-600 p-2 rounded-md font-semibold font-poppins transition-shadow duration-500 mt-2"
-                                    onClick={save}
-                                >
-                                    Save
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        )}
                     </SidebarMenu>
                 </div>
             </DialogContent>

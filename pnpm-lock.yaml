@@ -307,9 +307,6 @@ importers:
       nanostores:
         specifier: ^1.5.5
         version: 1.5.5
-      open-location-code:
-        specifier: ^1.0.3
-        version: 1.0.3
       osmtogeojson:
         specifier: 3.0.0-beta.5
         version: 3.0.0-beta.5
@@ -389,9 +386,6 @@ importers:
       '@types/node':
         specifier: ^24.19.1
         version: 24.19.1
-      '@types/open-location-code':
-        specifier: ^1.0.1
-        version: 1.0.1
       '@types/papaparse':
         specifier: ^5.5.2
         version: 5.5.2
@@ -2651,9 +2645,6 @@ packages:
   '@types/node@24.19.1':
     resolution: {integrity: sha512-aS3/DG0oM05K0RIXXP+hKjinGG5IgSSVGzswZxW3O0sS3pH4/fycXundUC9XsszgKCk4gHXylTEK6hyFxVxnoQ==}
 
-  '@types/open-location-code@1.0.1':
-    resolution: {integrity: sha512-txJKhrRpT2fw8RgZQUeT6qycBVIzRQ2zD7ecdLvc5R2QaeqSLcYIh1jxLSC+LjcpUT26Qyfw2UTttmhgk3sWmg==}
-
   '@types/papaparse@5.5.2':
     resolution: {integrity: sha512-gFnFp/JMzLHCwRf7tQHrNnfhN4eYBVYYI897CGX4MY1tzY9l2aLkVyx2IlKZ/SAqDbB3I1AOZW5gTMGGsqWliA==}
 
@@ -4163,9 +4154,6 @@ packages:
 
   oniguruma-to-es@4.3.6:
     resolution: {integrity: sha512-csuQ9x3Yr0cEIs/Zgx/OEt9iBw9vqIunAPQkx19R/fiMq2oGVTgcMqO/V3Ybqefr1TBvosI6jU539ksaBULJyA==}
-
-  open-location-code@1.0.3:
-    resolution: {integrity: sha512-DBm14BSn40Ee241n80zIFXIT6+y8Tb0I+jTdosLJ8Sidvr2qONvymwqymVbHV2nS+1gkDZ5eTNpnOIVV0Kn2fw==}
 
   optimist@0.3.7:
     resolution: {integrity: sha512-TCx0dXQzVtSCg2OgY/bO9hjM9cV4XYx09TVK+s3+FhkjT6LovsLe+pPMzpWf+6yXK/hUizs2gUoTw3jHM0VaTQ==}
@@ -7951,8 +7939,6 @@ snapshots:
     dependencies:
       undici-types: 7.24.6
 
-  '@types/open-location-code@1.0.1': {}
-
   '@types/papaparse@5.5.2':
     dependencies:
       '@types/node': 24.19.1
@@ -9495,8 +9481,6 @@ snapshots:
       oniguruma-parser: 0.12.2
       regex: 6.1.0
       regex-recursion: 6.0.2
-
-  open-location-code@1.0.3: {}
 
   optimist@0.3.7:
     dependencies:
