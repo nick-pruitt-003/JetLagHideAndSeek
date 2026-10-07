@@ -19,11 +19,16 @@ overrides:
     # GHSA-f65p-4m7j-42xc + GHSA-fph4-wmhf-6fwf (SSRF via IPv6 / repeated
     # percent-decoding), GHSA-jqff-g426-hqxp (percent-encoded scheme). Staying
     # on 3.x — ajv has not moved to fast-uri 4.
-    fast-uri: "3.1.7" # also GHSA-v2hh-gcrm-f6hx, GHSA-7p8r-x3mc-p8w7
-    brace-expansion: "5.0.9" # GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895 (DoS)
+    fast-uri: "3.1.8" # also GHSA-v2hh-gcrm-f6hx, GHSA-7p8r-x3mc-p8w7, GHSA-hrr3-gc8f-f4qj
+    brace-expansion: "5.0.12" # GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895, GHSA-6j4f-fj2g-mc7p, GHSA-qhr7-859c-m2p7, GHSA-q2hr-2g5m-vwhr (DoS)
     js-yaml: "4.3.2" # GHSA-5p4m-2wfm-xmqj, GHSA-2883-xcg3-v3hh (merge-key CPU); 5.x is a major the parents have not adopted
     nanoid: "3.3.18" # GHSA-2v37-7h3g-55p8 (infinite loop on size 0)
     postcss: "8.5.23" # GHSA-fxqj-rqcc-2cmp (arbitrary .map read)
+    http-cache-semantics: "4.3.0" # GHSA-ch52-4w7c-c8xp (cross-user cache disclosure)
+    source-map-js: "1.2.2" # GHSA-68fv-2mgg-jv7q (event-loop DoS)
+    # braces: GHSA-vfj7-8cjw-p6xm has no patched release (3.0.3 is the
+    # latest). Only eslint-plugin-import-alias > micromatch pulls it in, at
+    # lint time on our own source, so it is not reachable by users.
     "@xmldom/xmldom": "0.8.15"
     serialize-javascript: "7.0.5"
     glob: "13.0.6"
