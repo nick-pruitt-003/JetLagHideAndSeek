@@ -143,3 +143,80 @@ export function checkIfStationsShareZones(
     // If the distance of the 2 center points is smaller or equal of the radius, the 2 zones overlap.
     return d <= radius;
 }
+
+/** Ferry docks are mapped by many hands under many names. */
+const isFerryPlace = (place: StationPlace) => {
+    const p = place.properties;
+    return (
+        p.amenity === "ferry_terminal" ||
+        p.platform === "ferry" ||
+        p.ferry === "yes"
+    );
+};
+
+/**
+ * Ferry docks within this distance are one dock. Measured in NYC: the same
+ * dock mapped twice sits 29 m apart (Soissons Landing / "Governors Island")
+ * and 45 m apart (Whitehall's node and building), while genuinely separate
+ * terminals are 120 m apart at the closest (Whitehall / Battery Maritime
+ * Building).
+ */
+const FERRY_MERGE_METERS = 100;
+
+/**
+ * Collapse ferry places that are the same dock. Unlike
+ * {@link mergeDuplicateStation} this ignores names — "Soissons Landing" and
+ * "Governors Island" are one landing — and uses a fixed short distance rather
+ * than the hiding radius, so it is safe to always run. Non-ferry places pass
+ * through untouched.
+ *
+ * Each cluster keeps the first entry's id and tags (ways before nodes, since
+ * a terminal building is the more deliberate mapping) at the averaged
+ * position.
+ */
+export function mergeNearbyFerryDocks(
+    places: StationPlace[],
+    meters: number = FERRY_MERGE_METERS,
+): StationPlace[] {
+    const ferries = places.filter(isFerryPlace);
+    if (ferries.length < 2) return places;
+
+    // Single-link clustering: a dock joins a cluster if it is within range
+    // of any member. Union-find keeps chains (A-B-C at 60 m steps) together.
+    const parent = ferries.map((_, i) => i);
+    const find = (i: number): number =>
+        parent[i] === i ? i : (parent[i] = find(parent[i]));
+    for (let i = 0; i < ferries.length; i++) {
+        for (let j = i + 1; j < ferries.length; j++) {
+            const d = turf.distance(ferries[i], ferries[j], {
+                units: "meters",
+            });
+            if (d <= meters) parent[find(i)] = find(j);
+        }
+    }
+
+    const clusters = new Map<number, StationPlace[]>();
+    ferries.forEach((f, i) => {
+        const root = find(i);
+        clusters.set(root, [...(clusters.get(root) ?? []), f]);
+    });
+
+    const rank = (p: StationPlace) =>
+        String(p.properties.id).startsWith("way/") ? 0 : 1;
+    const merged = [...clusters.values()].map((group) => {
+        if (group.length === 1) return group[0];
+        const keep = [...group].sort((a, b) => rank(a) - rank(b))[0];
+        const lng =
+            group.reduce((s, p) => s + p.geometry.coordinates[0], 0) /
+            group.length;
+        const lat =
+            group.reduce((s, p) => s + p.geometry.coordinates[1], 0) /
+            group.length;
+        return {
+            ...keep,
+            geometry: { type: "Point", coordinates: [lng, lat] },
+        } as StationPlace;
+    });
+
+    return [...places.filter((p) => !isFerryPlace(p)), ...merged];
+}

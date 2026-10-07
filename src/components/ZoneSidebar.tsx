@@ -110,6 +110,7 @@ import {
     holedMask,
     lngLatToText,
     mergeDuplicateStation,
+    mergeNearbyFerryDocks,
     playableBboxFromHoledMask,
     prefetchMatchingFacilityPoints,
     prefetchMeasuringPoiPoints,
@@ -685,6 +686,10 @@ export const ZoneSidebar = () => {
                         );
                     }
                 }
+
+                // Always on: same-dock ferry duplicates (different names,
+                // tens of metres apart) are never two hiding spots.
+                places = mergeNearbyFerryDocks(places);
 
                 if (mergeDuplicates) {
                     places = mergeDuplicateStation(
