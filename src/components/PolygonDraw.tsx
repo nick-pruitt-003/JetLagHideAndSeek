@@ -184,6 +184,19 @@ export const PolygonDraw = () => {
 
     let question: Question | undefined;
 
+    // The stock "Edit layers" / "Delete layers" tooltips don't say what can be
+    // edited, so fixing a wobbly corner of a drawn area went unnoticed.
+    L.drawLocal.edit.toolbar.buttons.edit =
+        "Edit drawn areas (drag a corner, then Save)";
+    L.drawLocal.edit.toolbar.buttons.editDisabled = "No drawn areas to edit";
+    L.drawLocal.edit.toolbar.buttons.remove = "Delete a drawn area";
+    L.drawLocal.edit.toolbar.buttons.removeDisabled =
+        "No drawn areas to delete";
+    L.drawLocal.edit.handlers.edit.tooltip.text =
+        "Drag the white squares to move corners.";
+    L.drawLocal.edit.handlers.edit.tooltip.subtext =
+        "Click Cancel to undo, Save to keep.";
+
     if ($drawingQuestionKey === -1) {
         L.drawLocal.draw.toolbar.buttons.polygon = "Draw the hiding zone!";
     } else {
@@ -202,7 +215,7 @@ export const PolygonDraw = () => {
         }
     }
 
-    const onChange = () => {
+    const onChange = (event?: "edited") => {
         const layers = drawnLayers(featureRef.current);
         if (!layers) return;
 
@@ -216,7 +229,9 @@ export const PolygonDraw = () => {
 
             mapGeoJSON.set(geoJSON);
             polyGeoJSON.set(geoJSON);
-            questions.set([]);
+            // A new or deleted area is a new game. Nudging corners of the
+            // existing one is a fix, not a restart — keep the answers.
+            if (event !== "edited") questions.set([]);
             clearCache(CacheType.ZONE_CACHE);
         } else if (
             question?.id === "tentacles" &&
@@ -377,9 +392,9 @@ export const PolygonDraw = () => {
                                   shapeOptions: { fillOpacity: 0 },
                               },
                 }}
-                onCreated={onChange}
-                onEdited={onChange}
-                onDeleted={onChange}
+                onCreated={() => onChange()}
+                onEdited={() => onChange("edited")}
+                onDeleted={() => onChange()}
             />
         </FeatureGroup>
     );
