@@ -432,6 +432,58 @@ export const OptionDrawers = ({ className }: { className?: string }) => {
                                     Paste Hiding Zone
                                 </Button>
                             </div>
+                            {/* Same JSON as Copy/Paste, as a file: no size
+                                limit, and it survives chat apps that mangle
+                                long links. */}
+                            <div className="flex flex-row max-[330px]:flex-col gap-4">
+                                <Button
+                                    onClick={() => {
+                                        const blob = new Blob(
+                                            [JSON.stringify($hidingZone)],
+                                            { type: "application/json" },
+                                        );
+                                        const url = URL.createObjectURL(blob);
+                                        const link =
+                                            document.createElement("a");
+                                        link.href = url;
+                                        link.download = `jetlag-game-${new Date()
+                                            .toISOString()
+                                            .slice(0, 10)}.json`;
+                                        link.click();
+                                        setTimeout(
+                                            () => URL.revokeObjectURL(url),
+                                            1000,
+                                        );
+                                    }}
+                                >
+                                    Save Game to File
+                                </Button>
+                                <Button asChild>
+                                    <label className="cursor-pointer">
+                                        Open Game File
+                                        <input
+                                            type="file"
+                                            accept=".json,application/json"
+                                            className="sr-only"
+                                            onChange={async (e) => {
+                                                const file =
+                                                    e.target.files?.[0];
+                                                e.target.value = "";
+                                                if (!file) return;
+                                                try {
+                                                    loadHidingZone(
+                                                        await file.text(),
+                                                    );
+                                                } catch (error) {
+                                                    toast.error(
+                                                        `Couldn't read that file: ${error}`,
+                                                    );
+                                                }
+                                            }}
+                                        />
+                                    </label>
+                                </Button>
+                            </div>
                             <Separator className="bg-slate-300 w-[280px]" />
                             <Label>Default Unit</Label>
                             <UnitSelect

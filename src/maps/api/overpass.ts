@@ -27,8 +27,15 @@ const MULTI_AREA_CHUNK_GAP_MS = 700;
 /** Keep `poly:"…"` clauses small enough for GET and faster server-side evaluation. */
 const MAX_POLY_INLINE_LENGTH = 5200;
 
-/** HTTP statuses where delayed retry sometimes succeeds (busy / rate-limited Overpass). */
-const OVERPASS_RETRYABLE_HTTP = new Set([408, 429, 502, 503, 504, 529, 599]);
+/**
+ * HTTP statuses where delayed retry sometimes succeeds (busy / rate-limited
+ * Overpass). 500 is included because overloaded kumi and private.coffee
+ * answer with an instant 500 that clears on the next try (2026-10-10: kumi
+ * 500 then 200 one second apart).
+ */
+const OVERPASS_RETRYABLE_HTTP = new Set([
+    408, 429, 500, 502, 503, 504, 529, 599,
+]);
 const OVERPASS_RETRY_DELAY_MS = 3500;
 const OVERPASS_429_MIN_RETRY_MS = 9000;
 const OVERPASS_MAX_RETRIES = 4;
@@ -433,7 +440,9 @@ const getOverpassData = async (
         await debugOverpassFailure(response);
         const tries = _retryCount + 1;
         const hint =
-            response.status === 504 || response.status === 502
+            response.status === 504 ||
+            response.status === 502 ||
+            response.status === 500
                 ? " Public Overpass servers time out on large queries; try a smaller territory or wait and retry."
                 : response.status === 429
                   ? " Rate limited — wait a minute or reduce how many regions load at once."
