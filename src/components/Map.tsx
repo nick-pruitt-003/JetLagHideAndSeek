@@ -60,7 +60,12 @@ import { isDarkBasemap, MAP_CONTRAST } from "@/lib/map-contrast";
 import { cn } from "@/lib/utils";
 import { applyQuestionsToMapGeoData, holedMask, safeUnion } from "@/maps";
 import { hiderifyQuestion } from "@/maps";
-import { clearCache, determineMapBoundaries } from "@/maps/api";
+import {
+    clearCache,
+    currentCancelEpoch,
+    determineMapBoundaries,
+    wasCancelledSince,
+} from "@/maps/api";
 
 /**
  * CARTO Dark/Light used the non-`rastertiles` CDN paths while Voyager used
@@ -507,6 +512,10 @@ export const Map = ({ className }: { className?: string }) => {
         };
 
         const gen = ++refreshGenRef.current;
+        // A cancel (Cancel button, or deleting/hiding a question mid-load)
+        // empties every in-flight query; drawing from that would eliminate
+        // the wrong areas. Skip the draw and let the follow-up refresh redo it.
+        const cancelEpoch = currentCancelEpoch();
 
         // Read questions/hiderMode LIVE at execution time, not the render
         // snapshot this closure captured. The coalesced rerun (see
@@ -600,7 +609,7 @@ export const Map = ({ className }: { className?: string }) => {
             triggerLocalRefresh.set(Math.random()); // Refresh the question sidebar with new information but not this map
         }
 
-        if (gen !== refreshGenRef.current) {
+        if (gen !== refreshGenRef.current || wasCancelledSince(cancelEpoch)) {
             finishLoading();
             return;
         }

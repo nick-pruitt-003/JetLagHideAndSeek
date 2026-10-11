@@ -32,6 +32,17 @@ import {
 } from "@/components/ui/sidebar-l";
 import { isLoading, questions } from "@/lib/context";
 import { cn } from "@/lib/utils";
+import { cancelInFlightRequests } from "@/maps/api";
+
+/**
+ * Delete and hide stay usable while the map is loading (a slow or failing
+ * Overpass query used to lock them, so a stuck question couldn't be removed).
+ * Removing a question mid-load aborts the in-flight queries; Map.tsx then
+ * discards the cancelled refresh and redraws from the remaining questions.
+ */
+const abandonInFlightQueries = () => {
+    if (isLoading.get()) cancelInFlightRequests();
+};
 
 export const QuestionCard = ({
     children,
@@ -60,7 +71,6 @@ export const QuestionCard = ({
 }) => {
     const [isCollapsed, setIsCollapsed] = useState(collapsed ?? false);
     const $questions = useStore(questions);
-    const $isLoading = useStore(isLoading);
     const copyButtonRef = useRef<HTMLButtonElement>(null);
 
     const toggleCollapse = () => {
@@ -200,7 +210,7 @@ export const QuestionCard = ({
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        disabled={$isLoading}
+                                        aria-label="Delete question"
                                     >
                                         <VscTrash />
                                     </Button>
@@ -222,6 +232,7 @@ export const QuestionCard = ({
                                         </AlertDialogCancel>
                                         <AlertDialogAction
                                             onClick={() => {
+                                                abandonInFlightQueries();
                                                 questions.set([]);
                                             }}
                                         >
@@ -229,6 +240,7 @@ export const QuestionCard = ({
                                         </AlertDialogAction>
                                         <AlertDialogAction
                                             onClick={() => {
+                                                abandonInFlightQueries();
                                                 questions.set(
                                                     $questions.filter(
                                                         (q) =>
@@ -249,7 +261,6 @@ export const QuestionCard = ({
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setLocked!(!locked)}
-                                    disabled={$isLoading}
                                 >
                                     {locked ? <LockIcon /> : <UnlockIcon />}
                                 </Button>
@@ -258,8 +269,12 @@ export const QuestionCard = ({
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setHidden(!hidden)}
-                                    disabled={$isLoading}
+                                    onClick={() => {
+                                        // Hiding drops the question from the
+                                        // map, so its query is no longer needed.
+                                        abandonInFlightQueries();
+                                        setHidden(!hidden);
+                                    }}
                                     aria-label={
                                         hidden
                                             ? "Show question"
