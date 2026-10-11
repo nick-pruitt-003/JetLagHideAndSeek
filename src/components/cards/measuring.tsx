@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 
 import { QuestionCard } from "@/components/cards/base";
 import {
-    ADMIN_LEVEL_OPTIONS,
+    adminLevelGroups,
     applyLatLng,
     CustomInitChoiceDialog,
     DrawingEnableNotice,
@@ -14,6 +14,7 @@ import {
     questionCardControls,
     ResultRow,
     ungroupedTypeOptions,
+    useAdminLevelsAt,
     useQuestionLabel,
 } from "@/components/cards/shared";
 import { FacilityOsmPlayToggles } from "@/components/FacilityOsmPlayToggles";
@@ -64,6 +65,7 @@ const AdminZoneControls = ({
     }>({ loading: true, name: null });
 
     const adminLevel = data.cat?.adminLevel ?? DEFAULT_MEASURING_ADMIN_LEVEL;
+    const adminLevelsHere = useAdminLevelsAt(data.lat, data.lng);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -89,7 +91,7 @@ const AdminZoneControls = ({
             <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                 <Select
                     trigger="OSM Zone"
-                    options={ADMIN_LEVEL_OPTIONS}
+                    {...adminLevelGroups(adminLevelsHere)}
                     value={adminLevel.toString()}
                     onValueChange={(value) =>
                         questionModified(

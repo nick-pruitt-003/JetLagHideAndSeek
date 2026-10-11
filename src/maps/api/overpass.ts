@@ -770,6 +770,31 @@ out geom;
     return geo.features?.[0];
 };
 
+/**
+ * Admin levels that have a boundary containing this point. Tags only, no
+ * geometry, so it stays small even when the point is inside a country or
+ * state relation. Silent (no toast, no global loading lock): it only greys
+ * out zone-picker options. Upstream taibeled/JetLagHideAndSeek#252.
+ */
+export const findAdminLevelsAt = async (
+    latitude: number,
+    longitude: number,
+): Promise<Set<number>> => {
+    const query = `
+[out:json][timeout:25];
+is_in(${latitude}, ${longitude})->.a;
+rel(pivot.a)["boundary"="administrative"]["admin_level"];
+out tags;
+    `;
+    const data = await getOverpassData(query);
+    const levels = new Set<number>();
+    for (const element of data.elements ?? []) {
+        const level = Number(element.tags?.admin_level);
+        if (Number.isInteger(level)) levels.add(level);
+    }
+    return levels;
+};
+
 type PolyFeature = Feature<Polygon | MultiPolygon>;
 type WaterLineFeature = Feature<LineString | MultiLineString>;
 const LANDMASS_WATER_LINE_BUFFER_MILES = 0.06;

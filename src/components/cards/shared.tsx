@@ -1,5 +1,6 @@
 import { useStore } from "@nanostores/react";
 import type * as React from "react";
+import { useEffect, useState } from "react";
 
 import CustomInitDialog from "@/components/CustomInitDialog";
 import PresetsDialog from "@/components/PresetsDialog";
@@ -18,6 +19,7 @@ import {
     questions,
 } from "@/lib/context";
 import { cn } from "@/lib/utils";
+import { findAdminLevelsAt } from "@/maps/api";
 import type { Question, Units } from "@/maps/schema";
 import { determineUnionizedStrings, NO_GROUP } from "@/maps/schema";
 
@@ -130,7 +132,7 @@ export const questionCardControls = (data: {
  * CT planning regions are L6; NY towns are L7; Newark and Stamford are L8.
  * The US doesn't use L3. Other countries use the levels differently.
  */
-export const ADMIN_LEVEL_OPTIONS: Record<string, string> = {
+const ADMIN_LEVEL_OPTIONS: Record<string, string> = {
     2: "Admin L2 (country)",
     3: "Admin L3 (not used in the US)",
     4: "Admin L4 (state)",
@@ -140,6 +142,58 @@ export const ADMIN_LEVEL_OPTIONS: Record<string, string> = {
     8: "Admin L8 (city/town, e.g. Newark, Stamford)",
     9: "Admin L9 (city subdivision; rarely mapped)",
     10: "Admin L10 (neighborhood; rarely mapped)",
+};
+
+/**
+ * Admin levels with a boundary at `lat`/`lng`, or null while unknown (still
+ * loading, or the lookup failed). Unknown means every level stays selectable.
+ */
+export const useAdminLevelsAt = (
+    lat: number,
+    lng: number,
+    enabled: boolean = true,
+) => {
+    const [levels, setLevels] = useState<Set<number> | null>(null);
+    useEffect(() => {
+        let cancelled = false;
+        setLevels(null);
+        if (!enabled) return;
+        // Wait for the pin to settle: dragging fires many coordinate updates.
+        const timer = setTimeout(() => {
+            findAdminLevelsAt(lat, lng)
+                .then((found) => {
+                    // An empty answer usually means a failed or cancelled
+                    // query, not a point outside every boundary.
+                    if (!cancelled && found.size > 0) setLevels(found);
+                })
+                .catch(() => {});
+        }, 400);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [lat, lng, enabled]);
+    return levels;
+};
+
+/**
+ * Zone-picker options, with levels that have no boundary at the pin moved to
+ * a greyed-out group. Picking one of those would find nothing to measure or
+ * match against. Pass `levels = null` to leave every level selectable.
+ */
+export const adminLevelGroups = (levels: Set<number> | null) => {
+    if (!levels) return { options: ADMIN_LEVEL_OPTIONS };
+    const here: Record<string, string> = {};
+    const missing: Record<string, string> = {};
+    for (const [level, label] of Object.entries(ADMIN_LEVEL_OPTIONS)) {
+        (levels.has(Number(level)) ? here : missing)[level] = label;
+    }
+    return {
+        groups: {
+            "At this location": here,
+            "None at this location": { disabled: true, options: missing },
+        },
+    };
 };
 
 /** Writes back whichever of the two coordinates the picker changed. */

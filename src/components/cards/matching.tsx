@@ -7,7 +7,7 @@ import { toast } from "react-toastify";
 import { CandidatePlayToggles } from "@/components/CandidatePlayToggles";
 import { QuestionCard } from "@/components/cards/base";
 import {
-    ADMIN_LEVEL_OPTIONS,
+    adminLevelGroups,
     applyLatLng,
     CustomInitChoiceDialog,
     DrawingEnableNotice,
@@ -17,6 +17,7 @@ import {
     questionCardControls,
     ResultRow,
     ungroupedTypeOptions,
+    useAdminLevelsAt,
     useQuestionLabel,
 } from "@/components/cards/shared";
 import { FacilityOsmPlayToggles } from "@/components/FacilityOsmPlayToggles";
@@ -261,6 +262,14 @@ export const MatchingQuestionComponent = ({
         }
     }, [data.lng, data.lat, data.type, $trainStations]);
 
+    const adminLevelsHere = useAdminLevelsAt(
+        data.lat,
+        data.lng,
+        data.type === "zone" ||
+            data.type === "same-admin-zone" ||
+            data.type === "letter-zone",
+    );
+
     const nearestTrainStationId =
         typeof nearestTrainStationForLineQuestion?.properties?.id === "string"
             ? nearestTrainStationForLineQuestion.properties.id
@@ -432,7 +441,7 @@ export const MatchingQuestionComponent = ({
                     <SidebarMenuItem className={MENU_ITEM_CLASSNAME}>
                         <Select
                             trigger="OSM Zone"
-                            options={ADMIN_LEVEL_OPTIONS}
+                            {...adminLevelGroups(adminLevelsHere)}
                             value={data.cat.adminLevel.toString()}
                             onValueChange={(value) =>
                                 questionModified(
